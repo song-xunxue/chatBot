@@ -1,0 +1,9 @@
+# MyChat 服务端依赖
+# 作者: 李文煜
+# 日期: 2026-06-15
+fastapi>=0.110
+uvicorn[standard]>=0.29
+redis>=5.0
+pydantic-settings>=2.2
+python-multipart>=0.0.9
+websockets>=12.0
