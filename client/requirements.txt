@@ -1,0 +1,6 @@
+# MyChat 客户端依赖
+# 作者: 李文煜
+# 日期: 2026-06-15
+PySide6>=6.6
+httpx>=0.27       # REST 客户端（管理通道）
+websockets>=12.0  # WebSocket 客户端（实时主通道）
