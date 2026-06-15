@@ -1,0 +1,34 @@
+# MyChat 服务端编排
+# 作者: 李文煜
+# 日期: 2026-06-15
+# 启动: docker compose up -d   停止: docker compose down   日志: docker compose logs -f
+services:
+  # Redis：聊天记录/记忆/状态/配额（仅容器内网，不暴露公网）
+  redis:
+    image: redis:7-alpine
+    container_name: mychat-redis
+    restart: always
+    command: >
+      sh -c "redis-server
+      --appendonly yes
+      ${REDIS_PASSWORD:+--requirepass $$REDIS_PASSWORD}"
+    volumes:
+      - redis-data:/data
+
+  # 服务端：FastAPI + uvicorn
+  server:
+    build: ./server
+    container_name: mychat-server
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # 容器内通过服务名 redis 访问，覆盖 .env 中的本地地址
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    ports:
+      - "8000:8000"   # 面板/REST/WS；生产可前置 nginx 反代并加 HTTPS
+
+volumes:
+  redis-data:
