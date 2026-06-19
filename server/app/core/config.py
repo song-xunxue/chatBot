@@ -35,11 +35,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     redis_password: str = ""
 
-    # 3.LLM Providers（对应 F-C-03）
+    # 3.LLM Providers（对应 F-C-03；lmarena 已移除不做）
     glm_api_key: str = ""
     deepseek_api_key: str = ""
     siliconflow_api_key: str = ""
-    lmarena_api_key: str = ""
 
     # 4.多模态服务（M6 阶段使用）
     tts_api_key: str = ""
