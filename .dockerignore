@@ -1,0 +1,28 @@
+# MyChat 服务端镜像构建排除清单
+# build context = 项目根，以下内容不打入镜像（主要排除 Ref/ 的 113MB apk 与本地配置）
+# 作者: 李文煜
+# 日期: 2026-06-19
+
+# 参考资源（体积大，且镜像不需要）
+Ref/
+.jbeval/
+
+# 本地配置 / IDE / 版本控制
+.git/
+.gitignore
+.idea/
+.claude/
+.env
+.env.example
+
+# 客户端、文档、脚本（不部署到服务端镜像）
+client/
+docs/
+scripts/
+*.md
+Reference
+docker-compose.yml
+
+# Python 缓存
+**/__pycache__/
+*.pyc

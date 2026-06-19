@@ -17,7 +17,10 @@ services:
 
   # 服务端：FastAPI + uvicorn
   server:
-    build: ./server
+    # build context 取项目根，便于把 shared/ 一并打入镜像（ws.py 依赖 shared.protocol）
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     container_name: mychat-server
     restart: always
     env_file:
