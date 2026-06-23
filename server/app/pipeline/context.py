@@ -25,3 +25,12 @@ class MessageContext:
     model: str = ""                                     # 模型名（空则用 provider 默认模型）
     # 产出
     reply_text: str = ""                                # 最终回复文本（llm_call 累积填充）
+    # M3 新增（全部带默认值，保证向后兼容 / 降级 M2）
+    user_id: str = ""                                   # 单人场景与 object_id 同
+    persona_id: str = ""                                # 空则按 object_id 解析默认人设
+    persona_card: object = None                         # PersonaCard，人设注入阶段填充
+    memory_block: str = ""                              # 记忆协调器 render 输出，拼进 system_prompt 尾部
+    recall_result: object = None                        # RecallResult，记忆检索阶段填充
+    memory_meta: dict = field(default_factory=dict)     # hit_mids 等，供 save/编码使用
+    turn_index: int = 0
+    created_ts: int = 0                                 # ws.py 注入消息时间戳

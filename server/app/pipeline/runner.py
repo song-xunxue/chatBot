@@ -14,7 +14,8 @@ from typing import AsyncIterator
 
 from pipeline.context import MessageContext
 from pipeline.stages import (
-    stage_load_history, stage_persona_inject, stage_llm_stream, stage_save,
+    stage_load_history, stage_persona_inject, stage_memory_retrieve,
+    stage_llm_stream, stage_save, stage_memory_write,
 )
 from storage.redis_client import get_redis
 
@@ -28,8 +29,10 @@ async def run_stream(ctx: MessageContext) -> AsyncIterator[str]:
     redis = await get_redis()
     # ①取历史
     await stage_load_history(ctx, redis)
-    # ②人设注入（M2 占位）
-    await stage_persona_inject(ctx)
+    # ②人设注入（M3：真实人设加载，替换 M2 占位）
+    await stage_persona_inject(ctx, redis)
+    # ②.5记忆检索（M3：召回四层记忆，组装 memory_block 拼入 system_prompt）
+    await stage_memory_retrieve(ctx, redis)
     # ③流式调 LLM：边产边推，同时累积完整回复
     full_reply: list[str] = []
     async for token in stage_llm_stream(ctx):
@@ -38,3 +41,5 @@ async def run_stream(ctx: MessageContext) -> AsyncIterator[str]:
     ctx.reply_text = "".join(full_reply)
     # ④存历史（用户消息 + 完整回复）
     await stage_save(ctx, redis)
+    # ⑤记忆编码（异步触发：摘要/反思/事实抽取，不阻塞 WS 回复）
+    await stage_memory_write(ctx, redis)

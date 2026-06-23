@@ -45,6 +45,29 @@ class Settings(BaseSettings):
     asr_api_key: str = ""
     image_gen_api_key: str = ""
 
+    # 5.人设系统（M3）
+    persona_active_id: str = "default"             # 未绑定对象时使用的默认人设 id
+    persona_dir: str = "server/data/persona"       # 人设 JSON 文件双写目录（相对项目根）
+
+    # 6.四级记忆系统（M3）
+    memory_enabled: bool = True                    # 总开关，False 时降级为 M2 行为
+    memory_working_window: int = 20                 # 工作记忆滑窗轮数
+    memory_episodic_enable: bool = True
+    memory_episodic_summarize_threshold: int = 12   # 每 N 轮触发一次 Episodic 摘要
+    memory_episodic_reflect_interval: int = 5       # 每 N 次摘要触发一次反思
+    memory_longterm_enable: bool = True
+    memory_longterm_max_facts: int = 200            # 长期记忆条目上限，超出触发遗忘淘汰
+    memory_retrieve_topk: int = 5                   # 检索召回 top-K
+    memory_summary_provider: str = ""               # 编码用 LLM provider，空则用对话同款
+    memory_summary_model: str = ""                  # 编码用模型，空则用 provider 默认
+    # 遗忘评分权重与阈值（docs/06 §6.1 / §10）
+    memory_forget_w_importance: float = 0.4
+    memory_forget_w_recency: float = 0.3
+    memory_forget_w_access: float = 0.15
+    memory_forget_w_emotion: float = 0.15
+    memory_forget_threshold: float = 0.3
+    memory_forget_halflife_hours: float = 72.0
+
 
 # 全局配置单例
 settings = Settings()

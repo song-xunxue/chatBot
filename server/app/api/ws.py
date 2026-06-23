@@ -24,6 +24,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from shared.protocol import (  # noqa: E402
     TYPE_USER_MSG, TYPE_AI_START, TYPE_AI_CHUNK, TYPE_AI_DONE, TYPE_ERROR,
+    TYPE_DELETE,
     envelope, now_ts,
 )
 from core.config import settings  # noqa: E402
@@ -41,9 +42,9 @@ _DEFAULT_PROVIDER = "glm"
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     """WebSocket 主通道：实时消息双向通信"""
-    # 1.token 鉴权（单人场景）
+    # 1.token 鉴权（单人场景）；显式拒绝空 token，防 .env 误配为空时完全开放
     token = ws.query_params.get("token", "")
-    if token != settings.access_token:
+    if not settings.access_token or not token or token != settings.access_token:
         await ws.close(code=1008)  # 1008 = policy violation
         return
 
@@ -57,6 +58,9 @@ async def ws_endpoint(ws: WebSocket):
 
             if msg_type == TYPE_USER_MSG:
                 await _handle_user_msg(ws, data)
+            elif msg_type == TYPE_DELETE:
+                # 删除=标记不符合人格，记 persona_evolve 负样本（仅落 pending，反推 M4）
+                await _handle_delete(ws, data)
             else:
                 # 暂未处理的消息类型
                 await ws.send_json(envelope(
@@ -94,7 +98,8 @@ async def _handle_user_msg(ws: WebSocket, data: dict) -> None:
     ))
 
     # ②走管道流式；provider 默认 glm（M2.5 改为按聊天对象绑定）
-    ctx = MessageContext(object_id=object_id, user_text=text, provider_name=_DEFAULT_PROVIDER)
+    ctx = MessageContext(object_id=object_id, user_text=text,
+                         provider_name=_DEFAULT_PROVIDER, created_ts=now_ts())
     try:
         async for token in run_stream(ctx):
             # ai_chunk：逐 token 推送（LLM 边产边推，降低首字延迟）
@@ -116,3 +121,18 @@ async def _handle_user_msg(ws: WebSocket, data: dict) -> None:
             {"message": f"LLM 调用失败: {e}"},
             object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
         ))
+
+
+async def _handle_delete(ws: WebSocket, data: dict) -> None:
+    """处理删除消息：记 persona_evolve 负样本到 pending 队列（反推算法 M4 消费）。
+    失败仅记日志，不回发 error 以免打扰用户"""
+    object_id = data.get("object_id", "")
+    payload = data.get("payload", {})
+    if not settings.memory_enabled:
+        return
+    try:
+        from memory.coordinator import get_memory_coordinator
+        coord = await get_memory_coordinator()
+        await coord.record_negative_feedback(object_id, payload)
+    except Exception:
+        pass
