@@ -1,0 +1,7 @@
+# MyChat 开发/测试依赖（运行依赖见 requirements.txt）
+# 安装：pip install -r requirements-dev.txt
+# 作者: 李文煜
+# 日期: 2026-06-23
+pytest>=9.0
+pytest-asyncio>=1.4
+fakeredis>=2.30
