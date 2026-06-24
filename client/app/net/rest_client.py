@@ -56,3 +56,17 @@ class RestClient:
         except Exception:
             pass
         return None
+
+    def vision(self, image_bytes: bytes, prompt: str = "请简要描述这张图片的内容", mime: str = "image/jpeg") -> str:
+        """图像理解：上传图片 → 文字描述（M6.2，硅基流动视觉模型）"""
+        r = httpx.post(self._url("/api/v1/multimodal/vision"), headers=self._headers,
+                       files={"file": ("image", image_bytes, mime)}, data={"prompt": prompt}, timeout=60)
+        r.raise_for_status()
+        return r.json()["text"]
+
+    def asr(self, audio_bytes: bytes, fmt: str = "wav") -> str:
+        """语音识别：上传音频 → 文字（M6.2，硅基流动 SenseVoice）"""
+        r = httpx.post(self._url("/api/v1/multimodal/asr"), headers=self._headers,
+                       files={"file": (f"audio.{fmt}", audio_bytes, f"audio/{fmt}")}, timeout=60)
+        r.raise_for_status()
+        return r.json()["text"]
