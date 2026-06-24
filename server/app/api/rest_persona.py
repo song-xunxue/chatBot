@@ -1,8 +1,8 @@
 """
 人设 REST 接口
-人设 CRUD / 导入 / 导出 / 头像上传 / 模型绑定 / 对象绑定。
+人设 CRUD / 导入 / 导出 / 头像上传 / 模型绑定 / 对象绑定 / 历史快照 / 回滚。
 复用 ws.py 同款 access_token 鉴权（Header X-Access-Token 或 query token）。
-对应 docs/09 §6.1。
+对应 docs/03 §6.1、docs/10 §4（V1.1 M9 PUT 改 PATCH 深度合并 + history/rollback 端点）。
 
 作者: 李文煜
 日期: 2026-06-23
@@ -10,6 +10,11 @@
 2026-06-23
 变更说明：
   1. M3.1 创建人设 REST 接口
+
+2026-06-24
+变更说明：
+  1. V1.1 M9 update_persona 改 PATCH 深度合并语义（修 V1.0 PUT 全量替换丢字段 + created_ts 重置 bug）
+  2. V1.1 M9/M12 新增 GET /persona/{id}/history、POST /persona/{id}/rollback 端点
 """
 import json
 import re
@@ -39,6 +44,17 @@ def _new_id(name: str) -> str:
     """为新人设生成 id（优先用 name slug，回退时间戳）"""
     slug = re.sub(r"[^\w一-龥-]", "", name or "")[:32]
     return slug or f"persona_{int(time.time() * 1000)}"
+
+
+def _deep_merge(base: dict, patch: dict) -> dict:
+    """V1.1 M9 深度合并：patch 覆盖 base，嵌套 dict 递归合并（局部编辑不丢另一半）"""
+    out = dict(base)
+    for k, v in (patch or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
 
 
 @router.get("/persona", dependencies=[Depends(_auth)])
@@ -71,10 +87,16 @@ async def get_persona(persona_id: str):
 
 @router.put("/persona/{persona_id}", dependencies=[Depends(_auth)])
 async def update_persona(persona_id: str, body: dict):
-    """更新人设（全量替换，id 以路径为准）"""
-    card = PersonaCard.from_dict(body)
-    card.id = persona_id
+    """更新人设（V1.1 M9 改 PATCH 深度合并语义：get 现有卡→body 覆盖→嵌套深度合并→set）。
+    修复 V1.0 PUT 全量替换丢字段 + created_ts 重置 bug；保留未提交字段（含 model/avatar/dynamic_state）。"""
     redis = await get_redis()
+    existing = await store.get_persona(redis, persona_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="persona not found")
+    merged = _deep_merge(existing.to_dict(), body)
+    card = PersonaCard.from_dict(merged)
+    card.id = persona_id
+    card.created_ts = existing.created_ts   # 显式保留原创建时间（防 from_dict 重置）
     await store.set_persona(redis, card)
     return card.to_dict()
 
@@ -148,3 +170,26 @@ async def bind_object(persona_id: str, object_id: str):
         raise HTTPException(status_code=404, detail="persona not found")
     await store.bind_object_persona(redis, object_id, persona_id)
     return {"object_id": object_id, "persona_id": persona_id}
+
+
+@router.get("/persona/{persona_id}/history", dependencies=[Depends(_auth)])
+async def get_persona_history(persona_id: str):
+    """V1.1 M9/M12：列人设历史快照（反推合并留底，供回滚选择）"""
+    redis = await get_redis()
+    card = await store.get_persona(redis, persona_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="persona not found")
+    return {"history": card.history}
+
+
+@router.post("/persona/{persona_id}/rollback", dependencies=[Depends(_auth)])
+async def rollback_persona(persona_id: str, body: dict):
+    """V1.1 M9/M12：回滚到指定 version_no 的快照"""
+    version_no = body.get("version_no")
+    if version_no is None:
+        raise HTTPException(status_code=400, detail="version_no required")
+    redis = await get_redis()
+    restored = await store.rollback_persona(redis, persona_id, int(version_no))
+    if restored is None:
+        raise HTTPException(status_code=404, detail="version not found")
+    return restored.to_dict()
