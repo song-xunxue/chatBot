@@ -66,3 +66,17 @@ export const updateRoleplayMsg = (oid: string, mid: string, body: any) =>
   api.put(`/api/v1/roleplay/${oid}/messages/${mid}`, body).then((r) => r.data)
 export const deleteRoleplayMsg = (oid: string, mid: string) =>
   api.delete(`/api/v1/roleplay/${oid}/messages/${mid}`).then((r) => r.data)
+// V1.2 反推人设·两步合并（infer 预览 → apply 落库）
+export const reverseInfer = (oid: string, mode = 'fill_empty') =>
+  api.post(`/api/v1/roleplay/${oid}/reverse-infer`, { mode }).then((r) => r.data)
+export const applyReverseInfer = (oid: string, token: string) =>
+  api.post(`/api/v1/roleplay/${oid}/reverse-infer/apply`, { confirm_token: token }).then((r) => r.data)
+
+// —— 代人聊天 B：实时接管（rest_takeover，V1.1 M13）——
+export const takeoverToggle = (oid: string, enabled: boolean) =>
+  api.post('/api/v1/takeover/toggle', { object_id: oid, enabled }).then((r) => r.data)
+export const takeoverStatus = (oid: string) =>
+  api.get('/api/v1/takeover/status', { params: { object_id: oid } }).then((r) => r.data)
+export const takeoverPending = () => api.get('/api/v1/takeover/pending').then((r) => r.data)
+export const takeoverAnswer = (oid: string, pid: string, answer: string) =>
+  api.post('/api/v1/takeover/answer', { object_id: oid, pending_id: pid, answer }).then((r) => r.data)
