@@ -71,3 +71,48 @@ def test_upload_avatar(client):
                     headers=HEADERS)
     assert r.status_code == 200
     assert r.json()["avatar"].endswith(".png")
+
+
+# V1.1 M9：PUT 改 PATCH 深度合并（修 V1.0 丢字段 + created_ts 重置 bug）
+def test_put_preserves_other_fields(client):
+    r = client.post("/api/v1/persona",
+                    json={"name": "原", "description": "D", "creator_notes": "C",
+                          "profile": {"age": "18", "gender": "女"}},
+                    headers=HEADERS)
+    pid = r.json()["id"]
+    client.put(f"/api/v1/persona/{pid}", json={"name": "改名"}, headers=HEADERS)
+    got = client.get(f"/api/v1/persona/{pid}", headers=HEADERS).json()
+    assert got["name"] == "改名"
+    assert got["description"] == "D"        # 未丢
+    assert got["creator_notes"] == "C"      # 未丢
+    assert got["profile"]["age"] == "18"    # 嵌套未丢
+    assert got["profile"]["gender"] == "女"
+
+
+def test_put_deep_merge_nested(client):
+    r = client.post("/api/v1/persona",
+                    json={"name": "X", "profile": {"age": "18", "gender": "女"}},
+                    headers=HEADERS)
+    pid = r.json()["id"]
+    # PUT 只改 profile.gender，age 应保留（深度合并而非整体替换）
+    client.put(f"/api/v1/persona/{pid}", json={"profile": {"gender": "男"}}, headers=HEADERS)
+    got = client.get(f"/api/v1/persona/{pid}", headers=HEADERS).json()
+    assert got["profile"]["gender"] == "男"
+    assert got["profile"]["age"] == "18"
+
+
+def test_put_preserves_created_ts(client):
+    r = client.post("/api/v1/persona", json={"name": "T"}, headers=HEADERS)
+    pid = r.json()["id"]
+    created = r.json()["created_ts"]
+    client.put(f"/api/v1/persona/{pid}", json={"name": "T2"}, headers=HEADERS)
+    got = client.get(f"/api/v1/persona/{pid}", headers=HEADERS).json()
+    assert got["created_ts"] == created   # V1.0 bug 修复：不重置
+
+
+def test_history_and_rollback_endpoints(client):
+    pid = client.post("/api/v1/persona", json={"name": "H"}, headers=HEADERS).json()["id"]
+    h = client.get(f"/api/v1/persona/{pid}/history", headers=HEADERS).json()
+    assert h["history"] == []
+    r = client.post(f"/api/v1/persona/{pid}/rollback", json={"version_no": 1}, headers=HEADERS)
+    assert r.status_code == 404   # 无快照，回滚 404

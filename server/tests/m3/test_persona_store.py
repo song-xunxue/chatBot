@@ -74,3 +74,48 @@ async def test_save_avatar(fake_redis):
     assert rel == "static/avatar/default.png"
     card = await store.get_persona(fake_redis, "default")
     assert card.avatar == "static/avatar/default.png"
+
+
+# V1.1 M9：嵌套字段往返 + 导出含新字段 + 快照回滚
+from persona.models import Profile, Preferences, Relationship, DialogueExample
+
+
+async def test_nested_fields_roundtrip(fake_redis):
+    card = PersonaCard(id="n1", name="N", creator_notes="C",
+                       profile=Profile(age="17", gender="女"),
+                       preferences=Preferences(likes=["茶"]),
+                       relationship=Relationship(relation="姐姐"),
+                       example_dialogue=[DialogueExample(user="hi", character="嗨")])
+    await store.set_persona(fake_redis, card)
+    got = await store.get_persona(fake_redis, "n1")
+    assert got.profile.age == "17" and got.profile.gender == "女"
+    assert got.preferences.likes == ["茶"]
+    assert got.relationship.relation == "姐姐"
+    assert got.example_dialogue[0].character == "嗨"
+
+
+async def test_export_contains_new_fields(fake_redis):
+    card = PersonaCard(id="ex2", name="导出2",
+                       profile=Profile(age="18"), preferences=Preferences(likes=["猫"]))
+    await store.set_persona(fake_redis, card)
+    data = await store.export_persona(fake_redis, "ex2")
+    assert data["data"]["profile"]["age"] == "18"
+    assert data["data"]["preferences"]["likes"] == ["猫"]
+
+
+async def test_snapshot_and_rollback(fake_redis):
+    await store.set_persona(fake_redis, PersonaCard(id="s1", name="原", creator_notes="原CN"))
+    v1 = await store.snapshot_persona(fake_redis, "s1")
+    assert v1 >= 1
+    # 改人设后回滚到 v1（v1 快照内容是"原"）
+    card = await store.get_persona(fake_redis, "s1")
+    card.name = "改后"
+    await store.set_persona(fake_redis, card)
+    restored = await store.rollback_persona(fake_redis, "s1", v1)
+    assert restored is not None
+    assert restored.name == "原"
+
+
+async def test_rollback_nonexistent_version(fake_redis):
+    await store.set_persona(fake_redis, PersonaCard(id="s2", name="X"))
+    assert await store.rollback_persona(fake_redis, "s2", 999) is None
