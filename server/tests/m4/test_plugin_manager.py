@@ -107,3 +107,22 @@ async def test_alive_gate_skips_unloaded_instance(manager, bus):
     ctx2 = type("C", (), {"object_id": "o1", "reply_text": "hi"})()
     await bus.fire(ON_AFTER_LLM, ctx2)
     assert ctx2.reply_text == "hi"           # 不存活 → gate 跳过
+
+
+# V1.1 M10：manifest_to_dict 含 display_name/category + 缺省回退
+async def test_manifest_to_dict_defaults_fallback(manager):
+    from plugins.manifest import DEFAULT_CATEGORY
+    await manager.load_all()
+    mf = manager.get_manifest("echo")
+    d = manager.manifest_to_dict(mf)
+    assert "display_name" in d and "category" in d
+    assert d["display_name"] == "echo"           # echo 未设 → 回退 name
+    assert d["category"] == DEFAULT_CATEGORY     # 回退 未分类
+
+
+async def test_manifest_to_dict_explicit_passthrough(manager):
+    from plugins.manifest import PluginManifest
+    mf = PluginManifest(name="x", display_name="中文名", category="人性化")
+    d = manager.manifest_to_dict(mf)
+    assert d["display_name"] == "中文名"
+    assert d["category"] == "人性化"

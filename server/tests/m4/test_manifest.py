@@ -62,3 +62,17 @@ def test_defaults_when_minimal(tmp_path):
 def test_non_dict_yaml_raises(tmp_path):
     with pytest.raises(ValueError):
         parse_manifest(_write(tmp_path, "- a\n- b\n"))   # 列表而非字典
+
+
+# V1.1 M10：display_name/category 解析 + 缺省
+def test_parse_display_name_and_category(tmp_path):
+    p = _write(tmp_path, "name: tts\ndisplay_name: 语音合成\ncategory: 富媒体生成\n")
+    mf = parse_manifest(p)
+    assert mf.display_name == "语音合成"
+    assert mf.category == "富媒体生成"
+
+
+def test_defaults_display_name_category_empty(tmp_path):
+    mf = parse_manifest(_write(tmp_path, "name: minimal\n"))
+    assert mf.display_name == ""   # 缺省空串（manifest_to_dict 回退 name）
+    assert mf.category == ""       # 缺省空串（manifest_to_dict 回退 未分类）
