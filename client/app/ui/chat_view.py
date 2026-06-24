@@ -139,6 +139,15 @@ class ChatView(QWidget):
         self.send_text.emit(text)
 
     # —— 消息操作 ——
+    def clear(self):
+        """清空所有消息气泡（V1.1 切换聊天对象时调用，避免历史叠加重复显示）"""
+        for i in range(self._list.count() - 1, -1, -1):   # 倒序删，避免索引错乱
+            item = self._list.takeAt(i)
+            w = item.widget() if item else None
+            if w is not None:
+                w.deleteLater()
+        self._list.addStretch()   # 重新加顶部弹簧（消息从上往下排）
+
     def add_message(self, role: str, text: str, ts: int = 0, rich: dict | None = None):
         row = BubbleRow(role, text, ts)
         if rich:

@@ -94,8 +94,7 @@ class MainWindow(QMainWindow):
         split.setSizes([260, 700])
         split.setCollapsible(0, False)
         outer.addWidget(split)
-
-        self._show_empty_hint()
+        # 空状态提示由 _load_personas 末尾按实际对象数判断（避免拉取前误报"暂无"）
 
     def _build_topbar(self):
         bar = QFrame()
@@ -166,8 +165,7 @@ class MainWindow(QMainWindow):
             self.ws.object_id = pid          # WS 后续 user_msg 带新对象
         self.title.setText(item.text())
         # 清空聊天区 + 重载该对象历史
-        if hasattr(self.chat, "clear"):
-            self.chat.clear()
+        self.chat.clear()
         self._load_history()
 
     def _set_online(self, on: bool):
