@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     plugin_auto_discover: bool = True              # 启动时自动扫描+加载插件目录
     plugin_tick_interval: float = 60.0             # on_tick 调度间隔（秒），驱动心情/时间/主动消息插件
 
+    # 8.多模态理解（M6.2）
+    multimodal_vision_provider: str = "siliconflow"   # 图像理解 provider（无 key/测试用 stub）
+    multimodal_asr_provider: str = "siliconflow"      # 语音识别 provider
+    siliconflow_vision_model: str = "Qwen/Qwen2.5-VL-7B-Instruct"   # 硅基流动视觉模型
+    siliconflow_asr_model: str = "FunAudioLLM/SenseVoiceSmall"       # 硅基流动 ASR 模型(SenseVoice)
+
 
 # 全局配置单例
 settings = Settings()
