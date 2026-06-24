@@ -272,9 +272,14 @@ class PluginManager:
 
     @staticmethod
     def manifest_to_dict(mf: PluginManifest) -> dict:
-        """manifest 序列化为可返回前端的 dict"""
+        """manifest 序列化为可返回前端的 dict。
+        V1.1 M10：透传 display_name/category（display_name 空回退 name，category 空规范化为
+        DEFAULT_CATEGORY，后端单一真源，前端无需再处理空值）。"""
+        from plugins.manifest import DEFAULT_CATEGORY
         return {
             "name": mf.name,
+            "display_name": mf.display_name or mf.name,   # 缺省回退 name
+            "category": mf.category or DEFAULT_CATEGORY,
             "version": mf.version,
             "author": mf.author,
             "description": mf.description,

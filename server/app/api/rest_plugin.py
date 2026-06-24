@@ -87,8 +87,13 @@ async def get_object_plugins(object_id: str):
     out = []
     for name in mgr.list_loaded():
         cfg = await mgr.get_object_config(name, object_id)
+        # V1.1 M10：补 display_name/category 展示字段（修复前端按对象表渲染 undefined 的契约缺口）
+        mf = mgr.get_manifest(name)
+        md = mgr.manifest_to_dict(mf) if mf else {}
         out.append({
             "name": name,
+            "display_name": md.get("display_name", name),
+            "category": md.get("category", "未分类"),
             "enabled": await mgr.is_enabled_for(name, object_id),
             "params": await mgr.get_params(name, object_id),
             "explicit": "enabled" in cfg,

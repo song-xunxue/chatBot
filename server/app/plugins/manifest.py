@@ -1,7 +1,8 @@
 """
 插件清单（manifest）解析
-从 plugin.yaml 读取插件元信息：name/version/author/description/entry/hooks/default_enabled/config_schema/requires。
-钩子名合法集与 base.ALL_HOOKS 保持一致。对应 docs/05 §4。
+从 plugin.yaml 读取插件元信息：name/version/author/description/entry/hooks/default_enabled/config_schema/requires
++ V1.1 M10：display_name（中文展示名）/category（中文分类），缺省回退。
+钩子名合法集与 base.ALL_HOOKS 保持一致。对应 docs/05 §4、docs/10 §5。
 
 作者: 李文煜
 日期: 2026-06-24
@@ -9,6 +10,7 @@
 2026-06-24
 变更说明：
   1. M4.1 创建 manifest 数据模型 + YAML 解析（含校验）
+  2. V1.1 M10 新增 display_name/category 可选字段（缺省回退 name/未分类），英文 name 保留作内部 id
 """
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,6 +22,9 @@ VALID_HOOKS = {
     "on_message_in", "on_before_llm", "on_after_llm",
     "on_message_out", "on_tick", "on_delete",
 }
+
+# V1.1 M10：分类缺省值（后端单一真源，前端无需再处理空值）
+DEFAULT_CATEGORY = "未分类"
 
 
 @dataclass
@@ -41,6 +46,9 @@ class PluginManifest:
     default_enabled: bool = False
     config_schema: dict = field(default_factory=dict)   # 驱动面板表单 + 参数默认值
     requires: dict = field(default_factory=dict)        # 能力依赖，如 modality: [audio_out]
+    # V1.1 M10：中文展示元信息（缺省回退）
+    display_name: str = ""   # 中文展示名，缺省回退 name
+    category: str = ""       # 中文分类，缺省回退 DEFAULT_CATEGORY
 
     @property
     def hook_names(self) -> list[str]:
@@ -72,6 +80,9 @@ def parse_manifest(path: Path) -> PluginManifest:
         hooks.append(HookEntry(name=hn, priority=pri))
     config_schema = raw.get("config_schema", {}) or {}
     requires = raw.get("requires", {}) or {}
+    # V1.1 M10：中文展示元信息（缺省回退 name/未分类）
+    display_name = str(raw.get("display_name", "")).strip()
+    category = str(raw.get("category", "")).strip()
     return PluginManifest(
         name=name,
         version=str(raw.get("version", "0.0.0")),
@@ -82,4 +93,6 @@ def parse_manifest(path: Path) -> PluginManifest:
         default_enabled=bool(raw.get("default_enabled", False)),
         config_schema=config_schema if isinstance(config_schema, dict) else {},
         requires=requires if isinstance(requires, dict) else {},
+        display_name=display_name,
+        category=category,
     )
