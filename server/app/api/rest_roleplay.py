@@ -33,11 +33,15 @@ async def _auth(token: str = Header(default="", alias="X-Access-Token"),
 
 
 async def _check_bound(redis, object_id: str) -> str:
-    """校验 object_id 已绑定人设才允许录入（防孤儿 chat List）。返回绑定的 persona_id。"""
+    """校验 object_id 有效：已绑定人设，或 object_id 本身就是 persona_id
+    （客户端 M14 选人设作聊天对象，object_id 即 persona_id）。返回对应 persona_id。"""
     bound = await redis.get(_K_BIND.format(oid=object_id))
-    if not bound:
-        raise HTTPException(status_code=400, detail=f"对象 {object_id} 未绑定人设，请先在面板绑定")
-    return await persona_store.get_object_persona_id(redis, object_id)
+    if bound:
+        return await persona_store.get_object_persona_id(redis, object_id)
+    # 未绑定：object_id 本身可能是 persona_id（客户端用人设 id 作聊天对象）
+    if await persona_store.get_persona(redis, object_id):
+        return object_id
+    raise HTTPException(status_code=400, detail=f"对象 {object_id} 未绑定人设且不是有效人设 id")
 
 
 @router.post("/{object_id}/messages", dependencies=[Depends(_auth)])

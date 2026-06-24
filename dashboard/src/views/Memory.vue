@@ -1,13 +1,10 @@
 <script setup lang="ts">
 /**
- * 记忆查看：统计 + 长期/情节/核心 三层 + 手动遗忘单条（rest_memory）
+ * 记忆查看（V1.2 美化）：统计 + 类别筛选(预选) + 时间格式化 + 彩色类别标签 + 卡片式 + 手动遗忘。
  * 作者: 李文煜
  */
-import { ref, h } from 'vue'
-import {
-  NCard, NSpace, NInput, NButton, NDataTable, NStatistic, NGrid, NGi, NTag, NEmpty,
-  useMessage, type DataTableColumns,
-} from 'naive-ui'
+import { ref, computed } from 'vue'
+import { NCard, NSpace, NInput, NButton, NStatistic, NGrid, NGi, NTag, NEmpty, NSelect, NPopconfirm, useMessage } from 'naive-ui'
 import { getMemory, getMemoryStats, forgetOneMemory } from '@/api'
 
 const message = useMessage()
@@ -15,6 +12,16 @@ const oid = ref('default')
 const stats = ref<any>({})
 const data = ref<any>({})
 const loaded = ref(false)
+const catFilter = ref<string | null>(null)   // V1.2 长期记忆类别筛选（预选）
+
+const catOptions = [
+  { label: '全部类别', value: '' },
+  { label: '事实 fact', value: 'fact' },
+  { label: '偏好 preference', value: 'preference' },
+  { label: '关系 relationship', value: 'relationship' },
+  { label: '事件 event', value: 'event' },
+  { label: '性格 personality', value: 'personality' },
+]
 
 async function load() {
   if (!oid.value) return
@@ -22,39 +29,32 @@ async function load() {
     stats.value = await getMemoryStats(oid.value)
     data.value = await getMemory(oid.value, 'all')
     loaded.value = true
-  } catch (e: any) {
-    message.error('' + e)
-  }
+  } catch (e: any) { message.error('' + e) }
+}
+function fmtTs(ts: number): string {
+  if (!ts) return '—'
+  const d = new Date(ts); const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+function catColor(cat: string): 'success' | 'warning' | 'info' | 'error' | 'default' {
+  return ({ fact: 'info', preference: 'warning', relationship: 'success', event: 'error', personality: 'default' } as any)[cat] || 'default'
 }
 async function forget(mid: string) {
-  try {
-    await forgetOneMemory(oid.value, mid)
-    message.success('已遗忘')
-    load()
-  } catch (e: any) {
-    message.error('' + e)
-  }
+  try { await forgetOneMemory(oid.value, mid); message.success('已遗忘'); load() }
+  catch (e: any) { message.error('' + e) }
 }
-
-const ltCols: DataTableColumns<any> = [
-  { title: '内容', key: 'content', ellipsis: { tooltip: true } },
-  { title: '类别', key: 'category', width: 100, render: (m) => h(NTag, { size: 'small' }, () => m.category) },
-  { title: '重要', key: 'importance', width: 80 },
-  {
-    title: '操作', key: 'op', width: 80,
-    render: (m) => h(NButton, { size: 'small', type: 'error', quaternary: true, onClick: () => forget(m.id) }, () => '遗忘'),
-  },
-]
-const epCols: DataTableColumns<any> = [
-  { title: '摘要', key: 'summary', ellipsis: { tooltip: true } },
-  { title: '时间', key: 'created_ts', width: 160 },
-]
+// V1.2 长期记忆按类别筛选
+const ltFiltered = computed(() => {
+  const list = data.value.long_term || []
+  if (!catFilter.value) return list
+  return list.filter((m: any) => m.category === catFilter.value)
+})
 </script>
 
 <template>
   <n-space vertical size="large">
     <n-space align="center">
-      <n-input v-model:value="oid" placeholder="object_id" style="width: 240px" />
+      <n-input v-model:value="oid" placeholder="object_id" style="width: 240px" @keyup.enter="load" />
       <n-button type="primary" @click="load">查看记忆</n-button>
     </n-space>
 
@@ -66,13 +66,34 @@ const epCols: DataTableColumns<any> = [
     </n-grid>
 
     <n-card title="长期记忆 Long-term" size="small">
-      <n-data-table v-if="(data.long_term || []).length" :columns="ltCols" :data="data.long_term || []" :bordered="false" />
-      <n-empty v-else description="无" />
+      <n-space align="center" style="margin-bottom:10px">
+        <span style="font-size:13px;color:#666">筛选类别：</span>
+        <n-select v-model:value="catFilter" :options="catOptions" placeholder="全部类别" style="width:180px" clearable />
+      </n-space>
+      <n-empty v-if="!ltFiltered.length" description="无" />
+      <n-card v-for="m in ltFiltered" :key="m.id" size="small" style="margin-bottom:8px">
+        <n-space justify="space-between" align="center">
+          <n-space align="center">
+            <n-tag size="small" :type="catColor(m.category)">{{ m.category }}</n-tag>
+            <n-tag size="small" type="default">重要 {{ Number(m.importance || 0).toFixed(2) }}</n-tag>
+          </n-space>
+          <n-space>
+            <span style="font-size:11px;color:#aaa">{{ fmtTs(m.created_ts) }}</span>
+            <n-popconfirm @positive-click="forget(m.id)"><template #trigger><n-button size="tiny" type="error" ghost>遗忘</n-button></template>确认遗忘这条？</n-popconfirm>
+          </n-space>
+        </n-space>
+        <div style="margin-top:6px">{{ m.content }}</div>
+      </n-card>
     </n-card>
+
     <n-card title="情节记忆 Episodic" size="small">
-      <n-data-table v-if="(data.episodic || []).length" :columns="epCols" :data="data.episodic || []" :bordered="false" />
-      <n-empty v-else description="无" />
+      <n-empty v-if="!(data.episodic || []).length" description="无" />
+      <n-card v-for="(e, i) in (data.episodic || [])" :key="i" size="small" style="margin-bottom:8px">
+        <div>{{ e.summary }}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px">{{ fmtTs(e.created_ts) }}</div>
+      </n-card>
     </n-card>
+
     <n-card title="核心记忆 Core" size="small">
       <n-space v-if="(data.core || []).length" vertical>
         <n-card v-for="(c, i) in data.core" :key="i" size="small">{{ c.content || JSON.stringify(c) }}</n-card>
