@@ -10,7 +10,10 @@ Stub 多模态 Provider：不调用真实第三方服务，返回占位 artifact
 变更说明：
   1. M4.3 创建 StubTTSProvider / StubImageProvider
 """
-from modality.base import TTSProvider, ImageProvider, AudioArtifact, ImageArtifact
+from modality.base import (
+    TTSProvider, ImageProvider, VisionProvider, ASRProvider,
+    AudioArtifact, ImageArtifact,
+)
 
 
 class StubTTSProvider(TTSProvider):
@@ -27,3 +30,19 @@ class StubImageProvider(ImageProvider):
 
     async def generate(self, prompt: str, size: str = "", **opts) -> ImageArtifact:
         return ImageArtifact(url=f"stub://img/{abs(hash(prompt))}", provider="stub", format="png")
+
+
+class StubVisionProvider(VisionProvider):
+    """占位图像理解：不调真实视觉模型，返回固定占位描述（链路/测试用）"""
+    name = "stub"
+
+    async def understand(self, image_bytes: bytes, prompt: str, mime: str = "image/jpeg") -> str:
+        return "[图像理解·stub 占位]"
+
+
+class StubASRProvider(ASRProvider):
+    """占位语音识别：不调真实 ASR，返回固定占位转写（链路/测试用）"""
+    name = "stub"
+
+    async def transcribe(self, audio_bytes: bytes, fmt: str = "wav") -> str:
+        return "[语音转写·stub 占位]"

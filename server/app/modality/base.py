@@ -49,3 +49,29 @@ class ImageProvider(ABC):
     @abstractmethod
     async def generate(self, prompt: str, size: str = "", **opts) -> ImageArtifact:
         """按 prompt 生成图像，返回 ImageArtifact"""
+
+
+class VisionProvider(ABC):
+    """图像理解 Provider 抽象（多模态视觉：图 + 提示 → 文字描述）"""
+    name: str = ""
+
+    def __init__(self, api_key: str = "", model: str = ""):
+        self.api_key = api_key
+        self.model = model
+
+    @abstractmethod
+    async def understand(self, image_bytes: bytes, prompt: str, mime: str = "image/jpeg") -> str:
+        """理解图像内容，按 prompt 返回文字描述"""
+
+
+class ASRProvider(ABC):
+    """语音识别 Provider 抽象（音频 → 文字）"""
+    name: str = ""
+
+    def __init__(self, api_key: str = "", model: str = ""):
+        self.api_key = api_key
+        self.model = model
+
+    @abstractmethod
+    async def transcribe(self, audio_bytes: bytes, fmt: str = "wav") -> str:
+        """把音频转写为文字"""

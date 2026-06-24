@@ -10,11 +10,17 @@
   1. M4.3 创建 modality 包：TTS/Image Provider 抽象 + stub 默认实现 + registry
 """
 from modality.base import (
-    TTSProvider, ImageProvider, AudioArtifact, ImageArtifact,
+    TTSProvider, ImageProvider, VisionProvider, ASRProvider,
+    AudioArtifact, ImageArtifact,
 )
-from modality.registry import get_tts, get_image, register_tts, register_image
+from modality.registry import (
+    get_tts, get_image, get_vision, get_asr,
+    register_tts, register_image, register_vision, register_asr,
+)
 
 __all__ = [
-    "TTSProvider", "ImageProvider", "AudioArtifact", "ImageArtifact",
-    "get_tts", "get_image", "register_tts", "register_image",
+    "TTSProvider", "ImageProvider", "VisionProvider", "ASRProvider",
+    "AudioArtifact", "ImageArtifact",
+    "get_tts", "get_image", "get_vision", "get_asr",
+    "register_tts", "register_image", "register_vision", "register_asr",
 ]
