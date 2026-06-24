@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * 插件管理：列表 + 全局开关 + 按对象启用/参数配置（rest_plugin）
+ * 插件管理：按分类分组列表 + 全局开关 + 按对象启用/参数配置（rest_plugin）
+ * V1.1 M10：中文化（display_name/category/description）+ 按 category 分组展示
  * 作者: 李文煜
  */
-import { ref, h, onMounted } from 'vue'
+import { ref, h, computed, onMounted } from 'vue'
 import {
   NDataTable, NButton, NSpace, NInput, NSwitch, NTag, NCard,
   useMessage, type DataTableColumns,
@@ -25,6 +26,17 @@ async function load() {
   }
 }
 onMounted(load)
+
+// V1.1 M10：按 category 分组（保留插入顺序），每组一张卡片
+const grouped = computed(() => {
+  const map = new Map<string, any[]>()
+  for (const p of plugins.value) {
+    const cat = p.category || '未分类'
+    if (!map.has(cat)) map.set(cat, [])
+    map.get(cat)!.push(p)
+  }
+  return Array.from(map, ([category, items]) => ({ category, items }))
+})
 
 async function toggle(p: any) {
   try {
@@ -56,8 +68,9 @@ async function toggleObj(p: any) {
 }
 
 const cols: DataTableColumns<any> = [
-  { title: '插件', key: 'name' },
-  { title: '版本', key: 'version', width: 80 },
+  { title: '插件', key: 'display_name', render: (p) => p.display_name || p.name },
+  { title: '功能说明', key: 'description', ellipsis: { tooltip: true } },
+  { title: '版本', key: 'version', width: 70 },
   {
     title: '全局开关', key: 'global_enabled',
     render: (p) => h(NSwitch, { value: p.global_enabled, onUpdateValue: () => toggle(p) }),
@@ -69,7 +82,7 @@ const cols: DataTableColumns<any> = [
   { title: '钩子', key: 'hooks', render: (p) => (p.hooks || []).map((x: any) => x.name).join(', ') },
 ]
 const objCols: DataTableColumns<any> = [
-  { title: '插件', key: 'name' },
+  { title: '插件', key: 'display_name', render: (p) => p.display_name || p.name },
   {
     title: '启用(该对象)', key: 'enabled',
     render: (p) => h(NSwitch, { value: p.enabled, onUpdateValue: () => toggleObj(p) }),
@@ -83,7 +96,10 @@ const objCols: DataTableColumns<any> = [
     <n-space>
       <n-button @click="load" :loading="loading">刷新插件</n-button>
     </n-space>
-    <n-data-table :columns="cols" :data="plugins" :loading="loading" :bordered="false" />
+    <!-- V1.1 M10：按分类分组展示，每组一张卡片 -->
+    <n-card v-for="g in grouped" :key="g.category" :title="g.category" size="small">
+      <n-data-table :columns="cols" :data="g.items" :loading="loading" :bordered="false" />
+    </n-card>
     <n-card title="按对象配置" size="small">
       <n-space align="center">
         <n-input v-model:value="oid" placeholder="object_id" style="width: 240px" />
