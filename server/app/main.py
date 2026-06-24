@@ -29,6 +29,7 @@ from api.rest_plugin import router as rest_plugin_router  # 插件 REST（M4.2�
 from api.rest_pet import router as rest_pet_router  # 桌宠头像 REST（M6.1）
 from api.rest_multimodal import router as rest_multimodal_router  # 多模态理解 REST（M6.2）
 from api.rest_admin import router as rest_admin_router  # 管理面板杂项 REST（M7）
+from api.rest_roleplay import router as rest_roleplay_router  # 代人聊天 A 模拟训练 REST（V1.1 M11）
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
     app.include_router(rest_multimodal_router)
     # 挂载管理面板杂项 REST 接口（M7）
     app.include_router(rest_admin_router)
+    app.include_router(rest_roleplay_router)
     # M8：托管 Vue 管理面板静态产物（在所有 API 路由之后挂载，浏览器直开 /）
     _mount_dashboard(app)
 
