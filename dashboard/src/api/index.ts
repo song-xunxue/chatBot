@@ -42,6 +42,11 @@ export const restoreMemory = (oid: string, mid: string) =>
 export const getModels = () => api.get('/api/v1/models').then((r) => r.data)
 export const getHistory = (oid: string, limit = 50) =>
   api.get(`/api/v1/history/${oid}`, { params: { limit } }).then((r) => r.data)
+// V1.2 历史编辑
+export const updateHistoryMsg = (oid: string, mid: string, body: any) =>
+  api.put(`/api/v1/history/${oid}/${mid}`, body).then((r) => r.data)
+export const deleteHistoryMsg = (oid: string, mid: string) =>
+  api.delete(`/api/v1/history/${oid}/${mid}`).then((r) => r.data)
 export const getProposals = () => api.get('/api/v1/persona_evolve/proposals').then((r) => r.data)
 export const dismissProposal = (oid: string) =>
   api.delete(`/api/v1/persona_evolve/proposals/${oid}`).then((r) => r.data)
@@ -54,6 +59,9 @@ export const listRoleplayMsgs = (oid: string) =>
   api.get(`/api/v1/roleplay/${oid}/messages`).then((r) => r.data)
 export const addRoleplayMsg = (oid: string, body: any) =>
   api.post(`/api/v1/roleplay/${oid}/messages`, body).then((r) => r.data)
+// V1.2 代人聊天单条录入
+export const addRoleplaySingle = (oid: string, body: any) =>
+  api.post(`/api/v1/roleplay/${oid}/messages/single`, body).then((r) => r.data)
 export const updateRoleplayMsg = (oid: string, mid: string, body: any) =>
   api.put(`/api/v1/roleplay/${oid}/messages/${mid}`, body).then((r) => r.data)
 export const deleteRoleplayMsg = (oid: string, mid: string) =>

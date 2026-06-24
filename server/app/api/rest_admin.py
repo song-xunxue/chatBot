@@ -44,16 +44,32 @@ async def list_models():
 
 @router.get("/history/{object_id}", dependencies=[Depends(_auth)])
 async def get_history(object_id: str, limit: int = Query(50, ge=1, le=500)):
-    """按对象查看对话历史（chat_store Working 层）"""
+    """按对象查看对话历史（V1.2：返回 mid/ts/source，供历史页展示与编辑）"""
     redis = await get_redis()
-    msgs = await chat_store.get_history(redis, object_id, limit=limit)
-    return {
-        "object_id": object_id,
-        "messages": [
-            {"role": m.role, "content": m.content, "ts": getattr(m, "ts", 0)}
-            for m in msgs
-        ],
-    }
+    msgs = await chat_store.list_messages(redis, object_id, limit=limit)
+    return {"object_id": object_id, "messages": msgs}
+
+
+@router.put("/history/{object_id}/{mid}", dependencies=[Depends(_auth)])
+async def update_history(object_id: str, mid: str, body: dict):
+    """V1.2 修改一条历史消息（role/content/ts 任选，未传项不变）"""
+    redis = await get_redis()
+    hit = await chat_store.update_message(
+        redis, object_id, mid,
+        role=body.get("role"), content=body.get("content"), ts=body.get("ts"))
+    if not hit:
+        raise HTTPException(status_code=404, detail="message not found")
+    return {"updated": True}
+
+
+@router.delete("/history/{object_id}/{mid}", dependencies=[Depends(_auth)])
+async def delete_history(object_id: str, mid: str):
+    """V1.2 删除一条历史消息（删除后该对象历史索引前移，前端需重新拉取）"""
+    redis = await get_redis()
+    hit = await chat_store.delete_message(redis, object_id, mid)
+    if not hit:
+        raise HTTPException(status_code=404, detail="message not found")
+    return {"deleted": True}
 
 
 @router.get("/persona_evolve/proposals", dependencies=[Depends(_auth)])

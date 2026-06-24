@@ -76,6 +76,56 @@ async def clear_history(redis: Redis, object_id: str) -> None:
     await redis.delete(_key(object_id))
 
 
+# —— V1.2 历史展示/编辑（含 ts/mid，区别 get_history 仅给 LLM role/content）——
+
+async def list_messages(redis: Redis, object_id: str, limit: int = 500) -> list[dict]:
+    """列历史消息（含 mid/ts/source）供历史页展示与编辑。
+    mid 用 Redis List 绝对索引（稳定对应 List 位置，供 update/delete 定位）。"""
+    total = await redis.llen(_key(object_id))
+    start = max(0, total - limit)
+    raw = await redis.lrange(_key(object_id), start, -1)
+    out = []
+    for i, item in enumerate(raw):
+        d = json.loads(item)
+        out.append({
+            "mid": str(start + i),            # Redis List 绝对索引
+            "role": d.get("role", ""),
+            "content": d.get("content", ""),
+            "ts": d.get("ts", 0),
+            "source": d.get("source", ""),
+        })
+    return out
+
+
+async def update_message(redis: Redis, object_id: str, mid: str, *,
+                         role: str | None = None, content: str | None = None,
+                         ts: int | None = None) -> bool:
+    """按 mid（List 索引）改写一条历史消息的 role/content/ts（LSET 原地改，不改索引）。"""
+    idx = int(mid)
+    raw = await redis.lindex(_key(object_id), idx)
+    if raw is None:
+        return False
+    d = json.loads(raw)
+    if role is not None:
+        d["role"] = role
+    if content is not None:
+        d["content"] = content
+    if ts is not None:
+        d["ts"] = ts
+    await redis.lset(_key(object_id), idx, json.dumps(d, ensure_ascii=False))
+    return True
+
+
+async def delete_message(redis: Redis, object_id: str, mid: str) -> bool:
+    """按 mid（List 索引）删除一条历史消息（LSET 标记 + LREM，删除后后面索引前移）。"""
+    idx = int(mid)
+    if await redis.lindex(_key(object_id), idx) is None:
+        return False
+    await redis.lset(_key(object_id), idx, "__TODELETE__")
+    await redis.lrem(_key(object_id), 1, "__TODELETE__")
+    return True
+
+
 # —— V1.1 M11：roleplay 正样本存储（面板模拟训练）——
 
 async def append_roleplay_pair(redis: Redis, object_id: str,
@@ -94,6 +144,16 @@ async def append_roleplay_pair(redis: Redis, object_id: str,
     pipe.rpush(_roleplay_key(object_id), msg_a)
     await pipe.execute()
     return mid_u, mid_a, ts
+
+
+async def append_roleplay_single(redis: Redis, object_id: str, role: str, content: str) -> tuple:
+    """V1.2 录单条 roleplay 消息（不强制配对，支持连续多条同角色后再回复）。返回 (mid, ts)。"""
+    mid = f"rp_{uuid.uuid4().hex[:12]}"
+    ts = int(time.time() * 1000)
+    msg = json.dumps({"role": role, "content": content, "ts": ts,
+                      "mid": mid, "source": "roleplay"}, ensure_ascii=False)
+    await redis.rpush(_roleplay_key(object_id), msg)
+    return mid, ts
 
 
 async def list_roleplay(redis: Redis, object_id: str, limit: int = 1000) -> list[dict]:

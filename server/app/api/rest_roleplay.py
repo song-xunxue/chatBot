@@ -53,6 +53,21 @@ async def add_message(object_id: str, body: dict):
     return {"mid_user": mid_u, "mid_assistant": mid_a, "ts": ts}
 
 
+@router.post("/{object_id}/messages/single", dependencies=[Depends(_auth)])
+async def add_single_message(object_id: str, body: dict):
+    """V1.2 录单条 roleplay 消息（role + content，支持连续多条同角色后再回复）。"""
+    role = body.get("role", "user")
+    content = (body.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content 必填")
+    if role not in ("user", "assistant", "system"):
+        raise HTTPException(status_code=400, detail="role 必须为 user/assistant/system")
+    redis = await get_redis()
+    await _check_bound(redis, object_id)
+    mid, ts = await chat_store.append_roleplay_single(redis, object_id, role, content)
+    return {"mid": mid, "ts": ts}
+
+
 @router.get("/{object_id}/messages", dependencies=[Depends(_auth)])
 async def list_messages(object_id: str, limit: int = Query(1000, ge=1, le=1000)):
     """列出该对象的 roleplay 正样本（带 mid，正序）"""
