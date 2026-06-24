@@ -48,3 +48,13 @@ export const dismissProposal = (oid: string) =>
 // 人设模型绑定（rest_persona）
 export const bindPersonaModel = (id: string, body: any) =>
   api.put(`/api/v1/persona/${id}/model`, body).then((r) => r.data)
+
+// —— 代人聊天 A：模拟训练（rest_roleplay，V1.1 M11）——
+export const listRoleplayMsgs = (oid: string) =>
+  api.get(`/api/v1/roleplay/${oid}/messages`).then((r) => r.data)
+export const addRoleplayMsg = (oid: string, body: any) =>
+  api.post(`/api/v1/roleplay/${oid}/messages`, body).then((r) => r.data)
+export const updateRoleplayMsg = (oid: string, mid: string, body: any) =>
+  api.put(`/api/v1/roleplay/${oid}/messages/${mid}`, body).then((r) => r.data)
+export const deleteRoleplayMsg = (oid: string, mid: string) =>
+  api.delete(`/api/v1/roleplay/${oid}/messages/${mid}`).then((r) => r.data)
