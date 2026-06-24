@@ -48,7 +48,7 @@ def test_bubble_renders_rich(qapp):
 
 
 def test_main_window_applies_mood_state(qapp, tmp_path):
-    """MainWindow 收到带 state.mood 的 ai_done → 顶栏心情 emoji 更新"""
+    """V1.1 M14：MainWindow 收到 ai_done → 落库 assistant（顶栏 mood 已移除，仅保留落库）"""
     from config import ClientConfig
     from ui.main_window import MainWindow
     cfg = ClientConfig(
@@ -56,8 +56,10 @@ def test_main_window_applies_mood_state(qapp, tmp_path):
         token="t", object_id="t", db_path=tmp_path / "chat.db", message_limit=50,
     )
     win = MainWindow(cfg)
+    win._on_msg({"type": "ai_start", "payload": {}})
     win._on_msg({"type": "ai_done", "payload": {"text": "嗨", "state": {"mood": "开心"}}})
     qapp.processEvents()
-    assert win.mood.text() == "😊"
+    msgs = win.store.get_messages("t")
+    assert any(m.role == "assistant" and m.text == "嗨" for m in msgs)
     win.close()
     qapp.processEvents()

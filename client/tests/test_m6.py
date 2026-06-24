@@ -61,6 +61,7 @@ def test_main_window_has_sticker_manager_and_handlers(qapp, tmp_path):
                        token="t", object_id="t", db_path=tmp_path / "chat.db", message_limit=50)
     win = MainWindow(cfg)
     assert hasattr(win, "stickers")
-    assert callable(win._on_pick_sticker) and callable(win._on_set_background)
+    assert callable(win._on_pick_sticker)   # V1.1 M14：去设置入口，保留表情
+    assert hasattr(win, "object_list")      # V1.1 M14 微信式左对象列表
     win.close()
     qapp.processEvents()
