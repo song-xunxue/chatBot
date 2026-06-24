@@ -1,7 +1,7 @@
 """
 人设存储（Redis + 文件双写 CRUD）
 Redis 为权威源，启动时从文件重建索引；写入顺序 Redis→文件，文件失败仅告警。
-对应 docs/04 §3.2、docs/09 §3.3。
+对应 docs/04 §3.2、docs/09 §3.3、docs/10 §4/§7（V1.1 M9 export 扩字段 + M9/M12 快照回滚）。
 
 作者: 李文煜
 日期: 2026-06-23
@@ -9,6 +9,12 @@ Redis 为权威源，启动时从文件重建索引；写入顺序 Redis→文�
 2026-06-23
 变更说明：
   1. M3.1 创建 persona store：get/set/delete/list/default/bind/avatar/export
+
+2026-06-24
+变更说明：
+  1. V1.1 M9 export_persona 补 profile/preferences/relationship/example_dialogue 四组新字段
+  2. V1.1 M9/M12 新增 snapshot_persona/rollback_persona：反推合并前快照入 history，支持一键回滚
+     version_no 用 Redis INCR 单调递增（防同毫秒撞）；history 元素精简平铺（去 history/images 防写放大）
 """
 import json
 import logging
@@ -28,6 +34,9 @@ _K_PERSONA = "mychat:persona:{pid}"       # String(JSON) 人设完整 JSON
 _K_INDEX = "mychat:persona:index"          # Set 所有人设 id
 _K_DEFAULT = "mychat:persona:_default_id"  # String 默认人设 id（避开 mychat:persona:{pid}）
 _K_BIND = "mychat:obj:{oid}:persona"       # String 对象→人设绑定
+_K_VERSION = "mychat:persona_version:{pid}"  # V1.1 M9/M12 单调递增版本号计数器（INCR）
+
+_MAX_HISTORY = 20   # V1.1 M12 history 最多保留快照数
 
 # 文件目录（基于项目根的绝对路径，避免依赖运行时 cwd）
 _DATA_DIR = PROJECT_ROOT / "server" / "data"
@@ -129,7 +138,9 @@ async def save_avatar(redis: Redis, persona_id: str, file_bytes: bytes, ext: str
 
 
 async def export_persona(redis: Redis, persona_id: str) -> dict | None:
-    """导出为 persona_*.json 兼容格式（嵌套 prompts 形态）"""
+    """导出为 persona_*.json 兼容格式（嵌套 prompts 形态）。
+    V1.1 M9：inner 补 profile/preferences/relationship/example_dialogue 新字段，
+    同时写入 data 顶层与 data.prompts.<id>.data（保证 importer 扁平分支可读）。"""
     card = await get_persona(redis, persona_id)
     if not card:
         return None
@@ -138,6 +149,11 @@ async def export_persona(redis: Redis, persona_id: str) -> dict | None:
         "name": d["name"], "description": d["description"],
         "personality": d["personality"], "scenario": d["scenario"],
         "creator_notes": d["creator_notes"],
+        # V1.1 M9 新字段（嵌套形态导出）
+        "profile": d.get("profile", {}),
+        "preferences": d.get("preferences", {}),
+        "relationship": d.get("relationship", {}),
+        "example_dialogue": d.get("example_dialogue", []),
     }
     return {
         "spec": "chara_card_v2",
@@ -146,6 +162,43 @@ async def export_persona(redis: Redis, persona_id: str) -> dict | None:
             "prompts": {d["id"]: {"name": d["name"], "data": inner}},
         },
     }
+
+
+async def snapshot_persona(redis: Redis, persona_id: str) -> int:
+    """V1.1 M9/M12：快照当前人设入 card.history，返回新 version_no。
+    用于反推合并前留底，使合并可回滚。history 元素精简平铺（去 history/images 防写放大）。"""
+    card = await get_persona(redis, persona_id)
+    if not card:
+        return 0
+    version_no = await redis.incr(_K_VERSION.format(pid=persona_id))
+    snap = {k: v for k, v in card.to_dict().items() if k not in ("history", "images")}
+    snap["_version_no"] = version_no
+    card.history.append(snap)
+    if len(card.history) > _MAX_HISTORY:
+        card.history = card.history[-_MAX_HISTORY:]
+    await set_persona(redis, card)
+    return version_no
+
+
+async def rollback_persona(redis: Redis, persona_id: str, version_no: int) -> PersonaCard | None:
+    """V1.1 M9/M12：回滚到指定 version_no 的快照。
+    回滚前先 snapshot 当前卡（保证回滚可再回滚）；version 不存在返回 None。"""
+    card = await get_persona(redis, persona_id)
+    if not card:
+        return None
+    target = next((s for s in card.history if s.get("_version_no") == version_no), None)
+    if target is None:
+        return None
+    # 先快照当前卡留底
+    await snapshot_persona(redis, persona_id)
+    latest = await get_persona(redis, persona_id)   # 含本次 snapshot 的 history 链
+    # 用 target 恢复字段（去掉内部 _ 前缀键）
+    restore = {k: v for k, v in target.items() if not k.startswith("_")}
+    restored = PersonaCard.from_dict(restore)
+    restored.id = persona_id
+    restored.history = latest.history if latest else []
+    await set_persona(redis, restored)
+    return restored
 
 
 async def init_default_if_absent(redis: Redis) -> None:
