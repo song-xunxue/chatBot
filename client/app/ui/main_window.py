@@ -251,6 +251,11 @@ class MainWindow(QMainWindow):
             self.store.append_message(self.cfg.object_id, "assistant", text, ts=now_ts())
             if payload.get("nudge") and self.pet is not None:
                 self.pet.shake()                              # 桌宠抖动（M6.1）
+        elif t == "takeover_pending":                         # V1.1 M13 代答等待态（服务端主动）
+            self.chat.add_system("⏳ 等待人工代答…")
+        elif t == "takeover_timeout":                         # V1.1 M13 代答超时
+            self.chat.add_system("代人超时，请重试")
+            self._streaming = None
 
     def closeEvent(self, event):
         # 有桌宠且非强制退出：关闭聊天窗 → 缩到桌宠（不退出，WS/Store 保留）
