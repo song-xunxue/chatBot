@@ -3,6 +3,8 @@ version: 0.1.0
 author: 李文煜
 description: 表情包生成（F-P-03）——基于回复生成表情包图，加入回复富内容 ctx.rich.sticker
 entry: plugin.py
+display_name: 表情包生成
+category: 富媒体生成
 hooks:
   - { name: on_after_llm, priority: 160 }
 default_enabled: false

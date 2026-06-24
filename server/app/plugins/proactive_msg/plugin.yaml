@@ -3,6 +3,8 @@ version: 0.1.0
 author: 李文煜
 description: 自主发消息（人性化）——on_tick 按概率/冷却主动推送问候 + nudge 桌宠抖动
 entry: plugin.py
+display_name: 自主发消息
+category: 人性化
 hooks:
   - { name: on_tick, priority: 200 }
 default_enabled: false

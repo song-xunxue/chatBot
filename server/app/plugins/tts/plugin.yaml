@@ -3,6 +3,8 @@ version: 0.1.0
 author: 李文煜
 description: 语音合成（F-P-01）——把回复文本合成为语音，加入回复富内容 ctx.rich.audio
 entry: plugin.py
+display_name: 语音合成
+category: 富媒体生成
 hooks:
   - { name: on_after_llm, priority: 120 }
 default_enabled: false

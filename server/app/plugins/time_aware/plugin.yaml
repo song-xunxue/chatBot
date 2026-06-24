@@ -3,6 +3,8 @@ version: 0.1.0
 author: 李文煜
 description: 时间观念（人性化）——感知时辰/季节，注入时间上下文到 prompt，缓存时辰标签
 entry: plugin.py
+display_name: 时间观念
+category: 人性化
 hooks:
   - { name: on_before_llm, priority: 70 }
   - { name: on_tick, priority: 90 }

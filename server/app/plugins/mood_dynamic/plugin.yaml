@@ -3,6 +3,8 @@ version: 0.1.0
 author: 李文煜
 description: 动态心情（人性化）——维护心情值并注入 prompt，随对话情感与时间更新/衰减
 entry: plugin.py
+display_name: 动态心情
+category: 人性化
 hooks:
   - { name: on_before_llm, priority: 80 }
   - { name: on_after_llm, priority: 90 }

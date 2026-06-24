@@ -3,6 +3,8 @@ version: 0.1.0
 author: 李文煜
 description: 回复增强（F-P-05）——输出多段合并 + 可选输入累积（攒够再回）
 entry: plugin.py
+display_name: 回复增强
+category: 对话处理
 hooks:
   - { name: on_message_in, priority: 50 }
   - { name: on_before_llm, priority: 300 }
