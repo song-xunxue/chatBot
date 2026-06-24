@@ -2,6 +2,7 @@
 WebSocket 主通道端点
 token 鉴权 + 接收 user_msg + 走消息处理管道(run_stream) + 流式推送
 ai_start/ai_chunk/ai_done。M2：把 M1.5 的 echo 回显替换为真实 LLM 流式回复。
+V1.1 M13：代人聊天 B 实时接管——代人模式开启时 user_msg 旁路 LLM，推代答请求到面板。
 
 作者: 李文煜
 日期: 2026-06-15
@@ -17,7 +18,9 @@ ai_start/ai_chunk/ai_done。M2：把 M1.5 的 echo 回显替换为真实 LLM 流
 
 2026-06-24
 变更说明：
-  1. M4.1-review：run_stream 产出 0 chunk 且 reply_text 为空时回发 TYPE_ERROR（插件丢弃/空回复），避免客户端"转圈→空白"
+  1. M4.1-review：run_stream 产出 0 chunk 且 reply_text 为空时回发 TYPE_ERROR
+  2. V1.1 M13 代人聊天 B：_handle_user_msg 代检旁路 LLM（入 user 消息+推 PENDING+广播 takeover_request）；
+     新增 takeover_subscribe 路由 + disconnect 取消面板订阅
 """
 import sys
 from pathlib import Path
@@ -29,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from shared.protocol import (  # noqa: E402
     TYPE_USER_MSG, TYPE_AI_START, TYPE_AI_CHUNK, TYPE_AI_DONE, TYPE_ERROR,
     TYPE_DELETE,
+    TYPE_TAKEOVER_SUBSCRIBE, TYPE_TAKEOVER_PENDING, TYPE_TAKEOVER_REQUEST,  # V1.1 M13
     envelope, now_ts,
 )
 from core.config import settings  # noqa: E402
@@ -81,6 +85,10 @@ async def ws_endpoint(ws: WebSocket):
             elif msg_type == TYPE_DELETE:
                 # 删除=标记不符合人格，记 persona_evolve 负样本（仅落 pending，反推 M4）
                 await _handle_delete(ws, data)
+            elif msg_type == TYPE_TAKEOVER_SUBSCRIBE:
+                # V1.1 M13：面板订阅代答请求流
+                from takeover import panel_bus
+                panel_bus.subscribe(ws)
             else:
                 # 暂未处理的消息类型
                 await ws.send_json(envelope(
@@ -89,15 +97,26 @@ async def ws_endpoint(ws: WebSocket):
                     ts=now_ts(),
                 ))
     except WebSocketDisconnect:
-        # 客户端正常断开：注销连接
+        # 客户端正常断开：注销连接 + 取消面板订阅
         get_connection_registry().deregister(ws)
+        from takeover import panel_bus
+        panel_bus.unsubscribe(ws)
 
 
 async def _handle_user_msg(ws: WebSocket, data: dict) -> None:
-    """处理用户消息：走管道流式生成回复，推 ai_start / ai_chunk(×N) / ai_done"""
+    """处理用户消息：走管道流式生成回复，推 ai_start / ai_chunk(×N) / ai_done。
+    V1.1 M13：代人模式开启时旁路 LLM，转 _handle_takeover_bypass。"""
     object_id = data.get("object_id", "")
     get_connection_registry().register(object_id, ws)   # 登记活跃连接，供主动推送
     text = data.get("payload", {}).get("text", "")
+
+    # V1.1 M13 代人聊天 B：检测代人模式，命中则旁路 LLM（不入 run_stream）
+    from takeover import service as takeover_svc
+    from storage.redis_client import get_redis
+    redis = await get_redis()
+    if await takeover_svc.is_takeover_enabled(redis, object_id):
+        await _handle_takeover_bypass(ws, redis, object_id, text)
+        return
 
     # 无任何 LLM key 时降级提示（不崩）
     if not available_providers():
@@ -160,6 +179,30 @@ async def _handle_user_msg(ws: WebSocket, data: dict) -> None:
             {"message": f"LLM 调用失败: {e}"},
             object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
         ))
+
+
+async def _handle_takeover_bypass(ws: WebSocket, redis, object_id: str, text: str) -> None:
+    """V1.1 M13 代人模式旁路：不入 LLM，入用户消息（严格 1 条）+ 推 ai_start/PENDING 给客户端
+    + 广播 takeover_request 到面板订阅者。代答由面板经 REST /takeover/answer 回推。"""
+    from takeover import service as takeover_svc
+    from takeover import panel_bus
+    from storage import chat_store
+    # 入用户消息（source=user_turn）
+    await chat_store.append_message(redis, object_id, "user", text, source="user_turn")
+    pending_id = await takeover_svc.open_takeover_request(redis, object_id, text)
+    ai_msg_id = f"ai_{now_ts()}"
+    # 客户端：ai_start + PENDING（服务端主动等待态，非客户端自计时）
+    await ws.send_json(envelope(
+        TYPE_AI_START, {"msg_id": ai_msg_id},
+        object_id=object_id, msg_id=ai_msg_id, ts=now_ts()))
+    await ws.send_json(envelope(
+        TYPE_TAKEOVER_PENDING, {"pending_id": pending_id},
+        object_id=object_id, msg_id=ai_msg_id, ts=now_ts()))
+    # 面板：广播代答请求
+    await panel_bus.broadcast_to_panels(envelope(
+        TYPE_TAKEOVER_REQUEST,
+        {"pending_id": pending_id, "object_id": object_id, "user_text": text, "created_ts": now_ts()},
+        object_id=object_id, ts=now_ts()))
 
 
 async def _handle_delete(ws: WebSocket, data: dict) -> None:
