@@ -48,7 +48,7 @@ class PetWindow(QWidget):
         self.label.setFixedSize(_SIZE, _SIZE)
         self._base_y = 0
         self._load_appearance()
-        self._start_idle()
+        # V1.1 M14：去闲置弹跳，仅收到回复时由 main_window 调 shake()
 
     # —— 外观 ——
     def _load_appearance(self):
@@ -80,17 +80,7 @@ class PetWindow(QWidget):
         """重新拉取头像（上传/修改后调用）"""
         self._load_appearance()
 
-    # —— 闲置弹跳动画 ——
-    def _start_idle(self):
-        self._idle = QPropertyAnimation(self.label, b"geometry", self)
-        self._idle.setDuration(1400)
-        self._idle.setLoopCount(-1)                          # 无限循环
-        self._idle.setEasingCurve(QEasingCurve.InOutSine)
-        g = self.label.geometry()
-        self._idle.setKeyValueAt(0.0, g)
-        self._idle.setKeyValueAt(0.5, g.adjusted(0, -6, 0, -6))   # 上浮 6px
-        self._idle.setKeyValueAt(1.0, g)
-        self._idle.start()
+    # V1.1 M14：闲置弹跳已移除（仅收到回复时抖动，见 shake + main_window ai_done 触发）
 
     # —— nudge 抖动 ——
     def shake(self):

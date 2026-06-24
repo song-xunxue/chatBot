@@ -1,19 +1,24 @@
 """
-主窗口：顶栏 + 抽屉(人设/状态) + 聊天视图，接线 WS/REST/Store。
-温暖拟人化 + 单列 + 抽屉布局。WS 收到的消息驱动 ChatView 流式渲染并落 SQLite；
-离线发送入 outbox，重连自动补发。
+主窗口（V1.1 M14 微信式）：左侧聊天对象列表 + 右侧聊天区，接线 WS/REST/Store。
+按用户决策5 简化为纯聊天：去除人设管理/设置入口（人设 CRUD 在服务端面板），
+只留聊天 + 多模态收发(📎/🎙/😀)；无对象时提示去面板添加；温馨长方形窗口。
+桌宠仅"收到回复时抖动"（ai_done/proactive 触发，去闲置弹跳在 pet_window 处理）。
 
 作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24
 变更说明：
-  1. M5 创建主窗口：顶栏/抽屉/聊天区 + WS·REST·Store 接线 + 流式/离线/重连补发
+  1. M5 创建主窗口：顶栏/抽屉/聊天区 + WS·REST·Store 接线
+  2. V1.1 M14 微信式重构：左对象列表常驻 + 右聊天，去 ☰抽屉/⚙设置/心情顶栏，
+     对象点击切换 object_id，ai_done 收到回复时桌宠抖动，空状态提示去面板添加
 """
 import logging
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QMainWindow, QPushButton, QVBoxLayout, QWidget,
+    QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QMainWindow,
+    QSplitter, QVBoxLayout, QWidget,
 )
 
 from config import PROJECT_ROOT, ClientConfig
@@ -21,7 +26,6 @@ from net.ws_client import WSClient
 from net.rest_client import RestClient
 from store.db import ChatStore
 from ui.chat_view import ChatView
-from ui.rich_widgets import mood_emoji
 from ui.stickers import StickerPickerDialog, StickerManager
 from shared.protocol import now_ts
 
@@ -29,15 +33,15 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    """主窗口：单列聊天 + 可切换抽屉"""
+    """主窗口（微信式）：左聊天对象列表 + 右聊天区"""
 
     def __init__(self, config: ClientConfig, pet: "object | None" = None):
         super().__init__()
         self.cfg = config
-        self.pet = pet                          # 桌宠引用（nudge 抖动 / 关闭缩到桌宠）
+        self.pet = pet                          # 桌宠引用（仅收到回复时抖动）
         self._force_close = False               # 托盘退出时置 True，绕过"缩到桌宠"
         self.setWindowTitle("MyChat · 小聊")
-        self.resize(400, 640)
+        self.resize(960, 640)                   # V1.1 M14 长方形窗口
         self._streaming = None
         self._online = False
         self.store = ChatStore(config.db_path, config.message_limit)
@@ -58,62 +62,61 @@ class MainWindow(QMainWindow):
         outer = QHBoxLayout(central)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        self.drawer = self._build_drawer()
-        self.drawer.setFixedWidth(190)
-        self.drawer.setVisible(False)
-        outer.addWidget(self.drawer)
-        col = QWidget()
-        cl = QVBoxLayout(col)
-        cl.setContentsMargins(0, 0, 0, 0)
-        cl.setSpacing(0)
-        cl.addWidget(self._build_topbar())
+
+        split = QSplitter(Qt.Horizontal)
+        # 左：聊天对象列表（常驻，微信式）
+        left = QFrame()
+        left.setObjectName("objectPanel")
+        lv = QVBoxLayout(left)
+        lv.setContentsMargins(0, 0, 0, 0)
+        lv.setSpacing(0)
+        head = QLabel("聊天对象")
+        head.setObjectName("panelHead")
+        head.setFixedHeight(40)
+        lv.addWidget(head)
+        self.object_list = QListWidget()
+        self.object_list.setObjectName("objectList")
+        self.object_list.itemClicked.connect(self._on_select_object)
+        lv.addWidget(self.object_list, 1)
+        # 右：顶栏 + 聊天
+        right = QWidget()
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(0, 0, 0, 0)
+        rv.setSpacing(0)
+        rv.addWidget(self._build_topbar())
         self.chat = ChatView()
-        cl.addWidget(self.chat, 1)
-        outer.addWidget(col, 1)
+        rv.addWidget(self.chat, 1)
+
+        split.addWidget(left)
+        split.addWidget(right)
+        split.setStretchFactor(0, 0)
+        split.setStretchFactor(1, 1)
+        split.setSizes([260, 700])
+        split.setCollapsible(0, False)
+        outer.addWidget(split)
+
+        self._show_empty_hint()
 
     def _build_topbar(self):
         bar = QFrame()
         bar.setObjectName("topBar")
         bar.setFixedHeight(48)
         h = QHBoxLayout(bar)
-        h.setContentsMargins(8, 0, 8, 0)
+        h.setContentsMargins(16, 0, 12, 0)
         h.setSpacing(8)
-        self.btn_menu = QPushButton("☰")
-        self.btn_menu.setObjectName("iconBtn")
-        self.btn_menu.setToolTip("人设/历史/设置")
-        self.btn_menu.clicked.connect(self._toggle_drawer)
-        self.title = QLabel("小聊")
+        self.title = QLabel("选择一个聊天对象开始")
         self.title.setObjectName("title")
-        self.mood = QLabel("")                       # 心情占位（多模态阶段接入）
         self.dot = QLabel("●离线")
         self.dot.setObjectName("muted")
-        self.btn_set = QPushButton("⚙")
-        self.btn_set.setObjectName("iconBtn")
-        self.btn_set.setToolTip("设置聊天背景")
-        self.btn_set.clicked.connect(self._on_set_background)
-        h.addWidget(self.btn_menu)
         h.addWidget(self.title)
         h.addStretch()
-        h.addWidget(self.mood)
         h.addWidget(self.dot)
-        h.addWidget(self.btn_set)
         return bar
 
-    def _build_drawer(self):
-        f = QFrame()
-        f.setObjectName("drawer")
-        v = QVBoxLayout(f)
-        v.setContentsMargins(12, 12, 12, 12)
-        v.setSpacing(8)
-        t = QLabel("人设")
-        t.setObjectName("title")
-        v.addWidget(t)
-        self.persona_list = QListWidget()
-        v.addWidget(self.persona_list, 1)
-        self.drawer_status = QLabel("●离线")
-        self.drawer_status.setObjectName("muted")
-        v.addWidget(self.drawer_status)
-        return f
+    def _show_empty_hint(self):
+        """无对象或未选中时，聊天区提示去面板添加"""
+        if self.object_list.count() == 0:
+            self.chat.add_system("暂无聊天对象，请到管理面板（http://43.140.219.99:8000/）添加")
 
     # —— 接线 ——
     def _wire(self):
@@ -131,27 +134,45 @@ class MainWindow(QMainWindow):
             self.chat.add_message(m.role, m.text, ts=m.ts)
 
     def _load_personas(self):
+        """从服务端拉人设作为聊天对象，填入左列表（item 带 persona_id）"""
+        self.object_list.clear()
         try:
-            for p in self.rest.list_personas():
-                self.persona_list.addItem(p.get("name") or p.get("id", ""))
+            personas = self.rest.list_personas()
         except Exception as e:
-            logger.debug("load personas failed: %s", e)   # 离线/无服务端时静默
+            logger.debug("load personas failed: %s", e)
+            personas = []
+        for p in personas:
+            pid = p.get("id", "")
+            name = p.get("name") or pid
+            from PySide6.QtWidgets import QListWidgetItem
+            item = QListWidgetItem(name)
+            item.setData(Qt.UserRole, pid)
+            self.object_list.addItem(item)
+        # 默认选中当前 object_id 对应项
+        for i in range(self.object_list.count()):
+            if self.object_list.item(i).data(Qt.UserRole) == self.cfg.object_id:
+                self.object_list.setCurrentRow(i)
+                self.title.setText(self.object_list.item(i).text())
+                break
+        self._show_empty_hint()
 
-    def _toggle_drawer(self):
-        self.drawer.setVisible(not self.drawer.isVisible())
+    def _on_select_object(self, item):
+        """点击左列表对象 → 切换当前 object_id（WS 后续消息对象 + 重载历史）"""
+        pid = item.data(Qt.UserRole) or item.text()
+        if not pid or pid == self.cfg.object_id:
+            return
+        self.cfg.object_id = pid
+        if hasattr(self.ws, "object_id"):
+            self.ws.object_id = pid          # WS 后续 user_msg 带新对象
+        self.title.setText(item.text())
+        # 清空聊天区 + 重载该对象历史
+        if hasattr(self.chat, "clear"):
+            self.chat.clear()
+        self._load_history()
 
     def _set_online(self, on: bool):
         self._online = on
-        txt = "●在线" if on else "●离线"
-        self.dot.setText(txt)
-        self.drawer_status.setText(txt)
-
-    def _apply_state(self, state: dict):
-        """应用 ai_done 携带的状态：心情 → 顶栏 emoji"""
-        mood = state.get("mood")
-        if mood:
-            self.mood.setText(mood_emoji(mood))
-            self.mood.setToolTip(f"心情：{mood}")
+        self.dot.setText("●在线" if on else "●离线")
 
     # —— 发送 ——
     def _on_send(self, text: str):
@@ -164,12 +185,12 @@ class MainWindow(QMainWindow):
             self.chat.add_system("（离线，消息将在重连后发送）")
 
     def _on_pick_image(self):
-        """📎：选图 → 视觉理解 → 描述填入输入栏（用户可编辑后发送）"""
+        """📎：选图 → 视觉理解 → 描述填入输入栏"""
         path, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "图片 (*.png *.jpg *.jpeg *.webp)")
         if not path:
             return
         low = path.lower()
-        mime = "image/png" if low.endswith(".png") else ("image/webp" if low.endswith(".webp") else "image/jpeg")
+        mime = "image/png" if low.endswith(".png") else ("image/webm" if low.endswith(".webp") else "image/jpeg")
         try:
             with open(path, "rb") as f:
                 data = f.read()
@@ -204,12 +225,6 @@ class MainWindow(QMainWindow):
         self.chat.add_sticker(path)
         self.store.append_message(self.cfg.object_id, "user", "[表情包]", ts=now_ts())
 
-    def _on_set_background(self):
-        """⚙：选择聊天背景图"""
-        path, _ = QFileDialog.getOpenFileName(self, "选择聊天背景", "", "图片 (*.png *.jpg *.jpeg *.webp)")
-        if path:
-            self.chat.set_background(path)
-
     def _on_connected(self):
         self._set_online(True)
         self.chat.add_system("已连接服务端")
@@ -233,7 +248,6 @@ class MainWindow(QMainWindow):
             text = payload.get("text", "")
             held = bool(payload.get("held"))
             rich = payload.get("rich") or {}
-            self._apply_state(payload.get("state") or {})   # 心情等状态 → 顶栏
             if self._streaming is not None:
                 self.chat.finalize_ai(self._streaming, text, held=held, rich=rich)
                 if not held and text:
@@ -242,16 +256,19 @@ class MainWindow(QMainWindow):
                 self.chat.add_message("assistant", text, ts=now_ts(), rich=rich)
                 self.store.append_message(self.cfg.object_id, "assistant", text, ts=now_ts())
             self._streaming = None
+            # V1.1 M14：仅收到回复时桌宠抖动（去闲置弹跳）
+            if not held and text and self.pet is not None and hasattr(self.pet, "shake"):
+                self.pet.shake()
         elif t == "error":
             self.chat.add_system(payload.get("message", "错误"))
         elif t == "proactive_msg":
             text = payload.get("text", "")
-            self.chat.add_system("💬 对方主动发来消息")     # 主动消息提示
+            self.chat.add_system("💬 对方主动发来消息")
             self.chat.add_message("assistant", text, ts=now_ts())
             self.store.append_message(self.cfg.object_id, "assistant", text, ts=now_ts())
-            if payload.get("nudge") and self.pet is not None:
-                self.pet.shake()                              # 桌宠抖动（M6.1）
-        elif t == "takeover_pending":                         # V1.1 M13 代答等待态（服务端主动）
+            if payload.get("nudge") and self.pet is not None and hasattr(self.pet, "shake"):
+                self.pet.shake()
+        elif t == "takeover_pending":                         # V1.1 M13 代答等待态
             self.chat.add_system("⏳ 等待人工代答…")
         elif t == "takeover_timeout":                         # V1.1 M13 代答超时
             self.chat.add_system("代人超时，请重试")
