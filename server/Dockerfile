@@ -28,10 +28,12 @@ RUN pip install --no-cache-dir -r server/requirements.txt \
     -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 4.复制共享协议与应用代码（保留 server/ 层级）
-#   镜像布局：/app/shared/、/app/server/app/，
+#   镜像布局：/app/shared/、/app/server/app/、/app/dashboard_dist(前端面板产物)
 #   使 ws.py 的 parents[3]==/app 能找到 shared
 COPY shared/ ./shared/
 COPY server/app/ ./server/app/
+# M8：打入 Vue 管理面板构建产物（由 FastAPI 在 / 托管，浏览器直开 http://host:8000/）
+COPY dashboard/dist ./dashboard_dist
 
 # 5.切换到应用目录，使同级导入（from core.config）生效
 WORKDIR /app/server/app

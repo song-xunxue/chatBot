@@ -23,6 +23,14 @@ scripts/
 Reference
 docker-compose.yml
 
+# dashboard：只打入 dist 构建产物（Dockerfile COPY dashboard/dist），排除 node_modules/源码
+dashboard/node_modules/
+dashboard/src/
+dashboard/.gitignore
+dashboard/*.json
+dashboard/*.ts
+dashboard/index.html
+
 # Python 缓存
 **/__pycache__/
 *.pyc
