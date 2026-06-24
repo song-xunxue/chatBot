@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- 回形针/附件图标（细线风格，图片附件按钮） 作者: 李文煜 -->
+  <path d="M16 7 L9 14 a3 3 0 1 0 4.2 4.2 L20 11.5 a5 5 0 0 0 -7 -7 L6 11.5 a7 7 0 1 0 9.8 9.8"
+        fill="none" stroke="#5A5A5A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

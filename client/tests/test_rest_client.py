@@ -8,6 +8,10 @@ RestClient mock 测试：验证 vision / asr / get_pet_avatar_bytes / get / post
 2026-06-24
 变更说明：
   1. 回填：mock httpx 覆盖 RestClient 全部方法
+
+2026-06-25
+变更说明：
+  1. 新增 get_avatar_bytes 覆盖（人设头像字节拉取 + 空路径/失败优雅降级）
 """
 import httpx
 import pytest
@@ -70,6 +74,24 @@ def test_get_pet_avatar_bytes_ok(monkeypatch, rc):
 def test_get_pet_avatar_bytes_404_returns_none(monkeypatch, rc):
     monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp(status=404))
     assert rc.get_pet_avatar_bytes() is None
+
+
+def test_get_avatar_bytes_ok(monkeypatch, rc):
+    """M7：拉人设头像字节（GET rest_url/rel_path，image content-type）"""
+    cap = {}
+    monkeypatch.setattr(httpx, "get",
+                        lambda *a, **k: (cap.update(url=a[0]) or _Resp(content=b"\x89PNG", ctype="image/png")))
+    assert rc.get_avatar_bytes("static/avatar/x.png") == b"\x89PNG"
+    assert cap["url"] == "http://x:8000/static/avatar/x.png"
+
+
+def test_get_avatar_bytes_empty_or_fail_returns_none(monkeypatch, rc):
+    """空路径/非图片/失败 → None（优雅降级，调用方回退默认 svg）"""
+    assert rc.get_avatar_bytes("") is None
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp(content=b"x", ctype="text/html"))
+    assert rc.get_avatar_bytes("static/avatar/x.png") is None
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError("x")))
+    assert rc.get_avatar_bytes("static/avatar/x.png") is None
 
 
 def test_vision(monkeypatch, rc):

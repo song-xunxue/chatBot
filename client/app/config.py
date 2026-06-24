@@ -25,6 +25,7 @@ class ClientConfig:
     object_id: str         # 聊天对象 ID（单人场景固定）
     db_path: Path          # 本地 SQLite 缓存路径
     message_limit: int     # 单对象消息保存上限（超出清理最旧，Q-04）
+    user_avatar: str = ""  # 用户头像本地路径（空则用默认 svg；可由顶栏"我"按钮改图）
 
 
 def load_config() -> ClientConfig:
@@ -39,4 +40,5 @@ def load_config() -> ClientConfig:
         object_id=os.environ.get("CLIENT_OBJECT_ID", "default"),
         db_path=db_path,
         message_limit=int(os.environ.get("CLIENT_MESSAGE_LIMIT", "500")),
+        user_avatar=os.environ.get("CLIENT_USER_AVATAR", str(PROJECT_ROOT / "client" / "data" / "user_avatar.png")),
     )

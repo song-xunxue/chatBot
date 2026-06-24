@@ -7,14 +7,18 @@ UI 冒烟测试（QT_QPA_PLATFORM=offscreen）：验证主题加载、气泡/流
 2026-06-24
 变更说明：
   1. M5 创建 UI 冒烟：主题 + ChatView 渲染
+
+2026-06-25
+变更说明：
+  1. 适配微信/QQ 风格主题：断言改为微信绿 USER_GREEN + 列表/气泡 objectName
 """
 
 
 def test_theme_qss_loads():
-    from ui.theme import QSS, PRIMARY
-    assert "FF8B7B" in QSS                    # 主色注入
+    from ui.theme import QSS, USER_GREEN
+    assert "95EC69" in QSS                    # 微信绿注入（用户气泡/发送按钮）
     assert "border-radius" in QSS
-    assert PRIMARY == "#FF8B7B"
+    assert USER_GREEN == "#95EC69"
 
 
 def test_chatview_renders_messages_and_streaming(qapp):

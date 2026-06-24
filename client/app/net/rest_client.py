@@ -9,6 +9,10 @@ WS 是实时主通道，REST 用于初始化拉取与设置类操作。供 UI �
 2026-06-24
 变更说明：
   1. M5 创建 RestClient：get/post 通用 + 人设/health 便捷方法
+
+2026-06-25
+变更说明：
+  1. 新增 get_avatar_bytes(rel_path)：GET rest_url/rel_path 拉人设头像字节，供左列表/气泡头像
 """
 import httpx
 
@@ -63,6 +67,19 @@ class RestClient:
                        files={"file": ("image", image_bytes, mime)}, data={"prompt": prompt}, timeout=60)
         r.raise_for_status()
         return r.json()["text"]
+
+    def get_avatar_bytes(self, rel_path: str) -> bytes | None:
+        """下载人设头像字节（rel_path 为人设 dict 的 avatar 相对路径，如 static/avatar/x.jpg）。
+        GET rest_url/rel_path；非图片/失败返回 None（调用方回退默认 svg，不崩）。"""
+        if not rel_path:
+            return None
+        try:
+            r = httpx.get(self._url("/" + rel_path.lstrip("/")), timeout=8.0)
+            if r.status_code == 200 and "image" in r.headers.get("content-type", ""):
+                return r.content
+        except Exception:
+            pass
+        return None
 
     def asr(self, audio_bytes: bytes, fmt: str = "wav") -> str:
         """语音识别：上传音频 → 文字（M6.2，硅基流动 SenseVoice）"""
