@@ -42,6 +42,19 @@ from plugins.connections import get_connection_registry  # noqa: E402
 
 router = APIRouter()
 
+
+def _build_ai_done_payload(ctx) -> dict:
+    """构造 ai_done payload：文本 + 富内容(ctx.rich) + 状态(ctx.plugin_meta.mood)。
+    抽出为模块级函数便于单测；客户端据此渲染图像/语音/心情。"""
+    payload = {"text": ctx.reply_text}
+    rich = getattr(ctx, "rich", None)
+    if rich:
+        payload["rich"] = rich
+    mood = (getattr(ctx, "plugin_meta", None) or {}).get("mood")
+    if mood:
+        payload["state"] = {"mood": mood}
+    return payload
+
 # M2 默认 provider（M2.5 将改为按聊天对象绑定；此处优先用已配 key 的）
 _DEFAULT_PROVIDER = "glm"
 
@@ -134,10 +147,10 @@ async def _handle_user_msg(ws: WebSocket, data: dict) -> None:
                     object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
                 ))
         else:
-            # ③ai_done：回复结束（附完整文本，客户端可兜底校验）
+            # ③ai_done：回复结束（附完整文本 + 富内容 rich + 状态 state，客户端渲染图像/语音/心情）
             await ws.send_json(envelope(
                 TYPE_AI_DONE,
-                {"text": ctx.reply_text},
+                _build_ai_done_payload(ctx),
                 object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
             ))
     except Exception as e:

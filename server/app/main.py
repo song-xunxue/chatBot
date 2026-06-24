@@ -26,6 +26,7 @@ from api.ws import router as ws_router  # WebSocket 主通道（M1.5）
 from api.rest_persona import router as rest_persona_router  # 人设 REST（M3.1）
 from api.rest_memory import router as rest_memory_router  # 记忆 REST（M3.5）
 from api.rest_plugin import router as rest_plugin_router  # 插件 REST（M4.2）
+from api.rest_pet import router as rest_pet_router  # 桌宠头像 REST（M6.1）
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,8 @@ def create_app() -> FastAPI:
     app.include_router(rest_memory_router)
     # 挂载插件 REST 接口（M4.2）
     app.include_router(rest_plugin_router)
+    # 挂载桌宠头像 REST 接口（M6.1）
+    app.include_router(rest_pet_router)
 
     return app
 

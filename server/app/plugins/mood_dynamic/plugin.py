@@ -25,6 +25,7 @@ class MoodDynamicPlugin(Plugin):
 
     async def on_before_llm(self, ctx):
         mood = await self._get(ctx.object_id)
+        ctx.plugin_meta["mood"] = self._label(mood)        # 供 ws ai_done 下发心情指示
         if ctx.system_prompt:
             ctx.system_prompt += f"\n[当前心情：{self._label(mood)}，让回复语气与之协调]"
         return HookResult.CONTINUE
@@ -41,6 +42,7 @@ class MoodDynamicPlugin(Plugin):
         if delta != 0.0:
             mood = await self._get(ctx.object_id)
             await self._set(ctx.object_id, max(0.0, min(1.0, mood + delta)))
+        ctx.plugin_meta["mood"] = self._label(await self._get(ctx.object_id))   # 更新后心情随 ai_done 下发
         return HookResult.CONTINUE
 
     async def on_tick(self, ctx):

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- 耳朵（白色，暖灰描边） -->
+  <path d="M50 75 L34 18 L92 60 Z" fill="#FFFFFF" stroke="#E3CDB0" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M150 75 L166 18 L108 60 Z" fill="#FFFFFF" stroke="#E3CDB0" stroke-width="3" stroke-linejoin="round"/>
+  <!-- 内耳（粉） -->
+  <path d="M55 66 L46 34 L82 58 Z" fill="#FFC4D0"/>
+  <path d="M145 66 L154 34 L118 58 Z" fill="#FFC4D0"/>
+  <!-- 脸（白色圆头） -->
+  <ellipse cx="100" cy="118" rx="66" ry="60" fill="#FFFFFF" stroke="#E3CDB0" stroke-width="3"/>
+  <!-- 脸颊蓬松 -->
+  <circle cx="42" cy="128" r="16" fill="#FFFFFF" stroke="#E3CDB0" stroke-width="3"/>
+  <circle cx="158" cy="128" r="16" fill="#FFFFFF" stroke="#E3CDB0" stroke-width="3"/>
+  <!-- 眼睛 -->
+  <ellipse cx="76" cy="110" rx="10" ry="13" fill="#4A3B2A"/>
+  <ellipse cx="124" cy="110" rx="10" ry="13" fill="#4A3B2A"/>
+  <circle cx="79" cy="105" r="3.2" fill="#FFFFFF"/>
+  <circle cx="127" cy="105" r="3.2" fill="#FFFFFF"/>
+  <!-- 鼻子 -->
+  <path d="M100 132 q9 0 9 7 q0 6 -9 6 q-9 0 -9 -6 q0 -7 9 -7 Z" fill="#4A3B2A"/>
+  <!-- 嘴 -->
+  <path d="M100 145 q-8 9 -17 3 M100 145 q8 9 17 3" stroke="#4A3B2A" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+  <!-- 腮红 -->
+  <circle cx="58" cy="133" r="9" fill="#FFD9DD" opacity="0.65"/>
+  <circle cx="142" cy="133" r="9" fill="#FFD9DD" opacity="0.65"/>
+</svg>
