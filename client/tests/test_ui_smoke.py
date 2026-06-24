@@ -30,8 +30,8 @@ def test_chatview_renders_messages_and_streaming(qapp):
     qapp.processEvents()                      # 触发布局/绘制，不崩即通过
 
 
-def test_main_window_builds_and_dispatches(qapp, tmp_path):
-    """构造主窗口（WS 指向无效端口，快速失败）+ 直接驱动各收消息路径，验证不崩且能正常关闭"""
+def test_main_window_builds_and_dispatches(qapp, tmp_path, mock_ws):
+    """构造主窗口（mock_ws 不真起 WS 线程）+ 直接驱动各收消息路径，验证不崩且能正常关闭"""
     from config import ClientConfig
     from ui.main_window import MainWindow
     cfg = ClientConfig(

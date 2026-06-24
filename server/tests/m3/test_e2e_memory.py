@@ -10,6 +10,11 @@ M3.6 端到端集成测试
 2026-06-23
 变更说明：
   1. M3.6 端到端覆盖：人设+记忆注入、流式累积、历史保存、事实编码、跨轮召回
+
+2026-06-25
+变更说明：
+  1. 修复 flaky：用轮询（asyncio.wait_for，0.05s 间隔，2s 超时）替代固定 asyncio.sleep(0.2)
+     等待 stage_memory_write 的 create_task 完成，消除高 CI 负载下的时序竞态
 """
 import asyncio
 
@@ -39,6 +44,26 @@ class _FakeProvider:
     async def chat(self, messages, model="", **opts):
         return LLMResponse(
             text='[{"content":"用户喜欢猫","importance":0.8,"emotion":0.5,"category":"preference"}]')
+
+
+async def _wait_long_term_nonempty(redis, oid, *, timeout=2.0, interval=0.05):
+    """轮询等待 stage_memory_write 的 create_task 完成（长期记忆非空）。
+
+    高 CI 负载下固定 sleep 不可靠，改为轮询 get_all_long_term 直到非空，
+    总超时 timeout 秒（默认 2s），轮询间隔 interval（默认 0.05s）。
+    超时则返回最后一次查询结果（交由调用方断言判定），不在此抛错，便于定位。
+    """
+    async def _poll():
+        while True:
+            items = await store.get_all_long_term(redis, oid)
+            if items:
+                return items
+            await asyncio.sleep(interval)
+
+    try:
+        return await asyncio.wait_for(_poll(), timeout=timeout)
+    except asyncio.TimeoutError:
+        return await store.get_all_long_term(redis, oid)
 
 
 @pytest.fixture
@@ -92,8 +117,8 @@ async def test_e2e_memory_encoded_after_turn(fake_coord, fake_redis):
                          provider_name="glm", created_ts=2000)
     async for _ in runner.run_stream(ctx):
         pass
-    await asyncio.sleep(0.2)  # 等 stage_memory_write 的 create_task 完成
-    items = await store.get_all_long_term(fake_redis, "u2")
+    # 轮询等待 stage_memory_write 的 create_task 完成，不再固定 sleep
+    items = await _wait_long_term_nonempty(fake_redis, "u2")
     assert any("猫" in m.content for m in items)
 
 
@@ -104,7 +129,8 @@ async def test_e2e_memory_recalled_next_turn(fake_coord, fake_redis):
                           provider_name="glm", created_ts=3000)
     async for _ in runner.run_stream(ctx1):
         pass
-    await asyncio.sleep(0.2)
+    # 轮询等待第一轮记忆编码写入完成，不再固定 sleep
+    await _wait_long_term_nonempty(fake_redis, "u3")
 
     ctx2 = MessageContext(object_id="u3", user_text="再说猫",
                           provider_name="glm", created_ts=4000)
