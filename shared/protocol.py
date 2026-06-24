@@ -28,6 +28,13 @@ TYPE_SYNC_RESP = "sync_resp"        # 增量同步返回
 TYPE_PROACTIVE_MSG = "proactive_msg"  # 聊天对象自主发消息
 TYPE_ERROR = "error"                # 错误
 
+# ===== V1.1 M13 代人聊天 B 实时接管 =====
+TYPE_TAKEOVER_REQUEST = "takeover_request"      # 出站：代答请求（推面板）
+TYPE_TAKEOVER_RESOLVED = "takeover_resolved"    # 出站：代答已完成（推面板，前端移除待答项）
+TYPE_TAKEOVER_PENDING = "takeover_pending"      # 出站：客户端等待人工代答（服务端主动，非客户端自计时）
+TYPE_TAKEOVER_TIMEOUT = "takeover_timeout"      # 出站：代答超时（服务端主动）
+TYPE_TAKEOVER_SUBSCRIBE = "takeover_subscribe"  # 入站：面板订阅代答请求流
+
 
 def now_ts() -> int:
     """当前 Unix 毫秒时间戳"""
