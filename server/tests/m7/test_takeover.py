@@ -93,3 +93,29 @@ def test_takeover_answer_missing_fields_400(client):
 def test_takeover_toggle_missing_oid_400(client):
     r = client.post("/api/v1/takeover/toggle", json={"enabled": True}, headers=HEADERS)
     assert r.status_code == 400
+
+
+def test_takeover_answer_success_full_chain(client):
+    """V1.2 P0：代答成功全链路——开启+建pending+answer→resolved + 入库(source=takeover)。
+    审查指出此前只测 410，广播/入库/记忆全裸奔；本用例守护入库副作用。"""
+    import asyncio
+    import storage.redis_client as rc
+
+    async def seed():
+        await ts.set_takeover_enabled(rc._redis, "o-ans", True)
+        return await ts.open_takeover_request(rc._redis, "o-ans", "你好")
+
+    pid = asyncio.run(seed())
+    r = client.post("/api/v1/takeover/answer",
+                    json={"object_id": "o-ans", "pending_id": pid, "answer": "嗨~"},
+                    headers=HEADERS)
+    assert r.status_code == 200, r.text
+    assert r.json()["resolved"] is True
+    # 代答入库：history 含 source=takeover 的 assistant 消息
+    msgs = client.get("/api/v1/history/o-ans", headers=HEADERS).json()["messages"]
+    assert any(m.get("role") == "assistant" and m.get("content") == "嗨~" for m in msgs)
+    # pending 已清除（再 answer 同 pid → 410）
+    again = client.post("/api/v1/takeover/answer",
+                        json={"object_id": "o-ans", "pending_id": pid, "answer": "again"},
+                        headers=HEADERS)
+    assert again.status_code == 410

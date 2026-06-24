@@ -73,3 +73,35 @@ def test_proposals_list_and_dismiss(client):
 
 def test_auth_required(client):
     assert client.get("/api/v1/models").status_code == 401
+
+
+# V1.2 历史编辑（PUT/DELETE /history/{oid}/{mid}）
+def test_history_update_and_delete(client):
+    from storage import chat_store
+
+    async def seed():
+        await chat_store.append_message(rc._redis, "o-edit", "user", "原文", ts=10)
+        await chat_store.append_message(rc._redis, "o-edit", "assistant", "回复", ts=20)
+
+    asyncio.run(seed())
+    msgs = client.get("/api/v1/history/o-edit", headers=HEADERS).json()["messages"]
+    assert len(msgs) == 2
+    mid0 = msgs[0]["mid"]
+    # 改内容（role 未传不变）
+    assert client.put(f"/api/v1/history/o-edit/{mid0}", json={"content": "改后"}, headers=HEADERS).status_code == 200
+    msgs2 = client.get("/api/v1/history/o-edit", headers=HEADERS).json()["messages"]
+    assert msgs2[0]["content"] == "改后" and msgs2[0]["role"] == "user"
+    # 改角色
+    client.put(f"/api/v1/history/o-edit/{mid0}", json={"role": "assistant"}, headers=HEADERS)
+    assert client.get("/api/v1/history/o-edit", headers=HEADERS).json()["messages"][0]["role"] == "assistant"
+    # 删
+    assert client.delete(f"/api/v1/history/o-edit/{mid0}", headers=HEADERS).status_code == 200
+    assert len(client.get("/api/v1/history/o-edit", headers=HEADERS).json()["messages"]) == 1
+
+
+def test_history_update_not_found(client):
+    assert client.put("/api/v1/history/o-none/999", json={"content": "x"}, headers=HEADERS).status_code == 404
+
+
+def test_history_delete_not_found(client):
+    assert client.delete("/api/v1/history/o-none/999", headers=HEADERS).status_code == 404

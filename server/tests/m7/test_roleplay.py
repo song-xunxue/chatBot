@@ -70,3 +70,34 @@ def test_roleplay_update_delete_missing_mid(client):
     assert client.put(f"/api/v1/roleplay/{oid}/messages/nope",
                       json={"content": "x"}, headers=HEADERS).status_code == 404
     assert client.delete(f"/api/v1/roleplay/{oid}/messages/nope", headers=HEADERS).status_code == 404
+
+
+# V1.2 roleplay single 单条录入（不强制配对，支持连续多条同角色）
+def test_roleplay_single_persona_id_allowed(client):
+    """object_id=persona_id(default) 时 _check_bound 第二分支允许录入"""
+    r = client.post("/api/v1/roleplay/default/messages/single",
+                    json={"role": "user", "content": "你好"}, headers=HEADERS)
+    assert r.status_code == 200, r.text
+    msgs = client.get("/api/v1/roleplay/default/messages", headers=HEADERS).json()["messages"]
+    assert any(m["role"] == "user" and m["content"] == "你好" for m in msgs)
+
+
+def test_roleplay_single_invalid_role_400(client):
+    r = client.post("/api/v1/roleplay/default/messages/single",
+                    json={"role": "invalid", "content": "x"}, headers=HEADERS)
+    assert r.status_code == 400
+
+
+def test_roleplay_single_empty_content_400(client):
+    r = client.post("/api/v1/roleplay/default/messages/single",
+                    json={"role": "user", "content": "  "}, headers=HEADERS)
+    assert r.status_code == 400
+
+
+def test_roleplay_single_multi_same_role(client):
+    """连续多条同角色（单方多条后再换另一方回复）"""
+    for i in range(3):
+        client.post("/api/v1/roleplay/default/messages/single",
+                    json={"role": "user", "content": f"m{i}"}, headers=HEADERS)
+    msgs = client.get("/api/v1/roleplay/default/messages", headers=HEADERS).json()["messages"]
+    assert sum(1 for m in msgs if m["role"] == "user" and (m["content"] or "").startswith("m")) >= 3

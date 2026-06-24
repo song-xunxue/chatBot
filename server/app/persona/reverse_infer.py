@@ -59,6 +59,8 @@ _K_EVOLVE_SAMPLES = "mychat:persona_evolve:samples:{oid}"   # 真实删除负样
 def _get_card_value(card, field: str):
     if field in _TOP:
         return getattr(card, field, "")
+    if field == "relationship":
+        return getattr(card.relationship, "relation", "")   # V1.2 fix: 字段名 relation（非 relationship）
     parent = _NESTED.get(field)
     if parent == "profile":
         return getattr(card.profile, field, "")
@@ -72,6 +74,9 @@ def _get_card_value(card, field: str):
 def _set_card_value(card, field: str, value) -> None:
     if field in _TOP:
         setattr(card, field, value)
+        return
+    if field == "relationship":
+        setattr(card.relationship, "relation", value)   # V1.2 fix: 字段名 relation（非 relationship）
         return
     parent = _NESTED.get(field)
     if parent == "profile":

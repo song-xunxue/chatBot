@@ -58,6 +58,22 @@ def test_build_diff_nested_profile():
     assert diff["likes"]["new"] == ["猫", "甜食"]
 
 
+def test_build_diff_relationship_greeting_field_mapping():
+    """V1.2 fix: relationship 字段映射到 card.relationship.relation（非 relationship 属性）。
+    回归守护：防止 _set/_get_card_value 写错属性导致静默失败。"""
+    card = PersonaCard(id="p")
+    extracted = {"relationship": "青梅竹马", "greeting": "嗨~"}
+    diff = ri._build_diff(card, extracted, "fill_empty")
+    assert diff["relationship"]["new"] == "青梅竹马"
+    assert diff["greeting"]["new"] == "嗨~"
+    # 应用 diff，验证写入正确字段（relation/greeting），而非错误的 relationship 属性
+    for f, ch in diff.items():
+        ri._set_card_value(card, f, ch["new"])
+    assert card.relationship.relation == "青梅竹马"
+    assert card.relationship.greeting == "嗨~"
+    assert not hasattr(card.relationship, "relationship")   # 不应残留错误属性
+
+
 def test_build_diff_max_fields_cap():
     card = PersonaCard(id="p")
     extracted = {f: f"v{f}" for f in ri.FIELD_WHITELIST}
