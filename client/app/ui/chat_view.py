@@ -13,6 +13,7 @@
   2. M5 多模态：BubbleRow 支持 rich（图像缩略图/语音条）渲染
 """
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
@@ -68,11 +69,23 @@ class BubbleRow(QWidget):
         for spec in (rich.get("audio") or []):
             self._content_layout.addWidget(RichAudioWidget(spec))
 
+    def add_local_image(self, path: str, max_w: int = 150) -> None:
+        """添加本地图片（表情包等）到内容列"""
+        pm = QPixmap(path)
+        if pm.isNull():
+            return
+        lbl = QLabel()
+        lbl.setPixmap(pm.scaledToWidth(max_w, Qt.SmoothTransformation))
+        self._content_layout.addWidget(lbl)
+
 
 class ChatView(QWidget):
     """聊天主区：气泡列表 + 输入栏"""
 
     send_text = Signal(str)   # 用户发送文字
+    attach_image = Signal()   # 点击 📎（选图，视觉理解）
+    attach_audio = Signal()   # 点击 🎙（选音频，语音识别）
+    sticker_clicked = Signal()   # 点击 😀（打开表情包）
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -98,15 +111,24 @@ class ChatView(QWidget):
         bar.setSpacing(8)
         self.attach = QPushButton("📎", self)
         self.attach.setObjectName("iconBtn")
-        self.attach.setToolTip("附件（M5 后续）")
-        self.attach.setEnabled(False)
+        self.attach.setToolTip("发送图片（视觉理解）")
+        self.attach.clicked.connect(lambda: self.attach_image.emit())
+        self.mic = QPushButton("🎙", self)
+        self.mic.setObjectName("iconBtn")
+        self.mic.setToolTip("发送语音（语音识别）")
+        self.mic.clicked.connect(lambda: self.attach_audio.emit())
         self.input = QLineEdit(self)
         self.input.setPlaceholderText("输入消息，回车发送…")
         self.input.returnPressed.connect(self._emit_send)
         self.send = QPushButton("发送", self)
         self.send.setObjectName("sendBtn")
         self.send.clicked.connect(self._emit_send)
-        bar.addWidget(self.attach); bar.addWidget(self.input, 1); bar.addWidget(self.send)
+        self.sticker = QPushButton("😀", self)
+        self.sticker.setObjectName("iconBtn")
+        self.sticker.setToolTip("表情包")
+        self.sticker.clicked.connect(lambda: self.sticker_clicked.emit())
+        bar.addWidget(self.sticker); bar.addWidget(self.attach); bar.addWidget(self.mic)
+        bar.addWidget(self.input, 1); bar.addWidget(self.send)
         root.addLayout(bar)
 
     def _emit_send(self):
@@ -153,3 +175,17 @@ class ChatView(QWidget):
     def _scroll_bottom(self):
         sb = self.scroll.verticalScrollBar()
         sb.setValue(sb.maximum())
+
+    def add_sticker(self, path: str):
+        """以用户气泡形式发送一张本地表情包图片"""
+        row = BubbleRow("user", "", ts=0)
+        row.add_local_image(path)
+        self._list.insertWidget(self._list.count() - 1, row)
+        self._scroll_bottom()
+
+    def set_background(self, path: str):
+        """设置聊天区背景图（QSS background-image；气泡自带底色保持可读）"""
+        norm = path.replace("\\", "/")
+        self.scroll.setStyleSheet(
+            f"background-image: url('{norm}'); background-repeat: no-repeat; background-position: center;"
+        )

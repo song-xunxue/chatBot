@@ -13,15 +13,16 @@
 import logging
 
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QListWidget, QMainWindow, QPushButton, QVBoxLayout, QWidget,
+    QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QMainWindow, QPushButton, QVBoxLayout, QWidget,
 )
 
-from config import ClientConfig
+from config import PROJECT_ROOT, ClientConfig
 from net.ws_client import WSClient
 from net.rest_client import RestClient
 from store.db import ChatStore
 from ui.chat_view import ChatView
 from ui.rich_widgets import mood_emoji
+from ui.stickers import StickerPickerDialog, StickerManager
 from shared.protocol import now_ts
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ class MainWindow(QMainWindow):
         self.store = ChatStore(config.db_path, config.message_limit)
         self.rest = RestClient(config.rest_url, config.token)
         self.ws = WSClient(config.ws_url, config.token, config.object_id)
+        self.stickers = StickerManager(PROJECT_ROOT / "client" / "data" / "stickers")
 
         self._build_ui()
         self._wire()
@@ -87,6 +89,8 @@ class MainWindow(QMainWindow):
         self.dot.setObjectName("muted")
         self.btn_set = QPushButton("⚙")
         self.btn_set.setObjectName("iconBtn")
+        self.btn_set.setToolTip("设置聊天背景")
+        self.btn_set.clicked.connect(self._on_set_background)
         h.addWidget(self.btn_menu)
         h.addWidget(self.title)
         h.addStretch()
@@ -114,6 +118,9 @@ class MainWindow(QMainWindow):
     # —— 接线 ——
     def _wire(self):
         self.chat.send_text.connect(self._on_send)
+        self.chat.attach_image.connect(self._on_pick_image)
+        self.chat.attach_audio.connect(self._on_pick_audio)
+        self.chat.sticker_clicked.connect(self._on_pick_sticker)
         self.ws.msg_received.connect(self._on_msg)
         self.ws.connected.connect(self._on_connected)
         self.ws.disconnected.connect(self._on_disconnected)
@@ -155,6 +162,53 @@ class MainWindow(QMainWindow):
         else:
             self.store.enqueue_outbox(self.cfg.object_id, text, ts=now_ts())
             self.chat.add_system("（离线，消息将在重连后发送）")
+
+    def _on_pick_image(self):
+        """📎：选图 → 视觉理解 → 描述填入输入栏（用户可编辑后发送）"""
+        path, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "图片 (*.png *.jpg *.jpeg *.webp)")
+        if not path:
+            return
+        low = path.lower()
+        mime = "image/png" if low.endswith(".png") else ("image/webp" if low.endswith(".webp") else "image/jpeg")
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            desc = self.rest.vision(data, prompt="请简要描述这张图片的内容，便于对话参考", mime=mime)
+        except Exception as e:
+            self.chat.add_system(f"⚠ 图像理解失败: {e}")
+            return
+        self.chat.input.setText(f"（图片：{desc}）" + self.chat.input.text())
+
+    def _on_pick_audio(self):
+        """🎙：选音频 → 语音识别 → 转写填入输入栏"""
+        path, _ = QFileDialog.getOpenFileName(self, "选择音频", "", "音频 (*.wav *.mp3 *.m4a)")
+        if not path:
+            return
+        ext = path.rsplit(".", 1)[-1].lower()
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            text = self.rest.asr(data, fmt=ext)
+        except Exception as e:
+            self.chat.add_system(f"⚠ 语音识别失败: {e}")
+            return
+        self.chat.input.setText(text + self.chat.input.text())
+
+    def _on_pick_sticker(self):
+        """😀：打开表情包选择器；选中 → 发表情气泡"""
+        dlg = StickerPickerDialog(self.stickers, self)
+        dlg.picked.connect(self._send_sticker)
+        dlg.exec()
+
+    def _send_sticker(self, path: str):
+        self.chat.add_sticker(path)
+        self.store.append_message(self.cfg.object_id, "user", "[表情包]", ts=now_ts())
+
+    def _on_set_background(self):
+        """⚙：选择聊天背景图"""
+        path, _ = QFileDialog.getOpenFileName(self, "选择聊天背景", "", "图片 (*.png *.jpg *.jpeg *.webp)")
+        if path:
+            self.chat.set_background(path)
 
     def _on_connected(self):
         self._set_online(True)
