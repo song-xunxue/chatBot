@@ -82,3 +82,24 @@ async def delete_message(object_id: str, mid: str):
     if not hit:
         raise HTTPException(status_code=404, detail="message not found")
     return {"deleted": True}
+
+
+# —— V1.1 M12：反推人设·直接合并（两步契约：infer 预览 → apply 落库）——
+
+@router.post("/{object_id}/reverse-infer", dependencies=[Depends(_auth)])
+async def reverse_infer(object_id: str, body: dict):
+    """触发反推（强制 dry_run 预览，不可绕过）。返回 diff + confirm_token。
+    body: {mode?: 'fill_empty'|'overwrite'}（默认 fill_empty 只填空字段）。"""
+    from persona import reverse_infer as ri
+    mode = body.get("mode", "fill_empty")
+    redis = await get_redis()
+    return await ri.infer_and_merge(redis, object_id, mode=mode, dry_run=True)
+
+
+@router.post("/{object_id}/reverse-infer/apply", dependencies=[Depends(_auth)])
+async def reverse_infer_apply(object_id: str, body: dict):
+    """凭 confirm_token 落库合并（合并前自动快照入 history，支持回滚）。"""
+    from persona import reverse_infer as ri
+    token = body.get("confirm_token", "")
+    redis = await get_redis()
+    return await ri.infer_and_merge(redis, object_id, dry_run=False, confirm_token=token)
