@@ -1,0 +1,11 @@
+name: image_gen
+version: 0.1.0
+author: 李文煜
+description: 图像生成（F-P-02）——基于回复/上下文生成图，含每日配额上限与超额自主拒绝
+entry: plugin.py
+hooks:
+  - { name: on_after_llm, priority: 150 }
+default_enabled: false
+config_schema:
+  daily_quota: { type: number, default: 5 }
+  provider: { type: string, default: "stub" }

@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     memory_forget_threshold: float = 0.3
     memory_forget_halflife_hours: float = 72.0
 
+    # 7.插件系统（M4）
+    plugin_enabled: bool = True                    # 插件系统总开关，False 时降级（不初始化、不触发任何钩子）
+    plugin_dir: str = "server/app/plugins"         # 插件根目录（相对项目根）；_ 前缀子目录不被自动加载
+    plugin_auto_discover: bool = True              # 启动时自动扫描+加载插件目录
+    plugin_tick_interval: float = 60.0             # on_tick 调度间隔（秒），驱动心情/时间/主动消息插件
+
 
 # 全局配置单例
 settings = Settings()

@@ -1,0 +1,14 @@
+name: reply_enhance
+version: 0.1.0
+author: 李文煜
+description: 回复增强（F-P-05）——输出多段合并 + 可选输入累积（攒够再回）
+entry: plugin.py
+hooks:
+  - { name: on_message_in, priority: 50 }
+  - { name: on_before_llm, priority: 300 }
+  - { name: on_message_out, priority: 300 }
+default_enabled: false
+config_schema:
+  accumulate: { type: bool, default: false }
+  flush_count: { type: number, default: 3 }
+  merge_blank_lines: { type: bool, default: true }

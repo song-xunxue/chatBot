@@ -14,6 +14,10 @@ ai_start/ai_chunk/ai_done。M2：把 M1.5 的 echo 回显替换为真实 LLM 流
 变更说明：
   1. M2.4 接入消息处理管道：user_msg → run_stream → 流式 ai_start/ai_chunk/ai_done，替换 echo
   2. 无 LLM key 时降级提示；LLM 调用异常时回发 error
+
+2026-06-24
+变更说明：
+  1. M4.1-review：run_stream 产出 0 chunk 且 reply_text 为空时回发 TYPE_ERROR（插件丢弃/空回复），避免客户端"转圈→空白"
 """
 import sys
 from pathlib import Path
@@ -31,6 +35,9 @@ from core.config import settings  # noqa: E402
 from pipeline.context import MessageContext  # noqa: E402
 from pipeline.runner import run_stream  # noqa: E402
 from llm.registry import available_providers  # noqa: E402
+from plugins import get_event_bus  # noqa: E402
+from plugins.base import ON_DELETE  # noqa: E402
+from plugins.connections import get_connection_registry  # noqa: E402
 
 
 router = APIRouter()
@@ -69,13 +76,14 @@ async def ws_endpoint(ws: WebSocket):
                     ts=now_ts(),
                 ))
     except WebSocketDisconnect:
-        # 客户端正常断开
-        pass
+        # 客户端正常断开：注销连接
+        get_connection_registry().deregister(ws)
 
 
 async def _handle_user_msg(ws: WebSocket, data: dict) -> None:
     """处理用户消息：走管道流式生成回复，推 ai_start / ai_chunk(×N) / ai_done"""
     object_id = data.get("object_id", "")
+    get_connection_registry().register(object_id, ws)   # 登记活跃连接，供主动推送
     text = data.get("payload", {}).get("text", "")
 
     # 无任何 LLM key 时降级提示（不崩）
@@ -100,20 +108,38 @@ async def _handle_user_msg(ws: WebSocket, data: dict) -> None:
     # ②走管道流式；provider 默认 glm（M2.5 改为按聊天对象绑定）
     ctx = MessageContext(object_id=object_id, user_text=text,
                          provider_name=_DEFAULT_PROVIDER, created_ts=now_ts())
+    sent_chunks = 0
     try:
         async for token in run_stream(ctx):
+            sent_chunks += 1
             # ai_chunk：逐 token 推送（LLM 边产边推，降低首字延迟）
             await ws.send_json(envelope(
                 TYPE_AI_CHUNK,
                 {"delta": {"text": token}},
                 object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
             ))
-        # ③ai_done：回复结束（附完整文本，客户端可兜底校验）
-        await ws.send_json(envelope(
-            TYPE_AI_DONE,
-            {"text": ctx.reply_text},
-            object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
-        ))
+        if sent_chunks == 0 and not ctx.reply_text:
+            if ctx.plugin_meta.get("held"):
+                # 插件(如 reply_enhance)暂缓回复（攒够再回）：发 holding 指示，非错误
+                await ws.send_json(envelope(
+                    TYPE_AI_DONE,
+                    {"text": "", "held": True},
+                    object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
+                ))
+            else:
+                # 插件在 on_message_in 丢弃消息或产生空回复：给客户端明确信号，避免"转圈→空白"
+                await ws.send_json(envelope(
+                    TYPE_ERROR,
+                    {"message": "消息被插件丢弃或产生空回复"},
+                    object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
+                ))
+        else:
+            # ③ai_done：回复结束（附完整文本，客户端可兜底校验）
+            await ws.send_json(envelope(
+                TYPE_AI_DONE,
+                {"text": ctx.reply_text},
+                object_id=object_id, msg_id=ai_msg_id, ts=now_ts(),
+            ))
     except Exception as e:
         # LLM 调用失败（网络/key 无效/限流）回发 error
         await ws.send_json(envelope(
@@ -124,10 +150,15 @@ async def _handle_user_msg(ws: WebSocket, data: dict) -> None:
 
 
 async def _handle_delete(ws: WebSocket, data: dict) -> None:
-    """处理删除消息：记 persona_evolve 负样本到 pending 队列（反推算法 M4 消费）。
-    失败仅记日志，不回发 error 以免打扰用户"""
+    """处理删除消息：触发 on_delete 钩子(persona_evolve 消费人格负样本) + 记记忆负样本。
+    失败仅记日志，不回发 error 以免打扰用户。on_delete 与记忆开关解耦（人格反推独立于记忆）"""
     object_id = data.get("object_id", "")
     payload = data.get("payload", {})
+    bus = get_event_bus()
+    if bus is not None:
+        ctx = MessageContext(object_id=object_id, user_text="", reply_text="")
+        ctx.plugin_meta["deleted_payload"] = payload
+        await bus.fire(ON_DELETE, ctx)
     if not settings.memory_enabled:
         return
     try:

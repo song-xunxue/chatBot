@@ -1,0 +1,14 @@
+name: mood_dynamic
+version: 0.1.0
+author: 李文煜
+description: 动态心情（人性化）——维护心情值并注入 prompt，随对话情感与时间更新/衰减
+entry: plugin.py
+hooks:
+  - { name: on_before_llm, priority: 80 }
+  - { name: on_after_llm, priority: 90 }
+  - { name: on_tick, priority: 100 }
+default_enabled: false
+config_schema:
+  neutral: { type: number, default: 0.5 }
+  decay: { type: number, default: 0.05 }
+  step: { type: number, default: 0.1 }

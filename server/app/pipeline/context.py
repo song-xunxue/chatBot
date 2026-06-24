@@ -34,3 +34,6 @@ class MessageContext:
     memory_meta: dict = field(default_factory=dict)     # hit_mids 等，供 save/编码使用
     turn_index: int = 0
     created_ts: int = 0                                 # ws.py 注入消息时间戳
+    # M4 新增（插件系统）：默认空，保证向后兼容
+    rich: dict = field(default_factory=dict)            # 富内容收集：on_after_llm 插件写入 audio/sticker/image 等
+    plugin_meta: dict = field(default_factory=dict)     # 插件间协调用的临时状态暂存

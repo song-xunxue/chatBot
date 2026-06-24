@@ -1,0 +1,10 @@
+name: hello
+version: 0.1.0
+author: 李文煜
+description: 示例插件——在回复末尾追加后缀（M4.2 演示用，默认关闭）
+entry: plugin.py
+hooks:
+  - { name: on_after_llm, priority: 200 }
+default_enabled: false
+config_schema:
+  suffix: { type: string, default: "[hello]" }

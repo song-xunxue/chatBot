@@ -1,0 +1,10 @@
+name: persona_evolve
+version: 0.1.0
+author: 李文煜
+description: 人格反推（人性化）——消费删除负样本，累积到阈值生成人格进化提案(待人工确认，不自动改写)
+entry: plugin.py
+hooks:
+  - { name: on_delete, priority: 100 }
+default_enabled: false
+config_schema:
+  threshold: { type: number, default: 5 }

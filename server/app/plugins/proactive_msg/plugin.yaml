@@ -1,0 +1,11 @@
+name: proactive_msg
+version: 0.1.0
+author: 李文煜
+description: 自主发消息（人性化）——on_tick 按概率/冷却主动推送问候 + nudge 桌宠抖动
+entry: plugin.py
+hooks:
+  - { name: on_tick, priority: 200 }
+default_enabled: false
+config_schema:
+  probability: { type: number, default: 0.2 }
+  cooldown_sec: { type: number, default: 3600 }

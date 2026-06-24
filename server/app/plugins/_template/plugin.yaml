@@ -1,0 +1,10 @@
+name: my-template-plugin
+version: 0.1.0
+author: 李文煜
+description: 插件开发模板（_ 前缀不会被自动加载，仅供复制参考）
+entry: plugin.py
+hooks:
+  - { name: on_after_llm, priority: 100 }
+default_enabled: false
+config_schema:
+  tag: { type: string, default: "[template]" }
