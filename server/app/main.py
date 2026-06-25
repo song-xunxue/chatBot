@@ -119,6 +119,12 @@ def create_app() -> FastAPI:
     app.include_router(rest_admin_router)
     app.include_router(rest_roleplay_router)
     app.include_router(rest_takeover_router)
+    # V1.2：托管人设头像等静态资源（server/data/static → /static，供客户端拉取 persona.avatar）
+    from pathlib import Path as _Path
+    from fastapi.staticfiles import StaticFiles as _StaticFiles
+    _static_dir = _Path(__file__).resolve().parents[1] / "data" / "static"
+    _static_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", _StaticFiles(directory=str(_static_dir)), name="static")
     # M8：托管 Vue 管理面板静态产物（在所有 API 路由之后挂载，浏览器直开 /）
     _mount_dashboard(app)
 

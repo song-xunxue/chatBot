@@ -32,6 +32,8 @@ services:
       - redis
     ports:
       - "8000:8000"   # 面板/REST/WS；生产可前置 nginx 反代并加 HTTPS
+    volumes:
+      - ./server/data:/app/server/data   # 人设/桌宠头像等运行时数据持久（容器重建不丢）
 
 volumes:
   redis-data:
