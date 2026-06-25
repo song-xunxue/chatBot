@@ -170,6 +170,13 @@ class MainWindow(QMainWindow):
         lv.addWidget(head)
         self.object_list = QListWidget()
         self.object_list.setObjectName("objectList")
+        # QListWidget 是 QAbstractScrollArea，QSS 不作用 viewport → 显式 palette 设灰(#F5F5F5)
+        from PySide6.QtGui import QPalette, QColor
+        _vp = self.object_list.viewport()
+        _p = _vp.palette()
+        _p.setColor(QPalette.Window, QColor("#F5F5F5"))
+        _vp.setAutoFillBackground(True)
+        _vp.setPalette(_p)
         self.object_list.itemClicked.connect(self._on_select_object)
         lv.addWidget(self.object_list, 1)
         # 右：顶栏 + 聊天

@@ -16,7 +16,13 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 # 心情标签 → emoji（与服务端 mood_dynamic._label 对应）
-MOOD_EMOJI = {"开心": "😊", "愉悦": "🙂", "平静": "😐", "低落": "😕", "难过": "😢"}
+MOOD_EMOJI = {
+  "开心": "◍˃ᵕ˂◍",
+  "愉悦": "˗ˋˏ♡ˎˊ˗",
+  "平静": "◌",
+  "低落": "˚‧º·(˚ ˃̣̣̥᷄⌓˂̣̣̥᷅ )‧º·˚",
+  "难过": "╥﹏╥"
+                }
 
 
 def mood_emoji(label: str) -> str:

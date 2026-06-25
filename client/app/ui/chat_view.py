@@ -190,6 +190,13 @@ class ChatView(QWidget):
         self._list.addStretch()                      # 顶部弹簧，消息从上往下排
         self.scroll.setWidget(self._container)
         root.addWidget(self.scroll, 1)
+        # QSS 对 QScrollArea 的 viewport 不生效，显式 palette 强制灰背景（微信 #EDEDED）
+        from PySide6.QtGui import QPalette, QColor
+        for _w in (self.scroll, self.scroll.viewport(), self._container):
+            _p = _w.palette()
+            _p.setColor(QPalette.Window, QColor("#EDEDED"))
+            _w.setAutoFillBackground(True)
+            _w.setPalette(_p)
 
         # 输入栏
         bar_frame = QFrame()

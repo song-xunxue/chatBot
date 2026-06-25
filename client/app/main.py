@@ -1,6 +1,6 @@
 """
 MyChat 客户端入口（M5 桌面核心 + M6.1 桌宠）
-温暖拟人化主题 + 单列聊天 + 抽屉布局；桌宠(白色小狐狸)悬浮桌面，点击切换聊天窗，
+温暖拟人化主题 + 单列聊天 + 抽屉布局；桌宠悬浮桌面，点击切换聊天窗，
 收到主动消息 nudge 时抖动；关闭聊天窗缩到桌宠，托盘退出。
 
 作者: 李文煜
@@ -14,7 +14,7 @@ MyChat 客户端入口（M5 桌面核心 + M6.1 桌宠）
 2026-06-24
 变更说明：
   1. M5 重写为桌面核心：主题化主窗口(气泡/流式/抽屉) + 自动重连 + SQLite 缓存 + 离线补发
-  2. M6.1 加入桌宠 PetWindow：白色小狐狸悬浮窗 + 点击切换 + nudge 抖动 + 关闭缩到桌宠
+  2. M6.1 加入桌宠 PetWindow：白色悬浮窗 + 点击切换 + nudge 抖动 + 关闭缩到桌宠
 """
 import logging
 import sys
@@ -63,7 +63,7 @@ def main():
     # 3.系统托盘（桌宠是主要入口，托盘作为退出/兜底）
     tray = QSystemTrayIcon(app)
     tray.setIcon(app.style().standardIcon(QStyle.SP_ComputerIcon))
-    tray.setToolTip("MyChat · 小狐狸")
+    tray.setToolTip("MyChat · 浔")
     menu = QMenu()
     act_show = QAction("显示/隐藏聊天")
     act_show.triggered.connect(toggle_chat)

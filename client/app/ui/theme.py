@@ -66,7 +66,7 @@ QListWidget::item:selected {{ background: {BG_ITEM_SELECTED}; color: {TEXT}; }}
 /* —— 气泡（QFrame，微信式小圆角） —— */
 QFrame#bubbleAI {{
     background: {BG_BUBBLE_AI}; color: {TEXT};
-    border: 1px solid {BORDER_LIGHT};
+    border: 1px solid {BORDER};   /* 浅灰边框：白气泡在灰背景上更清晰可辨 */
     border-radius: {BUBBLE_RADIUS}px;
 }}
 QFrame#bubbleUser {{
@@ -99,5 +99,8 @@ QPushButton#meBtn {{
     background: transparent; border: none; padding: 2px;
 }}
 QPushButton#meBtn:hover {{ background: {BG_ITEM_HOVER}; border-radius: 4px; }}
+QAbstractScrollArea {{ background: {BG_CHAT}; border: none; }}
 QScrollArea {{ border: none; background: {BG_CHAT}; }}
+QScrollArea > QWidget > QWidget {{ background: {BG_CHAT}; }}   /* viewport 强制灰，避免默认白 */
+QWidget#qt_scrollarea_viewport {{ background: {BG_CHAT}; }}
 """
