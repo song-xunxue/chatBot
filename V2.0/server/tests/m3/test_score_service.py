@@ -151,11 +151,12 @@ async def test_get_score_not_found(fake_redis):
 async def test_persona_health_stats(fake_redis):
     """近 N 条 ai 消息均分 + 正/负/中计数(user 消息不计)"""
     await mood_service.seed_default_kinds(fake_redis)
-    for sc in (90, 70, 40):
-        mid = await chat_store.append_message(fake_redis, "u1", sender="ai", content="x")
+    base = 1700000000000
+    for i, sc in enumerate((90, 70, 40)):
+        mid = await chat_store.append_message(fake_redis, "u1", sender="ai", content="x", ts=base + i)
         await chat_store.set_score(fake_redis, mid, score_base=sc, mood_value=0.5, mood_bias=0)
     # 混入一条 user 消息(不应计入健康度)
-    await chat_store.append_message(fake_redis, "u1", sender="user", content="问")
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="问", ts=base + 99)
 
     health = await score_service.persona_health(fake_redis, "u1", window=10)
     assert health["count"] == 3
@@ -168,8 +169,9 @@ async def test_persona_health_stats(fake_redis):
 async def test_persona_health_window(fake_redis):
     """window 截断:只取最近 N 条有分的"""
     await mood_service.seed_default_kinds(fake_redis)
-    for sc in (90, 80, 70, 60):
-        mid = await chat_store.append_message(fake_redis, "u1", sender="ai", content="x")
+    base = 1700000000000
+    for i, sc in enumerate((90, 80, 70, 60)):
+        mid = await chat_store.append_message(fake_redis, "u1", sender="ai", content="x", ts=base + i)
         await chat_store.set_score(fake_redis, mid, score_base=sc, mood_value=0.5, mood_bias=0)
     health = await score_service.persona_health(fake_redis, "u1", window=2)   # 最近 2 条:70,60
     assert health["count"] == 2
