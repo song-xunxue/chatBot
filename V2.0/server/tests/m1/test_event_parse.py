@@ -33,10 +33,13 @@ def test_parse_c2c_message_missing_fields():
     assert msg.msg_id == ""
 
 
-def test_webhook_c2c_triggers_echo(make_signature, now_ts, qq_http, fake_redis):
-    """op=0 C2C_MESSAGE_CREATE:正确签名 → 触发 echo 回发(被动回复,带 msg_id)"""
+def test_webhook_c2c_schedules_debounce(make_signature, now_ts, fake_redis):
+    """op=0 C2C_MESSAGE_CREATE:验签通过 → 立即返 ACK + 消息进防抖缓冲(M2:echo→防抖+pipeline)。
+    pipeline 异步执行由 tests/m2/test_debounce 覆盖;此处验证 webhook 不阻塞立即 ACK + 防抖调度。"""
     from fastapi.testclient import TestClient
     from main import app
+    from qq import webhook
+    webhook._debounce.clear()   # 清理跨测试残留
     d = {"author": {"user_openid": "OID-ABC"}, "content": "你好", "id": "MID-1", "timestamp": "2023-11-06T13:37:18+08:00"}
     # body 与签名必须用同一序列化结果(确保验签通过)
     body = json.dumps({"op": 0, "s": 1, "t": "C2C_MESSAGE_CREATE", "d": d}, ensure_ascii=False).encode("utf-8")
@@ -46,13 +49,12 @@ def test_webhook_c2c_triggers_echo(make_signature, now_ts, qq_http, fake_redis):
         resp = c.post("/qq/webhook", content=body, headers=headers)
     assert resp.status_code == 200
     assert resp.json() == {"op": 12}
-    # echo 应触发发消息 REST 请求(被动回复带 msg_id);token 由 MockTransport 自动换
-    posts = [r for r in qq_http["requests"] if r.method == "POST" and "getAppAccessToken" not in str(r.url)]
-    assert posts, "echo 应触发发消息请求"
-    assert "OID-ABC" in str(posts[-1].url)
-    sent = json.loads(posts[-1].content)
-    assert sent["msg_id"] == "MID-1"
-    assert sent["content"] == "收到:你好"
+    # M2:消息进防抖缓冲(不立即发;pipeline 由 _flush 异步执行,见 tests/m2/test_debounce)
+    state = webhook._debounce.get("OID-ABC")
+    assert state is not None, "消息应进防抖缓冲"
+    assert "你好" in state["texts"]
+    assert state["msg_id"] == "MID-1"
+    webhook._debounce.clear()
 
 
 def test_webhook_other_event_ignored(make_signature, now_ts, fake_redis):
