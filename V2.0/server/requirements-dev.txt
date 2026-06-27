@@ -1,0 +1,8 @@
+# MyChat V2.0 测试依赖
+# 作者: 李文煜
+# 日期: 2026-06-25
+
+pytest>=8.0              # 测试框架(pytest 9.x 过新,conda mychat 兼容性存疑,锁定 8.x)
+pytest-asyncio>=0.23     # async 测试支持(pytest.ini 已设 asyncio_mode=auto)
+fakeredis>=2.30          # 内存假 Redis,替代真实 Redis 测 token 缓存
+# httpx MockTransport 内置,无需额外包;测 QQ REST 发消息/换 token 用
