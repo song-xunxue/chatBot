@@ -1,17 +1,20 @@
 """
 QQ 官方机器人 Webhook 回调入口(FastAPI 路由)
 职责:① Ed25519 验签(防篡改)② 回调地址验证(op=13 握手)③ 事件解析(op=0 Dispatch)
-      ④ M1 echo 链路(C2C_MESSAGE_CREATE → 回发)
+      ④ M2 pipeline 链路(C2C_MESSAGE_CREATE → 防抖合并 → pipeline → 被动回复)
 
 凭证(只需 AppID + AppSecret;AppSecret 既换 token 又验签,QQ 文档「Bot Secret」即此字段):
   - 密钥派生:seed = AppSecret 翻倍到 ≥32 字节、取前 32 字节 → 用该 seed 派生 Ed25519 确定密钥对
   - 入站事件验签(op=0):用「公钥」验证 X-Signature-Ed25519(64字节 hex) 对 {timestamp}{body} 的签名
   - 回调验证(op=13):用「私钥」对 {event_ts}{plain_token} 签名,回 {plain_token, signature} 握手
 
-签名机制严格对照 QQ 文档「安全和授权」Go DEMO,金标准单测验证通过(密钥派生 pub + op=13 签名)。
+签名机制严格对照 QQ 文档「安全和授权」Go DEMO,金标准单测验证通过(M1a)。
 payload 通用结构 {op,s,t,d,id};C2C 私聊 op=0 且 t=C2C_MESSAGE_CREATE,d 含 author.user_openid/content/id/timestamp。
 
-M1 echo:收私聊消息 → send_c2c_message(openid, "收到:{content}", msg_id=msg_id)。M2 起替换为 pipeline。
+M2 链路(替换 M1a echo):
+  - QQ 要求 3 秒内返 200,而 pipeline 调 LLM 慢 → 收消息立即 ACK,防抖+pipeline 旁路 asyncio.create_task
+  - 连发防抖(input_debounce_sec):用户连发多条合并为一次 LLM 调用(避免 N 条=N 次 LLM+记忆+评分)
+  - 超时合并 → pipeline.run_stream → 累积完整回复 → send_c2c_message 被动回复(带 msg_id)
 
 作者: 李文煜
 日期: 2026-06-25
@@ -19,8 +22,13 @@ M1 echo:收私聊消息 → send_c2c_message(openid, "收到:{content}", msg_id=
 2026-06-25
 变更说明：
   1. M1 创建 webhook:Ed25519 验签 + 回调验证(op=13) + C2C_MESSAGE_CREATE 解析 + echo 链路
-  2. 凭证从「AppSecret+BotSecret 双凭证」修正为「单 AppSecret」(用户后台确认无独立 Bot Secret)
+  2. 凭证从「AppSecret+BotSecret 双凭证」修正为「单 AppSecret」
+
+2026-06-27
+变更说明：
+  1. M2 echo → pipeline:连发防抖合并 + run_stream + 被动回复;改旁路 task 立即 ACK(满足 QQ 3s)
 """
+import asyncio
 import logging
 import time
 
@@ -32,6 +40,8 @@ from nacl.signing import SigningKey, VerifyKey
 from core.config import settings
 from qq.api_client import send_c2c_message
 from qq.types import C2CMessage
+from pipeline.context import MessageContext
+from pipeline.runner import run_stream
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +104,55 @@ def parse_c2c_message(event_d: dict) -> C2CMessage:
     )
 
 
+# —— 连发防抖状态(per-object 输入缓冲 + 计时器)——
+# oid -> {"texts": list[str], "msg_id": str, "task": asyncio.Task}
+_debounce: dict[str, dict] = {}
+_debounce_lock = asyncio.Lock()
+
+
+async def _schedule_debounce(msg: C2CMessage) -> None:
+    """连发防抖:首条启动计时器,期间连发追加缓冲并重置计时器,超时合并走 pipeline。
+    快速(仅 dict+lock,不跑 LLM),保证 webhook 立即 ACK。"""
+    async with _debounce_lock:
+        state = _debounce.get(msg.openid)
+        if state is None:
+            state = {"texts": [msg.content], "msg_id": msg.msg_id, "task": None}
+            _debounce[msg.openid] = state
+        else:
+            state["texts"].append(msg.content)
+            state["msg_id"] = msg.msg_id   # 用最新 msg_id(被动回复 60min 窗口)
+            if state["task"] is not None:
+                state["task"].cancel()      # 连发重置计时器
+        state["task"] = asyncio.create_task(_flush(msg.openid))
+
+
+async def _flush(openid: str) -> None:
+    """防抖超时:合并连发输入 → pipeline.run_stream → 被动回复。
+    被连发重置 cancel 时不 flush(state 留给新 task)。"""
+    try:
+        await asyncio.sleep(settings.input_debounce_sec)
+    except asyncio.CancelledError:
+        return   # 连发重置取消,不 flush
+    async with _debounce_lock:
+        state = _debounce.pop(openid, None)
+    if not state:
+        return
+    combined = "\n".join(state["texts"])   # 合并连发为一次输入
+    msg_id = state["msg_id"]
+    ctx = MessageContext(object_id=openid, user_text=combined,
+                         created_ts=int(time.time() * 1000))
+    try:
+        # QQ 不逐 token 发,迭代生成器仅为驱动管道跑完 + 累积 reply_text
+        async for _token in run_stream(ctx):
+            pass
+        reply = ctx.reply_text
+        if reply:
+            # 被动回复带 msg_id(60min 窗口/4 次);超时或超次 QQ 拒绝,M2 单测 mock 不触发,M9 真实场景注意
+            await send_c2c_message(openid, reply, msg_id=msg_id)
+    except Exception:
+        logger.exception("pipeline 处理失败 openid=%s", openid)
+
+
 @router.post("/webhook")
 async def qq_webhook(
     request: Request,
@@ -103,7 +162,7 @@ async def qq_webhook(
     """QQ Webhook 回调入口:回调验证(op=13 握手)/ 事件分发(op=0,验签+防重放)。
 
     QQ 后台配置回调 URL 填 https://<域名>/qq/webhook(端口须 80/443/8080/8443)。
-    QQ 要求 3 秒内返 200(M2 接 LLM 慢响应时改 create_task 旁路发 + 立即 200)。
+    QQ 要求 3 秒内返 200:C2C 消息旁路 create_task 防抖+pipeline,立即返 ACK。
 
     两类回调:
       - op=13 回调地址验证(首次配置):无签名头,服务端用私钥签 event_ts+plain_token 回包证明持有 AppSecret
@@ -132,7 +191,7 @@ async def qq_webhook(
         logger.warning("QQ 回调缺签名头 op=%s", op)
         return JSONResponse(status_code=401, content={"detail": "missing signature"})
     try:
-        # 防重放:timestamp 与服务器时间差超阈值拒绝(阈值可配 qq_signature_max_skew_sec,默认 300s)
+        # 防重放:timestamp 与服务器时间差超阈值拒绝(阈值 qq_signature_max_skew_sec,默认 300s)
         if abs(time.time() - int(x_signature_timestamp)) > settings.qq_signature_max_skew_sec:
             logger.warning("QQ 回调时间戳超期 ts=%s", x_signature_timestamp)
             return JSONResponse(status_code=401, content={"detail": "timestamp expired"})
@@ -142,22 +201,12 @@ async def qq_webhook(
         logger.warning("QQ 回调验签失败")
         return JSONResponse(status_code=401, content={"detail": "invalid signature"})
 
-    # op=0 Dispatch:事件派发
+    # op=0 Dispatch:C2C 私聊消息 → 防抖合并 → pipeline(旁路,立即 ACK)
     if op == 0 and t == "C2C_MESSAGE_CREATE":
         msg = parse_c2c_message(d)
-        await _handle_c2c_message(msg)
+        await _schedule_debounce(msg)   # 快速:加缓冲+重置计时器,不跑 LLM
         return JSONResponse(status_code=200, content={"op": 12})  # op=12 HTTP Callback ACK
 
-    # 其他事件类型(M1 忽略,返 ACK;M2+ 按需扩展 FRIEND_ADD/GROUP_AT_MESSAGE_CREATE 等)
-    logger.info("QQ 事件 op=%s t=%s 未处理(M1 仅处理 C2C_MESSAGE_CREATE)", op, t)
+    # 其他事件类型(M2 忽略,返 ACK;后续按需扩展 FRIEND_ADD/GROUP_AT_MESSAGE_CREATE 等)
+    logger.info("QQ 事件 op=%s t=%s 未处理(M2 仅处理 C2C_MESSAGE_CREATE)", op, t)
     return JSONResponse(status_code=200, content={"op": 12})
-
-
-async def _handle_c2c_message(msg: C2CMessage) -> None:
-    """处理私聊消息。M1 = echo 回发(被动回复带 msg_id);M2 起替换为 pipeline 产出真实回复"""
-    try:
-        # echo:验证整条 收→验签→解析→token→发 链路通(M2 换 pipeline.run_stream)
-        await send_c2c_message(msg.openid, f"收到:{msg.content}", msg_id=msg.msg_id)
-    except Exception:
-        # 发消息失败不影响 ACK(已返 200 给 QQ);M2 加重试队列
-        logger.exception("echo 回发失败 openid=%s", msg.openid)
