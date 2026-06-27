@@ -14,6 +14,12 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
 变更说明：
   1. M1 创建配置模块:服务端/Redis/QQ 凭证(AppID+AppSecret)统一从项目根 .env 加载
   2. 凭证从「AppSecret+BotSecret 双凭证」修正为「单 AppSecret」(用户后台确认无独立 Bot Secret)
+
+2026-06-27
+变更说明：
+  1. M2 扩展:搬入 V1.0 的 LLM Providers / 人设 / 四级记忆 / 插件 配置字段(copy 核心模块用)
+  2. M2 新增:心情系统参数(docs/03 §4) + 聊天记录 block 参数(docs/02 §6/§7),均为 V2.0 原创
+  3. 多模态(TTS/ASR/图像生成/Vision)留 M6,本里程碑不声明
 """
 from pathlib import Path
 
@@ -25,12 +31,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
-    """服务端配置:字段名小写,自动映射 .env 中的大写键;extra=ignore 忽略未声明键(如 M2+ 才用的 LLM key)"""
+    """服务端配置:字段名小写,自动映射 .env 中的大写键;extra=ignore 忽略未声明键"""
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),  # 从项目根 .env 读取
         env_file_encoding="utf-8",
-        extra="ignore",  # 忽略 .env 中未声明的键(如 GLM_API_KEY 等 M2+ 才用的字段)
+        extra="ignore",  # 忽略 .env 中未声明的键
     )
 
     # 1.服务端
@@ -51,7 +57,51 @@ class Settings(BaseSettings):
     qq_webhook_public_url: str = ""  # Webhook 回调公网 URL(部署/调试用,代码可不读)
     qq_signature_max_skew_sec: int = 300  # 验签时间戳防重放容忍秒数(QQ 推荐 300)
 
-    # 4.LLM Providers(M2+ 才用,M1 暂不声明,extra=ignore 自动兼容 .env 里已有的 key)
+    # 4.LLM Providers(M2 copy V1.0 llm 模块用;key 缺失时 provider 不注册,pipeline 降级)
+    glm_api_key: str = ""
+    deepseek_api_key: str = ""
+    siliconflow_api_key: str = ""
+
+    # 5.人设系统(M2 copy V1.0 persona 模块用)
+    persona_active_id: str = "default"  # 未绑定对象时使用的默认人设 id
+    persona_dir: str = "server/data/persona"  # 人设 JSON 文件双写目录(相对项目根 V2.0/)
+
+    # 6.四级记忆系统(M2 copy V1.0 memory 模块用)
+    memory_enabled: bool = True  # 总开关,False 时降级为无记忆
+    memory_working_window: int = 20  # 工作记忆滑窗轮数(get_history 二次裁剪)
+    memory_episodic_enable: bool = True
+    memory_episodic_summarize_threshold: int = 12  # 每 N 轮触发一次 Episodic 摘要
+    memory_episodic_reflect_interval: int = 5  # 每 N 次摘要触发一次反思
+    memory_longterm_enable: bool = True
+    memory_longterm_max_facts: int = 200  # 长期记忆条目上限,超出触发遗忘淘汰
+    memory_retrieve_topk: int = 5  # 检索召回 top-K
+    memory_summary_provider: str = ""  # 编码用 LLM provider,空则用对话同款
+    memory_summary_model: str = ""  # 编码用模型,空则用 provider 默认
+    # 遗忘评分权重与阈值(沿用 V1.0 forgetting.py)
+    memory_forget_w_importance: float = 0.4
+    memory_forget_w_recency: float = 0.3
+    memory_forget_w_access: float = 0.15
+    memory_forget_w_emotion: float = 0.15
+    memory_forget_threshold: float = 0.3
+    memory_forget_halflife_hours: float = 72.0
+
+    # 7.插件系统(M2 copy V1.0 plugins 基础设施用;M2 不加载业务插件,只保证 EventBus/钩子链路通)
+    plugin_enabled: bool = True  # 插件系统总开关,False 时降级(不初始化、不触发任何钩子)
+    plugin_dir: str = "server/app/plugins"  # 插件根目录(相对项目根);_ 前缀子目录不被自动加载
+    plugin_auto_discover: bool = True  # 启动时自动扫描+加载插件目录(M2 阶段目录内无业务插件)
+    plugin_tick_interval: float = 60.0  # on_tick 调度间隔(秒),驱动 mood 衰减/时间/主动消息
+
+    # 8.心情系统(M2 新增,docs/03 §4;从 V1.0 mood_dynamic 融入架构,不再作独立插件)
+    mood_step: float = 0.1  # 对话情感关键词触发的 mood ±step
+    mood_decay: float = 0.05  # on_tick 向中性回归的衰减幅度
+    mood_neutral: float = 0.5  # 中性 mood 值(衰减回归目标)
+    mood_kaomoji_prob: float = 0.3  # QQ 回复末尾附颜文字的概率(0-1,docs/03 §7.2)
+
+    # 9.聊天记录 block 结构(M2 新增,docs/02 §6/§7/§10)
+    block_silence_min: int = 10  # 静默分组阈值(分钟):超时关闭旧 block 开新 block
+    input_debounce_sec: float = 2.0  # 连发防抖窗口(秒):用户连发在此窗口合并为一次 LLM 调用
+    chat_history_max_blocks: int = 2  # get_history 取最近 N 个 block 拼 LLM 上下文
+    chat_history_max_messages: int = 20  # get_history 二次裁剪的最大消息条数
 
 
 # 全局配置单例
