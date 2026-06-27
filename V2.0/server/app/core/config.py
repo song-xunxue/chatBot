@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     memory_forget_w_emotion: float = 0.15
     memory_forget_threshold: float = 0.3
     memory_forget_halflife_hours: float = 72.0
+    # M4 记忆融合增强(借鉴 angel_memory:BM25 检索 / 加权随机召回 / 睡眠巩固)
+    memory_retriever: str = "bm25"  # 检索器:bm25(BM25 评分)/ keyword(交集计数)
+    memory_weighted_sample: bool = True  # 加权随机召回(避确定性偏见,angel_memory 借鉴)
+    memory_consolidate_enable: bool = True  # 睡眠巩固:episodic 摘要→long-term fact + 冗余清理
+    memory_consolidate_importance: float = 0.6  # 巩固提炼 fact 的最低 importance(低于则丢弃)
+    memory_episodic_keep: int = 20  # episodic 保留条数(超则清理最旧,睡眠巩固触发)
 
     # 7.插件系统(M2 copy V1.0 plugins 基础设施用;M2 不加载业务插件,只保证 EventBus/钩子链路通)
     plugin_enabled: bool = True  # 插件系统总开关,False 时降级(不初始化、不触发任何钩子)

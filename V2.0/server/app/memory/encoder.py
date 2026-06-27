@@ -98,6 +98,28 @@ def _parse_facts(text: str) -> list[dict]:
     return []
 
 
+async def consolidate_facts(episodic_summaries: list[str], llm: LLMProvider | None,
+                            model: str = "") -> list[dict]:
+    """睡眠巩固(M4,借鉴 angel_memory):从情景记忆摘要提炼长期事实。
+    返回 [{content, importance, emotion, category}, ...];无 LLM 或失败返回空。"""
+    if not llm or not episodic_summaries:
+        return []
+    joined = "\n".join(f"- {s}" for s in episodic_summaries[-20:])   # 最近 20 条摘要,控 token
+    prompt = (
+        "以下是关于某用户的若干段对话情景摘要。请从中提炼值得长期记住的关于用户的事实/偏好/关系/事件"
+        "(没有则返回空数组 [])。\n" + joined +
+        "\n严格只输出一个 JSON 数组,每个元素形如 "
+        '{"content": str, "importance": 0-1, "emotion": 0-1, '
+        '"category": "fact|preference|relationship|event|personality"},不要解释。'
+    )
+    try:
+        resp = await llm.chat([Message(role="user", content=prompt)], model=model)
+        return _parse_facts(resp.text)
+    except Exception as e:
+        logger.warning("consolidate_facts 调用失败: %s", e)
+        return []
+
+
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, x))
 

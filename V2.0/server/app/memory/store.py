@@ -60,6 +60,18 @@ async def count_episodic(redis: Redis, oid: str) -> int:
     return await redis.zcard(_K_EPISODIC.format(oid=oid))
 
 
+async def prune_oldest_episodic(redis: Redis, oid: str, keep: int) -> int:
+    """保留最近 keep 条 episodic(score=ts,ZSet 倒序最近),删更旧的。返回删除数(M4 睡眠巩固用)。"""
+    key = _K_EPISODIC.format(oid=oid)
+    total = await redis.zcard(key)
+    if keep <= 0 or total <= keep:
+        return 0
+    rem = total - keep
+    # ZSet 按 score 升序,rank 0..rem-1 为最旧;zremrangebyrank 删之
+    await redis.zremrangebyrank(key, 0, rem - 1)
+    return rem
+
+
 # ===== Reflect 反思(List)=====
 async def append_reflection(redis: Redis, oid: str, reflection: str,
                             span: tuple = (0, 0)) -> None:

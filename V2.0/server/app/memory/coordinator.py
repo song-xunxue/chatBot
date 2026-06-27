@@ -21,7 +21,7 @@ from redis.asyncio import Redis
 
 from memory import store, encoder
 from memory.models import RecallResult, ForgetConfig, EpisodicEntry, MemoryItem, Category
-from memory.retriever import KeywordRetriever, _tokenize
+from memory.retriever import KeywordRetriever, BM25Retriever, sample_weighted, _tokenize
 from memory.forgetting import should_forget, retain_score
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def _similar(a: str, b: str, threshold: float = _DEDUP_THRESHOLD) -> bool:
     """事实去重:先精确归一化相等判定,否则关键词 Jaccard(首版,零依赖)"""
     if _normalize(a) == _normalize(b):
         return True
-    ta, tb = _tokenize(a), _tokenize(b)
+    ta, tb = set(_tokenize(a)), set(_tokenize(b))
     if not ta or not tb:
         return False
     return len(ta & tb) / len(ta | tb) >= threshold
@@ -52,8 +52,14 @@ class MemoryCoordinator:
         self.redis = redis
         self.llm = llm_provider  # 编码用 LLM,None 时降级
         self.cfg = cfg or ForgetConfig()
-        self.retriever = KeywordRetriever()
+        self.retriever = self._make_retriever()
         self._locks: dict[str, asyncio.Lock] = {}
+
+    @staticmethod
+    def _make_retriever():
+        """按 config 选检索器(M4):bm25(默认 BM25 评分)/ keyword(交集计数)"""
+        from core.config import settings
+        return KeywordRetriever() if settings.memory_retriever == "keyword" else BM25Retriever()
 
     def _lock(self, oid: str) -> asyncio.Lock:
         """per-object 锁:串行化同一对象的读-改-写,避免 access_count/去重并发覆盖"""
@@ -66,10 +72,17 @@ class MemoryCoordinator:
         if self.redis is None:
             return RecallResult(working=working)
         try:
+            from core.config import settings
             core = await store.get_core(self.redis, object_id)
             episodic = await store.get_episodic(self.redis, object_id, limit=3)
             long_all = await store.get_all_long_term(self.redis, object_id)
-            long_hits, hit_mids = self.retriever.retrieve(long_all, query, top_k)
+            # M4:rank 打分后按 config 决定 加权随机召回(避确定性偏见)/ 确定性 top-K
+            ranked = self.retriever.rank(long_all, query)
+            if settings.memory_weighted_sample and ranked:
+                long_hits = sample_weighted(ranked, top_k)
+            else:
+                long_hits = [m for _, m in ranked[:top_k]]
+            hit_mids = [m.id for m in long_hits]
             if hit_mids:
                 async with self._lock(object_id):
                     await store.touch_long_term(self.redis, object_id, hit_mids)
@@ -213,6 +226,11 @@ class MemoryCoordinator:
                          and m.created_ts and (now - m.created_ts) > retain_ms]
                 if purge:
                     await store.delete_long_term(self.redis, oid, purge)
+                # 4) M4 睡眠巩固(episodic 摘要→long-term fact + 冗余 episodic 清理;调用方持锁)
+                if settings.memory_consolidate_enable:
+                    from memory.consolidation import consolidate_sleep
+                    await consolidate_sleep(self.redis, oid, self.llm,
+                                            self._summary_model(), coordinator=self)
         return marked
 
     async def manual_forget(self, oid: str, mid: str) -> bool:

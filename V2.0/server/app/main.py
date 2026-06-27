@@ -19,6 +19,7 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
 2026-06-28
 变更说明：
   1. M3 挂载评分/反推 REST 路由(score_router,/api/v1/chat/.../score、/health、/score/reverse_infer/...)
+  2. M4 挂载记忆 REST 路由(memory_router,/api/v1/memory/... 查看/统计/遗忘/恢复/锁定)
 """
 import asyncio
 import logging
@@ -31,6 +32,7 @@ from qq import api_client as qq_api
 from qq import auth as qq_auth
 from qq.webhook import router as qq_router
 from api.rest_score import router as score_router
+from api.rest_memory import router as memory_router
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +99,8 @@ def create_app() -> FastAPI:
     app.include_router(qq_router)
     # 挂载评分/反推 REST 路由(M3,/api/v1/chat/.../score、/health、/score/reverse_infer/...)
     app.include_router(score_router)
+    # 挂载记忆 REST 路由(M4,/api/v1/memory/... 查看/统计/遗忘/恢复/锁定)
+    app.include_router(memory_router)
     return app
 
 
