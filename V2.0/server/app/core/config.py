@@ -103,6 +103,20 @@ class Settings(BaseSettings):
     chat_history_max_blocks: int = 2  # get_history 取最近 N 个 block 拼 LLM 上下文
     chat_history_max_messages: int = 20  # get_history 二次裁剪的最大消息条数
 
+    # 10.评分系统(M3 新增,docs/01 §4 / docs/02 §5 score 四元组 / docs/03 §5 评分补偿)
+    score_enabled: bool = True  # 自动评分总开关:每条 ai 回复发用户后自动 LLM 评分
+    score_provider: str = ""  # 评分用 LLM provider,空则用对话同款(默认 glm)
+    score_model: str = ""  # 评分用模型,空则用 provider 默认模型
+    score_positive_threshold: int = 85  # 正样本阈值:score>=此值归类 positive(驱动反推正样本)
+    score_negative_threshold: int = 60  # 负样本阈值:score<此值归类 negative(驱动反推负样本)
+    score_health_window: int = 20  # 人设健康度统计窗口:近 N 条 ai/proxy 消息求均分(docs/01 §4)
+    score_sample_keep: int = 20  # 每类(正/负)评分样本最多留存条数(防 List 无限增长)
+    # 11.反推人设(M3 新增,docs/01 §4 驱动反推 / docs/02 §5.1):评分样本 → 人设字段提炼合并
+    reverse_infer_enabled: bool = True  # 反推总开关
+    reverse_infer_provider: str = "glm"  # 反推专用 provider(与聊天解耦,无 key 降级空 diff)
+    reverse_infer_mode: str = "fill_empty"  # 合并模式:fill_empty(只填空)/ overwrite(覆盖查漂移)
+    reverse_infer_max_fields: int = 6  # 单次反推最多改写字段数(整体接受,不拆散语义)
+
 
 # 全局配置单例
 settings = Settings()

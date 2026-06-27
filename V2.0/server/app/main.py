@@ -15,6 +15,10 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
 2026-06-27
 变更说明：
   1. M2 lifespan 整合:人设默认 seed + mood 默认 5 档种表 + 插件系统(空载) + mood 衰减循环
+
+2026-06-28
+变更说明：
+  1. M3 挂载评分/反推 REST 路由(score_router,/api/v1/chat/.../score、/health、/score/reverse_infer/...)
 """
 import asyncio
 import logging
@@ -26,6 +30,7 @@ from core.config import settings
 from qq import api_client as qq_api
 from qq import auth as qq_auth
 from qq.webhook import router as qq_router
+from api.rest_score import router as score_router
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +95,8 @@ def create_app() -> FastAPI:
 
     # 挂载 QQ Webhook 回调路由(/qq/webhook)
     app.include_router(qq_router)
+    # 挂载评分/反推 REST 路由(M3,/api/v1/chat/.../score、/health、/score/reverse_infer/...)
+    app.include_router(score_router)
     return app
 
 

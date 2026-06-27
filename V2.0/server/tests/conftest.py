@@ -46,6 +46,15 @@ def _qq_secret(monkeypatch):
     qq_api._client = None
 
 
+@pytest.fixture(autouse=True)
+def _no_real_llm(monkeypatch):
+    """自动清空 LLM api key,使 available_providers() 返回 [](pytest 全程不真调 LLM)。
+    避免评分/反推/Memory 编码等 LLM 调用在测试中真烧 API;真实 LLM 验证走 scripts/real_llm_check.py。"""
+    monkeypatch.setattr(settings, "glm_api_key", "")
+    monkeypatch.setattr(settings, "deepseek_api_key", "")
+    monkeypatch.setattr(settings, "siliconflow_api_key", "")
+
+
 @pytest.fixture
 def fake_redis():
     """注入 fakeredis 单例到 storage.redis_client._redis(token 缓存走内存假 Redis)"""

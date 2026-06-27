@@ -11,6 +11,11 @@ M2 实现:load_history / persona_inject / memory_retrieve / mood_inject / build_
 变更说明：
   1. M2 从 V1.0 移植 stages 到 V2.0;load_history/save 适配 block chat_store 签名;
      新增 stage_mood_inject(before_llm 注入 prompt_hint)/ stage_mood_update(after_llm 情感更新)
+
+2026-06-28
+变更说明：
+  1. M3 stage_save 把 ai 消息 mid 存入 ctx.reply_mid;新增 stage_score(save 后对 ai 回复
+     自动 LLM 评分 + 心情补偿 + 写 score 四元组 + 正负样本归类)
 """
 from typing import AsyncIterator
 import asyncio
@@ -111,14 +116,33 @@ async def stage_llm_stream(ctx: MessageContext) -> AsyncIterator[str]:
 
 async def stage_save(ctx: MessageContext, redis: Redis) -> None:
     """阶段④:把本次用户消息 + AI 回复写入历史(block 三层,落当前 open block)。
-    V2.0 sender 用 user/ai(弃 V1.0 role),source=live。user/ai 用递增 ts 保证时序(user 先,ai 后)。"""
+    V2.0 sender 用 user/ai(弃 V1.0 role),source=live。user/ai 用递增 ts 保证时序(user 先,ai 后)。
+    ai 消息 mid 存 ctx.reply_mid,供 stage_score 评分定位。"""
     base_ts = ctx.created_ts or int(time.time() * 1000)
     await chat_store.append_message(redis, ctx.object_id,
                                     sender="user", content=ctx.user_text,
                                     source="live", ts=base_ts)
-    await chat_store.append_message(redis, ctx.object_id,
-                                    sender="ai", content=ctx.reply_text,
-                                    source="live", ts=base_ts + 1)
+    ctx.reply_mid = await chat_store.append_message(redis, ctx.object_id,
+                                                    sender="ai", content=ctx.reply_text,
+                                                    source="live", ts=base_ts + 1)
+
+
+async def stage_score(ctx: MessageContext, redis: Redis) -> None:
+    """阶段④.5:对本次 ai 回复自动 LLM 评分(对照人设)+ 心情补偿 + 写 score 四元组 + 样本归类。
+    在 stage_save 后执行(用 ctx.reply_mid 定位);score_enabled=False 或评分失败则跳过(不阻塞)。
+    对应 docs/01 §4 / docs/02 §5 / docs/03 §5。评分用对话同款 provider(ctx.provider_name)。"""
+    if not settings.score_enabled:
+        return
+    if not ctx.reply_mid or not ctx.reply_text:
+        return
+    from score import service as score_service
+    try:
+        await score_service.score_reply(
+            redis, ctx.object_id, ctx.reply_text, ctx.persona_card, ctx.reply_mid,
+            mood_value=ctx.mood_value, provider_name=ctx.provider_name,
+        )
+    except Exception:
+        logger.exception("score stage failed")   # 评分失败不阻塞主流程与记忆编码
 
 
 async def stage_mood_update(ctx: MessageContext, redis) -> None:

@@ -8,6 +8,10 @@
 2026-06-27
 变更说明：
   1. M2 从 V1.0 移植 MessageContext 到 V2.0;新增 mood_value 字段(stage_mood 填充)
+
+2026-06-28
+变更说明：
+  1. M3 新增 reply_mid 字段(stage_save 填 ai 消息 mid,stage_score 评分定位用)
 """
 from dataclasses import dataclass, field
 
@@ -25,6 +29,7 @@ class MessageContext:
     model: str = ""                                     # 模型名(空则用 provider 默认模型)
     # 产出
     reply_text: str = ""                                # 最终回复文本(llm_stream 累积填充)
+    reply_mid: str = ""                                 # ai 回复消息 mid(stage_save 填,stage_score 评分定位)
     # 人设/记忆
     user_id: str = ""                                   # 单人场景与 object_id 同
     persona_id: str = ""                                # 空则按 object_id 解析默认人设

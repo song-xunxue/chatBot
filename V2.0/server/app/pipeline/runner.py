@@ -21,7 +21,7 @@ from typing import AsyncIterator
 from pipeline.context import MessageContext
 from pipeline.stages import (
     stage_load_history, stage_persona_inject, stage_memory_retrieve,
-    stage_mood_inject, stage_llm_stream, stage_save, stage_mood_update,
+    stage_mood_inject, stage_llm_stream, stage_save, stage_score, stage_mood_update,
     stage_memory_write,
 )
 from storage.redis_client import get_redis
@@ -37,7 +37,7 @@ async def run_stream(ctx: MessageContext) -> AsyncIterator[str]:
     顺序:
       on_message_in → ①取历史 → ②人设注入 → ②.5记忆检索 → ②.6心情注入
       → on_before_llm → ③流式调 LLM(边产边推) → on_after_llm → ②.6'心情更新
-      → on_message_out → ④存历史 → ⑤记忆编码
+      → on_message_out → ④存历史 → ④.5评分(M3) → ⑤记忆编码
     QQ 场景调用方(webhook)迭代本生成器累积为完整回复,再一次性被动下发(不逐 token 发)。
     插件钩子(M6 加载插件后才生效):on_message_in(STOP 丢弃)/on_before_llm(STOP 跳过 LLM)/
       on_after_llm(仅 LLM 真实产出时触发;STOP 跳过回复增强)/on_message_out(置于 save 前)。
@@ -76,5 +76,7 @@ async def run_stream(ctx: MessageContext) -> AsyncIterator[str]:
         await bus.fire(ON_MESSAGE_OUT, ctx)
     # ④存历史(用户消息 + 最终回复,落当前 open block)
     await stage_save(ctx, redis)
+    # ④.5评分(M3):对 ai 回复自动 LLM 评分 + 心情补偿 + 写 score 四元组 + 样本归类(失败不阻塞)
+    await stage_score(ctx, redis)
     # ⑤记忆编码(异步触发:摘要/反思/事实抽取,不阻塞回复)
     await stage_memory_write(ctx, redis)
