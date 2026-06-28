@@ -128,6 +128,9 @@ class Settings(BaseSettings):
     web_search_enable: bool = True  # DuckDuckGo 联网兜底工具开关(docs/01 §6 联网兜底)
     mcp_enable: bool = True  # MCP client 总开关(连外部 MCP server)
     mcp_servers: str = ""  # MCP server 列表 JSON([{name,transport:stdio|sse,command,args|url}]),空则不连
+    # 13.插件兼容(M6,docs/01 §8 / docs/04 §8):.star 兼容层 + V1.0 原生插件收敛
+    star_enable: bool = True  # .star 兼容层总开关(加载 AstrBot 风格 .star 插件)
+    star_dir: str = "server/data/star_plugins"  # .star 插件目录(相对项目根,放 *.py)
 
 
 # 全局配置单例

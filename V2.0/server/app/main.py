@@ -21,6 +21,7 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
   1. M3 挂载评分/反推 REST 路由(score_router,/api/v1/chat/.../score、/health、/score/reverse_infer/...)
   2. M4 挂载记忆 REST 路由(memory_router,/api/v1/memory/... 查看/统计/遗忘/恢复/锁定)
   3. M5 lifespan 注册自研工具 + MCP client 连外部 server(无配置降级)
+  4. M6 lifespan 加载 .star 兼容层(star_loader,适配到 EventBus/ToolRegistry)
 """
 import asyncio
 import logging
@@ -59,6 +60,18 @@ async def lifespan(app: FastAPI):
     from plugins import init_plugins
     await init_plugins(redis)
 
+    # M6 .star 兼容层:加载 .star 插件(适配到 EventBus/ToolRegistry;无 .star 则空载)
+    star_loader = None
+    if settings.star_enable:
+        from plugins import get_event_bus
+        from plugins.star_compat.star_loader import StarLoader
+        from tools import get_tool_registry
+        from core.config import PROJECT_ROOT
+        _bus = get_event_bus()
+        if _bus is not None:
+            star_loader = StarLoader(_bus, get_tool_registry(), redis, settings)
+            await star_loader.load_dir(PROJECT_ROOT / settings.star_dir)
+
     # M5 工具系统:注册自研工具(get_persona/write_memory/reverse_infer_trigger/web_search)
     # + MCP client 连外部 server(无配置则降级,只用自研工具)
     from tools import get_tool_registry, register_builtin_tools
@@ -84,6 +97,8 @@ async def lifespan(app: FastAPI):
         pass
     if mcp_servers:
         await mcp_client.close_all()
+    if star_loader is not None:
+        await star_loader.unload_all()
     from plugins import shutdown_plugins
     await shutdown_plugins()
     await qq_api.close_client()
