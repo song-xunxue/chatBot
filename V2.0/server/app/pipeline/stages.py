@@ -145,6 +145,25 @@ async def stage_score(ctx: MessageContext, redis: Redis) -> None:
         logger.exception("score stage failed")   # 评分失败不阻塞主流程与记忆编码
 
 
+async def stage_tool_loop(ctx: MessageContext, redis: Redis) -> str | None:
+    """阶段③':有注册工具时走 tool-loop(LLM function calling 决策调工具→执行→再推理),
+    返回最终回复文本;tool_loop_enable=False 或无注册工具时返回 None(pipeline 降级 stream_chat)。
+    对应 docs/01 §6。非流式(QQ 累积完整回复);与 stream 互斥(有工具走 tool-loop,否则 stream)。"""
+    if not settings.tool_loop_enable:
+        return None
+    from tools import get_tool_registry
+    from tools.base import ToolContext
+    from pipeline.tool_loop import run_tool_loop
+    registry = get_tool_registry()
+    if not registry.all():
+        return None
+    provider = get_provider(ctx.provider_name)
+    tctx = ToolContext(redis=redis, object_id=ctx.object_id)
+    return await run_tool_loop(provider, ctx.system_prompt, ctx.user_text,
+                               ctx.history, registry, tctx,
+                               model=ctx.model, max_iterations=settings.tool_loop_max_iterations)
+
+
 async def stage_mood_update(ctx: MessageContext, redis) -> None:
     """阶段④.5:心情情感更新(LLM 产出后)。
     按回复文本关键词情感更新 mood(正向词↑step/负向词↓step)。对应 docs/03 §4.1。

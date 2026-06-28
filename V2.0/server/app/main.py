@@ -20,6 +20,7 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
 变更说明：
   1. M3 挂载评分/反推 REST 路由(score_router,/api/v1/chat/.../score、/health、/score/reverse_infer/...)
   2. M4 挂载记忆 REST 路由(memory_router,/api/v1/memory/... 查看/统计/遗忘/恢复/锁定)
+  3. M5 lifespan 注册自研工具 + MCP client 连外部 server(无配置降级)
 """
 import asyncio
 import logging
@@ -58,18 +59,31 @@ async def lifespan(app: FastAPI):
     from plugins import init_plugins
     await init_plugins(redis)
 
+    # M5 工具系统:注册自研工具(get_persona/write_memory/reverse_infer_trigger/web_search)
+    # + MCP client 连外部 server(无配置则降级,只用自研工具)
+    from tools import get_tool_registry, register_builtin_tools
+    from mcp_client import MCPClient, parse_mcp_servers
+    registry = get_tool_registry()
+    register_builtin_tools(registry, web_search_enable=settings.web_search_enable)
+    mcp_servers = parse_mcp_servers(settings.mcp_servers) if settings.mcp_enable else []
+    mcp_client = MCPClient()
+    if mcp_servers:
+        await mcp_client.connect_all(mcp_servers, registry)
+
     # mood 衰减循环(独立任务,周期向中性回归)
     from mood.decay import start_decay_loop
     decay_task = start_decay_loop(redis)
 
     yield
 
-    # 关闭:衰减循环 → 插件 → httpx 客户端
+    # 关闭:衰减循环 → MCP client → 插件 → httpx 客户端
     decay_task.cancel()
     try:
         await decay_task
     except asyncio.CancelledError:
         pass
+    if mcp_servers:
+        await mcp_client.close_all()
     from plugins import shutdown_plugins
     await shutdown_plugins()
     await qq_api.close_client()

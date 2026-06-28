@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     reverse_infer_provider: str = "glm"  # 反推专用 provider(与聊天解耦,无 key 降级空 diff)
     reverse_infer_mode: str = "fill_empty"  # 合并模式:fill_empty(只填空)/ overwrite(覆盖查漂移)
     reverse_infer_max_fields: int = 6  # 单次反推最多改写字段数(整体接受,不拆散语义)
+    # 12.MCP / 工具循环(M5,docs/01 §6):tool-loop + 自研工具 + MCP client
+    tool_loop_enable: bool = True  # tool-loop 总开关:有注册工具时 LLM 可 function calling 调工具
+    tool_loop_max_iterations: int = 5  # tool-loop 最大循环轮数(防死循环)
+    web_search_enable: bool = True  # DuckDuckGo 联网兜底工具开关(docs/01 §6 联网兜底)
+    mcp_enable: bool = True  # MCP client 总开关(连外部 MCP server)
+    mcp_servers: str = ""  # MCP server 列表 JSON([{name,transport:stdio|sse,command,args|url}]),空则不连
 
 
 # 全局配置单例

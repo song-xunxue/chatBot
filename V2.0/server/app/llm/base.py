@@ -11,7 +11,7 @@ LLM Provider 抽象基类
   1. M2 从 V1.0 移植 llm 模块到 V2.0(零业务改动;Message 保持 role+content:str,多模态留 M6)
 """
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import AsyncIterator
 
 
@@ -32,7 +32,8 @@ class Delta:
 class LLMResponse:
     """一次性调用的完整回复"""
     text: str
-    finish_reason: str = ""   # stop / length / content_filter 等
+    finish_reason: str = ""   # stop / length / content_filter / tool_calls 等
+    tool_calls: list = field(default_factory=list)   # M5:[{id,name,arguments(str JSON)}],function calling
 
 
 class LLMProvider(ABC):

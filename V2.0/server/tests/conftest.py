@@ -55,6 +55,13 @@ def _no_real_llm(monkeypatch):
     monkeypatch.setattr(settings, "siliconflow_api_key", "")
 
 
+@pytest.fixture(autouse=True)
+def _disable_tool_loop(monkeypatch):
+    """自动关闭 tool-loop(M5):m1-m4 测试不经 tool-loop(走 stream_chat);m5 测试显式 monkeypatch 开。
+    避免 lifespan 注册的自研工具污染全局 registry 导致 m2/m3/m4 的 mock provider 走 tool-loop 崩。"""
+    monkeypatch.setattr(settings, "tool_loop_enable", False)
+
+
 @pytest.fixture
 def fake_redis():
     """注入 fakeredis 单例到 storage.redis_client._redis(token 缓存走内存假 Redis)"""

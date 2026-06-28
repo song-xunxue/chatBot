@@ -21,8 +21,8 @@ from typing import AsyncIterator
 from pipeline.context import MessageContext
 from pipeline.stages import (
     stage_load_history, stage_persona_inject, stage_memory_retrieve,
-    stage_mood_inject, stage_llm_stream, stage_save, stage_score, stage_mood_update,
-    stage_memory_write,
+    stage_mood_inject, stage_llm_stream, stage_tool_loop, stage_save, stage_score,
+    stage_mood_update, stage_memory_write,
 )
 from storage.redis_client import get_redis
 from plugins import get_event_bus
@@ -57,13 +57,18 @@ async def run_stream(ctx: MessageContext) -> AsyncIterator[str]:
     await stage_mood_inject(ctx, redis)
     # on_before_llm:prompt 拼装后、调 LLM 前;STOP 则跳过 LLM(插件可自产 ctx.reply_text)
     skip_llm = bus is not None and await bus.fire(ON_BEFORE_LLM, ctx) == HookResult.STOP
-    # ③流式调 LLM:边产边推,同时累积完整回复
+    # ③调 LLM:有注册工具走 tool-loop(M5,function calling 调工具→再推理),否则流式 stream
     full_reply: list[str] = []
     if not skip_llm:
-        async for token in stage_llm_stream(ctx):
-            full_reply.append(token)
-            yield token  # 推给调用方(QQ 场景 webhook 累积)
-        ctx.reply_text = "".join(full_reply)
+        tool_text = await stage_tool_loop(ctx, redis)
+        if tool_text is not None:
+            ctx.reply_text = tool_text          # tool-loop 产出完整回复
+            yield tool_text                      # 一次性 yield 完整回复(webhook 累积兼容)
+        else:
+            async for token in stage_llm_stream(ctx):
+                full_reply.append(token)
+                yield token  # 推给调用方(QQ 场景 webhook 累积)
+            ctx.reply_text = "".join(full_reply)
     # on_after_llm:LLM 真实产出后触发(skip_llm 时不触发);STOP 则跳过回复增强(on_message_out)
     skip_out = skip_llm
     if bus is not None and not skip_llm:

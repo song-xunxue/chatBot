@@ -54,6 +54,34 @@ class OpenAICompatProvider(LLMProvider):
             choice = data["choices"][0]
             return LLMResponse(text=choice["message"]["content"], finish_reason=choice.get("finish_reason", ""))
 
+    async def chat_with_tools(self, messages: list[dict], model: str = "",
+                              tools: list[dict] | None = None,
+                              tool_choice: str = "auto") -> LLMResponse:
+        """M5 tool-loop 用:messages 为 list[dict](已含 system/user/assistant+tool_calls/tool 角色),
+        直接作 payload messages(不经 _to_payload_messages)。传 tools 触发 function calling,
+        解析响应 tool_calls。返回 LLMResponse(含 tool_calls)。"""
+        payload = {"model": model or self.default_model, "messages": messages, "stream": False}
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(self._chat_url(), headers=self._headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        choice = data["choices"][0]
+        msg = choice["message"]
+        tool_calls = []
+        for tc in msg.get("tool_calls", []) or []:
+            fn = tc.get("function", {})
+            tool_calls.append({
+                "id": tc.get("id", ""),
+                "name": fn.get("name", ""),
+                "arguments": fn.get("arguments", "{}"),   # str(JSON)
+            })
+        return LLMResponse(text=msg.get("content", "") or "",
+                           finish_reason=choice.get("finish_reason", ""),
+                           tool_calls=tool_calls)
+
     async def stream_chat(self, messages: list[Message], model: str = "", **opts) -> AsyncIterator[Delta]:
         """流式调用:异步生成器逐 token 产出 Delta(pipeline 累积为完整回复再下发 QQ)"""
         model = model or self.default_model
