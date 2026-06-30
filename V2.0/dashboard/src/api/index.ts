@@ -1,0 +1,92 @@
+/**
+ * REST API 封装(V2.0 M7):人设 / 聊天历史 / 评分 / 心情 / 记忆 / 插件 / 系统。
+ * 对接 V2.0 服务端 rest_persona / rest_chat / rest_score / rest_mood / rest_memory / rest_plugin / rest_system。
+ * 鉴权由 client.ts 拦截器自动注入 X-Access-Token(Header)。
+ * 作者: 李文煜
+ */
+import { api } from './client'
+
+// —— 人设 persona ——
+export const listPersonas = () => api.get('/api/v1/persona').then((r) => r.data)
+export const getPersona = (id: string) => api.get(`/api/v1/persona/${id}`).then((r) => r.data)
+export const createPersona = (body: any) => api.post('/api/v1/persona', body).then((r) => r.data)
+export const updatePersona = (id: string, body: any) => api.put(`/api/v1/persona/${id}`, body).then((r) => r.data)
+export const deletePersona = (id: string) => api.delete(`/api/v1/persona/${id}`).then((r) => r.data)
+export const importPersona = (file: File) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api.post('/api/v1/persona/import', fd).then((r) => r.data)
+}
+export const exportPersona = (id: string) => api.get(`/api/v1/persona/${id}/export`).then((r) => r.data)
+export const bindPersonaModel = (id: string, body: any) =>
+  api.put(`/api/v1/persona/${id}/model`, body).then((r) => r.data)
+export const snapshotPersona = (id: string) => api.post(`/api/v1/persona/${id}/snapshot`).then((r) => r.data)
+export const rollbackPersona = (id: string, version_no: number) =>
+  api.post(`/api/v1/persona/${id}/rollback`, { version_no }).then((r) => r.data)
+
+// —— 聊天历史 chat(block 三层)——
+export const listBlocks = (oid: string, limit = 100) =>
+  api.get(`/api/v1/chat/${oid}/blocks`, { params: { limit } }).then((r) => r.data)
+export const listMessages = (oid: string, params: { block_id?: string; limit?: number } = {}) =>
+  api.get(`/api/v1/chat/${oid}/messages`, { params }).then((r) => r.data)
+export const getMessage = (mid: string) => api.get(`/api/v1/chat/messages/${mid}`).then((r) => r.data)
+export const updateMessage = (mid: string, body: any) =>
+  api.put(`/api/v1/chat/messages/${mid}`, body).then((r) => r.data)
+export const deleteMessage = (mid: string, reason = 'out_of_character') =>
+  api.delete(`/api/v1/chat/messages/${mid}`, { data: { reason } }).then((r) => r.data)
+export const closeBlock = (bid: string, reason = 'manual') =>
+  api.post(`/api/v1/chat/blocks/${bid}/close`, { reason }).then((r) => r.data)
+
+// —— 评分 score(M3 + M7 samples)——
+export const getScore = (mid: string) => api.get(`/api/v1/chat/messages/${mid}/score`).then((r) => r.data)
+export const setScore = (mid: string, score_base: number) =>
+  api.patch(`/api/v1/chat/messages/${mid}/score`, { score_base }).then((r) => r.data)
+export const getHealth = (oid: string, window = 0) =>
+  api.get(`/api/v1/chat/${oid}/health`, { params: { window } }).then((r) => r.data)
+export const getSamples = (oid: string, kind = 'negative') =>
+  api.get(`/api/v1/score/samples/${oid}`, { params: { kind } }).then((r) => r.data)
+export const reverseInferDryRun = (oid: string, body: any = {}) =>
+  api.post(`/api/v1/score/reverse_infer/${oid}/dry_run`, body).then((r) => r.data)
+export const reverseInferApply = (oid: string, token: string) =>
+  api.post(`/api/v1/score/reverse_infer/${oid}/apply`, { confirm_token: token }).then((r) => r.data)
+
+// —— 心情 mood ——
+export const getMood = (oid: string) => api.get(`/api/v1/mood/${oid}`).then((r) => r.data)
+export const setMood = (oid: string, mood: number) => api.put(`/api/v1/mood/${oid}`, { mood }).then((r) => r.data)
+export const getMoodHistory = (oid: string, limit = 100) =>
+  api.get(`/api/v1/mood/${oid}/history`, { params: { limit } }).then((r) => r.data)
+export const listMoodKinds = () => api.get('/api/v1/mood/kinds').then((r) => r.data)
+export const upsertMoodKind = (body: any) => api.post('/api/v1/mood/kinds', body).then((r) => r.data)
+export const putMoodKind = (key: string, body: any) => api.put(`/api/v1/mood/kinds/${key}`, body).then((r) => r.data)
+export const deleteMoodKind = (key: string) => api.delete(`/api/v1/mood/kinds/${key}`).then((r) => r.data)
+export const getMoodParams = () => api.get('/api/v1/mood/params').then((r) => r.data)
+export const setMoodParams = (body: any) => api.put('/api/v1/mood/params', body).then((r) => r.data)
+export const moodCalc = (oid: string, body: any) => api.post(`/api/v1/mood/${oid}/calc`, body).then((r) => r.data)
+
+// —— 记忆 memory ——
+export const getMemory = (oid: string, layer = 'all', category = '', limit = 100) =>
+  api.get(`/api/v1/memory/${oid}`, { params: { layer, category, limit } }).then((r) => r.data)
+export const getMemoryStats = (oid: string) => api.get(`/api/v1/memory/${oid}/stats`).then((r) => r.data)
+export const forgetOneMemory = (oid: string, mid: string) =>
+  api.delete(`/api/v1/memory/${oid}/${mid}`).then((r) => r.data)
+export const restoreMemory = (oid: string, mid: string) =>
+  api.post(`/api/v1/memory/${oid}/${mid}/restore`).then((r) => r.data)
+export const lockMemory = (oid: string, mid: string, locked = true) =>
+  api.post(`/api/v1/memory/${oid}/${mid}/lock`, { locked }).then((r) => r.data)
+export const batchForgetMemory = (oid: string, body: any = {}) =>
+  api.post(`/api/v1/memory/${oid}/forget`, body).then((r) => r.data)
+
+// —— 插件 plugin(原生 + .star)——
+export const listPlugins = () => api.get('/api/v1/plugin').then((r) => r.data)
+export const getPlugin = (name: string) => api.get(`/api/v1/plugin/${name}`).then((r) => r.data)
+export const enablePlugin = (name: string) => api.post(`/api/v1/plugin/${name}/enable`).then((r) => r.data)
+export const disablePlugin = (name: string) => api.post(`/api/v1/plugin/${name}/disable`).then((r) => r.data)
+export const reloadPlugin = (name: string) => api.post(`/api/v1/plugin/${name}/reload`).then((r) => r.data)
+export const reloadStar = (name: string) => api.post(`/api/v1/plugin/star/${name}/reload`).then((r) => r.data)
+export const getObjectPlugins = (oid: string) => api.get(`/api/v1/plugin/object/${oid}`).then((r) => r.data)
+export const setObjectPlugin = (oid: string, name: string, body: any) =>
+  api.put(`/api/v1/plugin/object/${oid}/${name}`, body).then((r) => r.data)
+
+// —— 系统 system ——
+export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) => r.data)
+export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => r.data)
