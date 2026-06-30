@@ -27,6 +27,11 @@ M2 链路(替换 M1a echo):
 2026-06-27
 变更说明：
   1. M2 echo → pipeline:连发防抖合并 + run_stream + 被动回复;改旁路 task 立即 ACK(满足 QQ 3s)
+
+2026-06-30
+变更说明：
+  1. M8 代答联动:C2C_MESSAGE_CREATE 分支先查代答开关,开启则入 takeover pending 队列
+     (逐条入队,不合并连发,管理员面板看到完整原话),不进 pipeline;关闭则原防抖 → pipeline
 """
 import asyncio
 import logging
@@ -201,9 +206,18 @@ async def qq_webhook(
         logger.warning("QQ 回调验签失败")
         return JSONResponse(status_code=401, content={"detail": "invalid signature"})
 
-    # op=0 Dispatch:C2C 私聊消息 → 防抖合并 → pipeline(旁路,立即 ACK)
+    # op=0 Dispatch:C2C 私聊消息 → 代答拦截 / 防抖合并 → pipeline(旁路,立即 ACK)
     if op == 0 and t == "C2C_MESSAGE_CREATE":
         msg = parse_c2c_message(d)
+        # M8 代答联动:代答模式开启则入 pending 队列等管理员代答,不进 pipeline
+        from storage import takeover_store
+        from storage.redis_client import get_redis
+        redis = await get_redis()
+        if await takeover_store.is_enabled(redis, msg.openid):
+            pid = await takeover_store.enqueue(redis, msg.openid,
+                                               user_text=msg.content, msg_id=msg.msg_id)
+            logger.info("代答模式入队 oid=%s pid=%s", msg.openid, pid)
+            return JSONResponse(status_code=200, content={"op": 12})
         await _schedule_debounce(msg)   # 快速:加缓冲+重置计时器,不跑 LLM
         return JSONResponse(status_code=200, content={"op": 12})  # op=12 HTTP Callback ACK
 

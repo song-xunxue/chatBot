@@ -27,6 +27,10 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
 变更说明：
   1. M7 加 CORSMiddleware + 挂载 Web 面板 REST(chat/mood/plugin/persona/system)+ 暴露 star_loader 单例
   2. M7e 静态托管 dashboard/dist(生产同源省 CORS;dist 不存在则跳过,dev 用 vite :5173 + proxy)
+
+2026-06-30
+变更说明：
+  1. M8 挂载代答/roleplay REST 路由(takeover_router / roleplay_router,/api/v1/takeover|roleplay/...)
 """
 import asyncio
 import logging
@@ -45,6 +49,8 @@ from api.rest_mood import router as mood_router
 from api.rest_plugin import router as plugin_router
 from api.rest_persona import router as persona_router
 from api.rest_system import router as system_router
+from api.rest_takeover import router as takeover_router
+from api.rest_roleplay import router as roleplay_router
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +162,9 @@ def create_app() -> FastAPI:
     app.include_router(plugin_router)
     app.include_router(persona_router)
     app.include_router(system_router)
+    # M8 挂载代答/roleplay REST 路由(/api/v1/takeover/...、/api/v1/roleplay/...)
+    app.include_router(takeover_router)
+    app.include_router(roleplay_router)
     # M7e 静态托管前端构建产物(生产同源省 CORS);dist 不存在则跳过(dev 用 vite :5173 + proxy)
     from fastapi.staticfiles import StaticFiles
     from core.config import PROJECT_ROOT
