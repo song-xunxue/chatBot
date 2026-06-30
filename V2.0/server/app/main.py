@@ -26,6 +26,7 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
 2026-06-30
 变更说明：
   1. M7 加 CORSMiddleware + 挂载 Web 面板 REST(chat/mood/plugin/persona/system)+ 暴露 star_loader 单例
+  2. M7e 静态托管 dashboard/dist(生产同源省 CORS;dist 不存在则跳过,dev 用 vite :5173 + proxy)
 """
 import asyncio
 import logging
@@ -155,6 +156,12 @@ def create_app() -> FastAPI:
     app.include_router(plugin_router)
     app.include_router(persona_router)
     app.include_router(system_router)
+    # M7e 静态托管前端构建产物(生产同源省 CORS);dist 不存在则跳过(dev 用 vite :5173 + proxy)
+    from fastapi.staticfiles import StaticFiles
+    from core.config import PROJECT_ROOT
+    _dist = PROJECT_ROOT / "dashboard" / "dist"
+    if _dist.is_dir():
+        app.mount("/", StaticFiles(directory=str(_dist), html=True), name="dashboard")
     return app
 
 
