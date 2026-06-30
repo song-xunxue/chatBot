@@ -152,6 +152,7 @@ async def resolve(redis: Redis, oid: str, pid: str | None = None) -> dict | None
     pipe.expire(pending_key, 3600)      # 续期 1h 供审计/重试
     pipe.lrem(queue_key, 1, pid)        # 出队(指定 pid 或已解析的队首 pid,统一 LREM)
     await pipe.execute()
+    pending["status"] = "resolved"      # 回填返回 dict(pending 是 hgetall 旧快照,读时 status 还是 pending)
     return pending
 
 
