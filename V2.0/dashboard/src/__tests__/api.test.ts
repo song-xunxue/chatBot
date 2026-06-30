@@ -39,6 +39,8 @@ import {
   restoreMemory, lockMemory,
   enablePlugin, reloadStar, setObjectPlugin,
   getSystemConfig, reloadSystem,
+  toggleTakeover, getTakeoverStatus, listTakeoverQueue, answerTakeover, answerTakeoverBatch, skipTakeover,
+  addRoleplay, addRoleplayBatch, listRoleplay, updateRoleplay, deleteRoleplay,
 } from '@/api'
 
 function mockResolve(method: 'get' | 'post' | 'put' | 'delete', responseData: any) {
@@ -126,6 +128,34 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/system/config')
     mockResolve('post', {}); await reloadSystem()
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/system/reload')
+  })
+
+  it('takeover: toggle/status/queue/answer/batch/skip', async () => {
+    mockResolve('post', {}); await toggleTakeover('o', true)
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/toggle', { enabled: true })
+    mockResolve('get', {}); await getTakeoverStatus('o')
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/takeover/o/status')
+    await listTakeoverQueue('o')
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/takeover/o/queue')
+    mockResolve('post', {}); await answerTakeover('o', { pid: 'p1', answer: 'a' })
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/answer', { pid: 'p1', answer: 'a' })
+    await answerTakeoverBatch('o', [{ answer: 'a' }])
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/answer/batch', { items: [{ answer: 'a' }] })
+    await skipTakeover('o', 'p1')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/skip', { pid: 'p1' })
+  })
+
+  it('roleplay: add/batch/list/update/delete', async () => {
+    mockResolve('post', {}); await addRoleplay('o', { role: 'user', content: 'hi' })
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { role: 'user', content: 'hi' })
+    await addRoleplayBatch('o', [{ role: 'user', content: 'x' }])
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/batch', { items: [{ role: 'user', content: 'x' }] })
+    mockResolve('get', {}); await listRoleplay('o')
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { params: { limit: 1000 } })
+    mockResolve('put', {}); await updateRoleplay('o', 'm1', 'new')
+    expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/m1', { content: 'new' })
+    mockResolve('delete', {}); await deleteRoleplay('o', 'm1')
+    expect(apiMethods.delete).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/m1')
   })
 })
 

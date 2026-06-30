@@ -90,3 +90,29 @@ export const setObjectPlugin = (oid: string, name: string, body: any) =>
 // —— 系统 system ——
 export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) => r.data)
 export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => r.data)
+
+// —— 代答 takeover(M8)——
+export const toggleTakeover = (oid: string, enabled: boolean) =>
+  api.post(`/api/v1/takeover/${oid}/toggle`, { enabled }).then((r) => r.data)
+export const getTakeoverStatus = (oid: string) =>
+  api.get(`/api/v1/takeover/${oid}/status`).then((r) => r.data)
+export const listTakeoverQueue = (oid: string) =>
+  api.get(`/api/v1/takeover/${oid}/queue`).then((r) => r.data)
+export const answerTakeover = (oid: string, body: { pid?: string; answer: string }) =>
+  api.post(`/api/v1/takeover/${oid}/answer`, body).then((r) => r.data)
+export const answerTakeoverBatch = (oid: string, items: { pid?: string; answer: string }[]) =>
+  api.post(`/api/v1/takeover/${oid}/answer/batch`, { items }).then((r) => r.data)
+export const skipTakeover = (oid: string, pid?: string) =>
+  api.post(`/api/v1/takeover/${oid}/skip`, { pid }).then((r) => r.data)
+
+// —— roleplay 训练样本(M8)——
+export const addRoleplay = (oid: string, body: { role: string; content: string }) =>
+  api.post(`/api/v1/roleplay/${oid}/messages`, body).then((r) => r.data)
+export const addRoleplayBatch = (oid: string, items: { role: string; content: string }[]) =>
+  api.post(`/api/v1/roleplay/${oid}/messages/batch`, { items }).then((r) => r.data)
+export const listRoleplay = (oid: string, limit = 1000) =>
+  api.get(`/api/v1/roleplay/${oid}/messages`, { params: { limit } }).then((r) => r.data)
+export const updateRoleplay = (oid: string, mid: string, content: string) =>
+  api.put(`/api/v1/roleplay/${oid}/messages/${mid}`, { content }).then((r) => r.data)
+export const deleteRoleplay = (oid: string, mid: string) =>
+  api.delete(`/api/v1/roleplay/${oid}/messages/${mid}`).then((r) => r.data)
