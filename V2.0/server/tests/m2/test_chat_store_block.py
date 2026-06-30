@@ -16,9 +16,11 @@ from llm.base import Message
 
 
 async def test_append_and_get_history(fake_redis):
-    """append 消息 → get_history 转 Message(user/ai→assistant)"""
-    mid_u = await chat_store.append_message(fake_redis, "u1", sender="user", content="你好")
-    mid_a = await chat_store.append_message(fake_redis, "u1", sender="ai", content="你也好")
+    """append 消息 → get_history 转 Message(user/ai→assistant)。
+    显式递增 ts 避免同毫秒 ZSet 同 score 排序不稳定(pre-existing flaky)。"""
+    base = int(_time.time() * 1000)
+    mid_u = await chat_store.append_message(fake_redis, "u1", sender="user", content="你好", ts=base)
+    mid_a = await chat_store.append_message(fake_redis, "u1", sender="ai", content="你也好", ts=base + 1)
     assert mid_u != mid_a   # UUID mid 唯一
     history = await chat_store.get_history(fake_redis, "u1")
     assert history == [

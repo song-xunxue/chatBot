@@ -25,6 +25,11 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
 变更说明：
   1. M7 新增 mood_history_keep(mood 历史曲线保留条数,面板实时监控页用)、
      cors_origins(Web 面板 CORS 允许 origin,逗号分隔,空则用默认 dev origin)
+
+2026-06-30
+变更说明：
+  1. M8 新增 takeover_pending_ttl_sec(代答 pending 保留秒,默认 86400)、
+     takeover_batch_max(批量代答/录入上限)、takeover_queue_orphan_scan_limit(孤儿 pid 扫描上限)
 """
 from pathlib import Path
 
@@ -138,6 +143,11 @@ class Settings(BaseSettings):
     # 13.插件兼容(M6,docs/01 §8 / docs/04 §8):.star 兼容层 + V1.0 原生插件收敛
     star_enable: bool = True  # .star 兼容层总开关(加载 AstrBot 风格 .star 插件)
     star_dir: str = "server/data/star_plugins"  # .star 插件目录(相对项目根,放 *.py)
+
+    # 14.代人聊天 takeover(M8,docs/01 §11 / docs/02 §8):代答 pending 队列 + 批量连发真实下发 QQ
+    takeover_pending_ttl_sec: int = 86400  # pending 待答保留秒数(管理员可能延迟代答,V1.0 的 120s 太短)
+    takeover_batch_max: int = 20  # 批量代答/录入条数上限(防滥用,截断)
+    takeover_queue_orphan_scan_limit: int = 50  # resolve/list_queue 扫描孤儿 pid 上限(防雪崩)
 
 
 # 全局配置单例

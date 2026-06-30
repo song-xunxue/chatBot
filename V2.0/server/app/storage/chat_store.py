@@ -23,6 +23,13 @@ M2 实现:
 2026-06-30
 变更说明：
   1. M7 新增 list_blocks(列会话所有 block 元数据 + msg_count,面板历史页 block 第一层浏览)
+
+2026-06-30
+变更说明：
+  1. M8 roleplay 物理隔离从简化 List 升级为 block 三层(mychat:block_roleplay:* / mychat:msg_roleplay:*),
+     与 live 结构对齐(独立前缀,get_history 只读 live 键天然隔离);
+     新增 close_roleplay_block(手动分段)/ append_roleplay_batch(批量录连发);
+     update/delete 从 O(N) 重建 List 改为 O(1) hset / ZREM+DEL;签名向后兼容(list_roleplay 返回含 content)
 """
 import json
 import time
@@ -78,14 +85,34 @@ def _active_key(object_id: str) -> str:
     return f"mychat:chat:{object_id}:active_block"
 
 
-# —— roleplay 物理隔离键(简化为独立 List,M8 可 block 化)——
-def _roleplay_key(object_id: str) -> str:
-    """roleplay 正样本(List)"""
-    return f"mychat:chat_roleplay:{object_id}"
+# —— roleplay 物理隔离键(block 三层,与 live 前缀独立;get_history 只读 live 键 → 天然隔离)——
+def _rp_blocks_key(object_id: str) -> str:
+    """roleplay 会话所有 block 的索引(ZSet, score=start_ts)"""
+    return f"mychat:block_roleplay:{object_id}:blocks"
+
+
+def _rp_block_key(block_id: str) -> str:
+    """roleplay block 元数据(Hash)"""
+    return f"mychat:block_roleplay:{block_id}"
+
+
+def _rp_msgs_key(block_id: str) -> str:
+    """roleplay block 内消息索引(ZSet, score=ts)"""
+    return f"mychat:block_roleplay:{block_id}:msgs"
+
+
+def _rp_msg_key(mid: str) -> str:
+    """roleplay 消息详情(Hash)"""
+    return f"mychat:msg_roleplay:{mid}"
+
+
+def _rp_active_key(object_id: str) -> str:
+    """当前 open roleplay block_id 缓存(String,加速判定)"""
+    return f"mychat:roleplay:{object_id}:active_block"
 
 
 def _roleplay_neg_key(object_id: str) -> str:
-    """删除的 roleplay 样本(List,训练负样本信号)"""
+    """删除的 roleplay 样本(List,训练负样本信号,沿用 V1.0)"""
     return f"mychat:roleplay:neg:{object_id}"
 
 
@@ -355,68 +382,133 @@ async def set_score(redis: Redis, mid: str, *,
     return quad
 
 
-# ================ roleplay 物理隔离(简化 List,M8 可 block 化)=================
+# ================ roleplay 物理隔离(block 三层,M8 升级自简化 List)=================
+# 训练样本离散录入,不按静默超时关 block:单一持续 open block 追加,close_roleplay_block 手动分段。
+# 键前缀 mychat:block_roleplay:* / mychat:msg_roleplay:* 独立于 live,get_history 只读 live 键 → 天然隔离。
+
+async def _rp_new_block(redis: Redis, object_id: str, *, ts: int = 0) -> dict:
+    """新建 open roleplay block 并登记,返回 block dict"""
+    ts = ts or _now_ms()
+    block_id = _gen_id()
+    block = {
+        "block_id": block_id,
+        "object_id": object_id,
+        "start_ts": ts,
+        "end_ts": ts,
+        "status": "open",
+        "source": "roleplay",
+        "summary": "",
+        "close_reason": "",
+    }
+    pipe = redis.pipeline()
+    pipe.hset(_rp_block_key(block_id), mapping=block)
+    pipe.zadd(_rp_blocks_key(object_id), {block_id: ts})
+    pipe.set(_rp_active_key(object_id), block_id)
+    await pipe.execute()
+    return block
+
+
+async def _rp_open_or_get_block(redis: Redis, object_id: str) -> dict:
+    """取当前 open roleplay block;无/已关则开新(不做静默超时判定,训练样本离散录入)。"""
+    block_id = await redis.get(_rp_active_key(object_id))
+    if block_id:
+        block = await redis.hgetall(_rp_block_key(block_id))
+        if block and block.get("status") == "open":
+            return block
+    return await _rp_new_block(redis, object_id)
+
+
+async def close_roleplay_block(redis: Redis, object_id: str, *, reason: str = "manual") -> None:
+    """手动关闭当前 open roleplay block(分段用,如"第一幕/第二幕")。无 active 则空操作。"""
+    block_id = await redis.get(_rp_active_key(object_id))
+    if not block_id:
+        return
+    pipe = redis.pipeline()
+    pipe.hset(_rp_block_key(block_id), mapping={
+        "status": "closed", "end_ts": _now_ms(), "close_reason": reason})
+    pipe.delete(_rp_active_key(object_id))
+    await pipe.execute()
+
 
 async def append_roleplay_message(redis: Redis, object_id: str, *,
-                                  role: str, content: str) -> str:
-    """录单条 roleplay 训练样本(独立键 mychat:chat_roleplay:{oid},绝不污染 get_history)。
-    返回 mid(rp_ 前缀便于辨识)。"""
-    ts = _now_ms()
+                                  role: str, content: str, ts: int = 0) -> str:
+    """录单条 roleplay 训练样本(独立 block 三层,绝不污染 get_history)。
+    落当前 open roleplay block;返回 mid(rp_ 前缀便于辨识)。"""
+    ts = ts or _now_ms()
+    block = await _rp_open_or_get_block(redis, object_id)
+    block_id = block["block_id"]
     mid = _gen_id("rp_")
-    msg = json.dumps({"role": role, "content": content, "ts": ts,
-                      "mid": mid, "source": "roleplay"}, ensure_ascii=False)
-    await redis.rpush(_roleplay_key(object_id), msg)
+    msg = {
+        "mid": mid,
+        "block_id": block_id,
+        "object_id": object_id,
+        "role": role,            # user/assistant/system(roleplay 概念,独立于 live 的 sender)
+        "content": content,
+        "ts": ts,
+        "source": "roleplay",
+        "status": "active",
+    }
+    pipe = redis.pipeline()
+    pipe.hset(_rp_msg_key(mid), mapping=msg)
+    pipe.zadd(_rp_msgs_key(block_id), {mid: ts})
+    pipe.hset(_rp_block_key(block_id), "end_ts", ts)
+    await pipe.execute()
     return mid
 
 
+async def append_roleplay_batch(redis: Redis, object_id: str, *, items: list[dict]) -> list[str]:
+    """批量录 roleplay(同一 open block,连发场景)。items 每项 {role, content, ts?}。返回 mid 列表。"""
+    mids: list[str] = []
+    for item in items:
+        mid = await append_roleplay_message(
+            redis, object_id,
+            role=item["role"], content=item["content"], ts=item.get("ts", 0))
+        mids.append(mid)
+    return mids
+
+
 async def list_roleplay(redis: Redis, object_id: str, *, limit: int = 1000) -> list[dict]:
-    """列 roleplay 正样本(带 mid,时间正序)"""
-    raw = await redis.lrange(_roleplay_key(object_id), -limit, -1)
-    return [json.loads(x) for x in raw]
+    """列 roleplay 样本(跨 block,按 ts 正序,取最近 limit 条)。完整字段含 role/content/mid。"""
+    block_ids = await redis.zrange(_rp_blocks_key(object_id), 0, -1)
+    if not block_ids:
+        return []
+    pipe = redis.pipeline()
+    for bid in block_ids:
+        pipe.zrange(_rp_msgs_key(bid), 0, -1)
+    groups = await pipe.execute()
+    mids = [mid for g in groups for mid in g]
+    if not mids:
+        return []
+    pipe = redis.pipeline()
+    for mid in mids:
+        pipe.hgetall(_rp_msg_key(mid))
+    raws = await pipe.execute()
+    items = [r for r in raws if r]
+    items.sort(key=lambda d: int(d.get("ts", 0) or 0))
+    return items[-limit:]
 
 
 async def update_roleplay(redis: Redis, object_id: str, mid: str, content: str) -> bool:
-    """按 mid 改单条 roleplay 内容(重建 List)。返回是否命中。"""
-    raw = await redis.lrange(_roleplay_key(object_id), 0, -1)
-    hit = False
-    new_items = []
-    for x in raw:
-        d = json.loads(x)
-        if d.get("mid") == mid:
-            d["content"] = content
-            hit = True
-        new_items.append(json.dumps(d, ensure_ascii=False))
-    if hit:
-        pipe = redis.pipeline()
-        pipe.delete(_roleplay_key(object_id))
-        for it in new_items:
-            pipe.rpush(_roleplay_key(object_id), it)
-        await pipe.execute()
-    return hit
+    """按 mid 改单条 roleplay 内容(msg Hash 直接 hset,O(1),→ status=edited)。命中返回 True。"""
+    if not await redis.exists(_rp_msg_key(mid)):
+        return False
+    await redis.hset(_rp_msg_key(mid), mapping={"content": content, "status": "edited"})
+    return True
 
 
 async def delete_roleplay(redis: Redis, object_id: str, mid: str) -> bool:
-    """按 mid 删单条 roleplay 样本,同时写入 neg 队列作训练负样本(重建 List)。返回是否命中。"""
-    raw = await redis.lrange(_roleplay_key(object_id), 0, -1)
-    hit = False
-    new_items = []
-    deleted = None
-    for x in raw:
-        d = json.loads(x)
-        if d.get("mid") == mid:
-            hit = True
-            deleted = d
-            continue
-        new_items.append(x)   # 未删的保留原 json 串
-    if hit:
-        pipe = redis.pipeline()
-        pipe.delete(_roleplay_key(object_id))
-        for it in new_items:
-            pipe.rpush(_roleplay_key(object_id), it)
-        if deleted:
-            pipe.rpush(_roleplay_neg_key(object_id), json.dumps(
-                {"text": deleted.get("content", ""), "mid": mid,
-                 "ts": deleted.get("ts", 0), "reason": "roleplay_deleted"},
-                ensure_ascii=False))
-        await pipe.execute()
-    return hit
+    """按 mid 删单条 roleplay 样本(物理删:ZREM 出 block + DEL msg Hash)+ 写 neg 队列(训练负信号)。
+    命中返回 True。roleplay 无 score,物理删比软删干净,neg 队列已留训练负信号。"""
+    msg = await redis.hgetall(_rp_msg_key(mid))
+    if not msg:
+        return False
+    pipe = redis.pipeline()
+    bid = msg.get("block_id", "")
+    if bid:
+        pipe.zrem(_rp_msgs_key(bid), mid)
+    pipe.delete(_rp_msg_key(mid))
+    pipe.rpush(_roleplay_neg_key(object_id), json.dumps(
+        {"text": msg.get("content", ""), "mid": mid, "ts": msg.get("ts", 0),
+         "role": msg.get("role", ""), "reason": "roleplay_deleted"}, ensure_ascii=False))
+    await pipe.execute()
+    return True
