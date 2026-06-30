@@ -1,0 +1,36 @@
+# MyChat V2.0 镜像构建排除清单(build context = V2.0/)
+# 作者: 李文煜
+# 日期: 2026-07-01
+
+# 参考资源(体积大,镜像不需要)
+Ref/
+docs/
+
+# 本地配置 / 版本控制 / IDE
+.env
+.env.example
+.git/
+.gitignore
+.idea/
+.claude/
+
+# 测试与开发工具(不入镜像)
+server/tests/
+server/scripts/
+server/.pytest_cache/
+**/__pycache__/
+*.pyc
+
+# 前端源码与依赖(只入 dashboard/dist)
+dashboard/node_modules/
+dashboard/src/
+dashboard/.gitignore
+dashboard/*.json
+dashboard/*.ts
+dashboard/index.html
+dashboard/.vite/
+
+# 部署工件自身(compose 读宿主机,不入镜像)
+docker-compose.yml
+deploy/
+*.md

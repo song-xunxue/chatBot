@@ -1,0 +1,53 @@
+# MyChat V2.0 服务端编排(QQ 官方机器人后端)
+# 作者: 李文煜
+# 日期: 2026-07-01
+# 启动: docker compose up -d   停止: docker compose down   日志: docker compose logs -f
+#
+# 说明: V2.0 独立栈(自有 redis + app),与 V1.0(mychat-server/mychat-redis)隔离;
+#       对外由现有 nginx-ssl 容器(443 HTTPS)反代到 mychat-server-v2:8000(见 deploy/nginx.conf)
+# 2026-07-01
+# 变更说明：
+#   1. M9 部署:V2.0 编排,独立网 chatbot_v2_net(供 nginx-ssl 加入反代)
+#   2. 修 redis command:不用 ${REDIS_PASSWORD:+...} shell 扩展(compose v5 不识别 ${VAR:+...},
+#      会把 "}" 传给 redis-server 致其崩溃);V2.0 redis 仅内网无密码,直起即可
+services:
+  # Redis:V2.0 聊天 block/记忆/心情/token 缓存(独立实例,与 V1.0 数据隔离)
+  redis:
+    image: redis:7-alpine
+    container_name: mychat-redis-v2
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data-v2:/data
+    networks:
+      - chatbot_v2_net
+
+  # 服务端:FastAPI + uvicorn(QQ webhook / pipeline / REST 面板)
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: mychat-server-v2
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # 容器内通过服务名 redis 访问,覆盖 .env 中的本地 localhost 地址
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    ports:
+      # 仅本机映射(调试/健康检查直连);公网入口走 nginx-ssl 443 反代,不暴露 8001
+      - "127.0.0.1:8001:8000"
+    volumes:
+      # 人设 JSON 双写 / .star 插件 / 桌宠头像等运行时数据持久(容器重建不丢)
+      - ./server/data:/app/server/data
+    networks:
+      - chatbot_v2_net
+
+volumes:
+  redis-data-v2:
+
+networks:
+  chatbot_v2_net:
+    driver: bridge
