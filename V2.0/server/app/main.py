@@ -22,6 +22,10 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
   2. M4 挂载记忆 REST 路由(memory_router,/api/v1/memory/... 查看/统计/遗忘/恢复/锁定)
   3. M5 lifespan 注册自研工具 + MCP client 连外部 server(无配置降级)
   4. M6 lifespan 加载 .star 兼容层(star_loader,适配到 EventBus/ToolRegistry)
+
+2026-06-30
+变更说明：
+  1. M7 加 CORSMiddleware + 挂载 Web 面板 REST(chat/mood/plugin/persona/system)+ 暴露 star_loader 单例
 """
 import asyncio
 import logging
@@ -35,6 +39,11 @@ from qq import auth as qq_auth
 from qq.webhook import router as qq_router
 from api.rest_score import router as score_router
 from api.rest_memory import router as memory_router
+from api.rest_chat import router as chat_router
+from api.rest_mood import router as mood_router
+from api.rest_plugin import router as plugin_router
+from api.rest_persona import router as persona_router
+from api.rest_system import router as system_router
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +80,10 @@ async def lifespan(app: FastAPI):
         if _bus is not None:
             star_loader = StarLoader(_bus, get_tool_registry(), redis, settings)
             await star_loader.load_dir(PROJECT_ROOT / settings.star_dir)
+
+    # M7 暴露 StarLoader 单例(供 rest_plugin 调 reload_file;star_enable=False 时登记 None)
+    from plugins.star_compat import set_star_loader
+    set_star_loader(star_loader)
 
     # M5 工具系统:注册自研工具(get_persona/write_memory/reverse_infer_trigger/web_search)
     # + MCP client 连外部 server(无配置则降级,只用自研工具)
@@ -113,7 +126,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # QQ 回调是服务端到服务端(无浏览器 origin),M2 不加 CORSMiddleware;M7 加 Web 面板时再加
+    # M7 Web 面板 CORS:允许 dashboard dev origin(cors_origins 配置,空则默认 localhost:5173)
+    from fastapi.middleware.cors import CORSMiddleware
+    _raw_origins = (settings.cors_origins or "").strip()
+    _origins = [o.strip() for o in _raw_origins.split(",") if o.strip()] or [
+        "http://localhost:5173", "http://127.0.0.1:5173"]
+    app.add_middleware(CORSMiddleware, allow_origins=_origins,
+                       allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
     @app.get("/health")
     async def health():
@@ -130,6 +149,12 @@ def create_app() -> FastAPI:
     app.include_router(score_router)
     # 挂载记忆 REST 路由(M4,/api/v1/memory/... 查看/统计/遗忘/恢复/锁定)
     app.include_router(memory_router)
+    # M7 挂载 Web 面板 REST 路由(chat 历史/mood 心情/plugin 插件/persona 人设/system 系统)
+    app.include_router(chat_router)
+    app.include_router(mood_router)
+    app.include_router(plugin_router)
+    app.include_router(persona_router)
+    app.include_router(system_router)
     return app
 
 

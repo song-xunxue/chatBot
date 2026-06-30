@@ -16,6 +16,10 @@
 2026-06-28
 变更说明:
   1. M3 新建 rest_score:GET/PATCH score、GET health、POST reverse_infer dry_run/apply
+
+2026-06-30
+变更说明:
+  1. M7 补 GET /score/samples/{oid}(暴露 list_samples,供面板正反样例页)
 """
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 
@@ -97,3 +101,11 @@ async def reverse_infer_apply(object_id: str, body: dict):
     from score.reverse_infer import infer_and_merge
     redis = await get_redis()
     return await infer_and_merge(redis, object_id, dry_run=False, confirm_token=token)
+
+
+@router.get("/score/samples/{object_id}", dependencies=[Depends(_auth)])
+async def list_samples(object_id: str, kind: str = Query(default="negative")):
+    """列正/负评分样本(驱动反推,供 Web 面板正反样例页)。kind=positive/negative。"""
+    from score import service as score_service
+    redis = await get_redis()
+    return await score_service.list_samples(redis, object_id, kind)
