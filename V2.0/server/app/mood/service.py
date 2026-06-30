@@ -16,8 +16,15 @@ Redis 键:
 变更说明：
   1. M2 新建 mood service:mood 读写/apply_emotion(复用 V1.0 词表)/档位 CRUD(含范围冲突校验)/
      lookup_kind/compute_mood_bias(M3 评分调)/默认 5 档 seed/list_mood_objects
+
+2026-06-30
+变更说明：
+  1. M7 新增全局参数 get_params/set_params(Redis Hash,apply_emotion/decay 改读 Redis 回退 settings)+
+     mood 历史曲线(set_mood 写 + get_history_curve,面板实时监控页)
 """
+import json
 import random
+import time
 
 from redis.asyncio import Redis
 
@@ -28,6 +35,22 @@ _K_MOOD = "mychat:mood:{oid}"
 _K_OIDS = "mychat:mood:oids"
 _K_KINDS = "mychat:mood:kinds"
 _K_KIND = "mychat:mood:kind:{key}"
+_K_PARAMS = "mychat:mood:params"            # 全局参数 Hash(M7 面板可写,apply_emotion/decay 读)
+_K_HISTORY = "mychat:mood:{oid}:history"    # mood 历史曲线 List(LPUSH 新值在前,LTRIM 保留近 N 条)
+
+
+def _now_ms() -> int:
+    """当前毫秒时间戳"""
+    return int(time.time() * 1000)
+
+
+# 全局参数字段(名 → 取值转换;均属 [0,1] 范围,缺失时回退 settings 同名字段)
+_PARAM_FIELDS = {
+    "mood_step": float,
+    "mood_decay": float,
+    "mood_neutral": float,
+    "mood_kaomoji_prob": float,
+}
 
 # 情感关键词表(复用 V1.0 mood_dynamic,零依赖启发式;M4 可换 LLM 情感分析)
 _POSITIVE = ["开心", "高兴", "喜欢", "好棒", "谢谢", "想你", "爱你", "哈哈", "嘿嘿", "😊", "😄", "❤"]
@@ -119,18 +142,24 @@ async def get_mood(redis: Redis, object_id: str) -> float:
 
 
 async def set_mood(redis: Redis, object_id: str, mood: float) -> None:
-    """写 mood 值(clamp [0,1],round 3 位);同时登记 oid 到 oids 集合(衰减遍历用)"""
+    """写 mood 值(clamp [0,1],round 3 位);登记 oid 到 oids 集合(衰减遍历用);
+    M7 同时写历史曲线(LPUSH + LTRIM 保留近 mood_history_keep 条)。"""
     mood = max(0.0, min(1.0, mood))
+    mood = round(mood, 3)
+    hist_key = _K_HISTORY.format(oid=object_id)
     pipe = redis.pipeline()
-    pipe.set(_K_MOOD.format(oid=object_id), str(round(mood, 3)))
+    pipe.set(_K_MOOD.format(oid=object_id), str(mood))
     pipe.sadd(_K_OIDS, object_id)
+    pipe.lpush(hist_key, json.dumps({"ts": _now_ms(), "mood": mood}, ensure_ascii=False))
+    pipe.ltrim(hist_key, 0, settings.mood_history_keep - 1)
     await pipe.execute()
 
 
 async def apply_emotion(redis: Redis, object_id: str, text: str, *, step: float | None = None) -> float:
     """按文本关键词情感更新 mood(正向词↑step / 负向词↓step,可叠加),返回更新后 mood。
-    step 默认 settings.mood_step。复用 V1.0 正/负向词表(docs/03 §4.1)。"""
-    step = settings.mood_step if step is None else step
+    step 默认读全局参数(Redis mood:params,回退 settings.mood_step)。复用 V1.0 正/负向词表(docs/03 §4.1)。"""
+    if step is None:
+        step = (await get_params(redis))["mood_step"]
     mood = await get_mood(redis, object_id)
     delta = 0.0
     if any(w in text for w in _POSITIVE):
@@ -235,3 +264,54 @@ def compute_mood_bias(mood: float, kinds: list[dict]) -> float:
     bias = float(kind.get("score_bias", 0))
     noise = float(kind.get("bias_noise", 0))
     return bias + random.uniform(-noise, noise)
+
+
+# ================ 全局参数 + 历史曲线(M7 面板用)================
+
+async def get_params(redis: Redis) -> dict:
+    """取全局参数(Redis Hash);缺失/非法字段回退 settings 同名字段,保证未配置时行为不变。
+    返回 {mood_step, mood_decay, mood_neutral, mood_kaomoji_prob}。"""
+    raw = await redis.hgetall(_K_PARAMS)
+    out = {}
+    for name, cast in _PARAM_FIELDS.items():
+        v = raw.get(name, "")
+        try:
+            out[name] = cast(v) if v not in ("", None) else cast(getattr(settings, name))
+        except (TypeError, ValueError):
+            out[name] = cast(getattr(settings, name))
+    return out
+
+
+async def set_params(redis: Redis, params: dict) -> dict:
+    """改全局参数(Redis Hash)。所有参数均须在 [0,1],违例抛 ValueError。返回回读结果。"""
+    mapping = {}
+    for name in _PARAM_FIELDS:
+        if name not in params:
+            continue
+        try:
+            v = float(params[name])
+        except (TypeError, ValueError):
+            raise ValueError(f"参数 {name} 必须是数值")
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"参数 {name} 须在 [0,1]")
+        mapping[name] = str(v)
+    if mapping:
+        await redis.hset(_K_PARAMS, mapping=mapping)
+    return await get_params(redis)
+
+
+async def get_history_curve(redis: Redis, object_id: str, *, limit: int = 100) -> list[dict]:
+    """mood 历史曲线(近 limit 点,旧→新正序),供面板实时监控页。返回 [{ts, mood}]。
+    limit 上限 mood_history_keep(LPUSH+LTRIM 只保留这么多)。"""
+    limit = min(limit, settings.mood_history_keep)
+    raw = await redis.lrange(_K_HISTORY.format(oid=object_id), 0, limit - 1)   # LPUSH:新在前
+    out = []
+    for x in raw:
+        try:
+            d = json.loads(x)
+            if isinstance(d, dict):
+                out.append(d)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    out.reverse()   # 反转成旧→新正序(曲线左→右)
+    return out

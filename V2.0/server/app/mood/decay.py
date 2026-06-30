@@ -9,6 +9,10 @@ V2.0 mood 融入架构后不再是插件,故不走 ON_TICK 钩子,改用独立 a
 2026-06-27
 变更说明：
   1. M2 新建 mood decay:decay_step/decay_all + start_decay_loop(独立循环,main.py lifespan 启动)
+
+2026-06-30
+变更说明：
+  1. M7 decay_step 默认参数改读全局参数(Redis mood:params,回退 settings),面板可运行时调衰减幅度
 """
 import asyncio
 import logging
@@ -24,9 +28,11 @@ logger = logging.getLogger(__name__)
 async def decay_step(redis: Redis, object_id: str, *,
                      decay: float | None = None, neutral: float | None = None) -> float:
     """单对象 mood 衰减一步:mood > neutral 向下 decay / < neutral 向上 decay。
-    默认参数读 settings.mood_decay / settings.mood_neutral。返回衰减后 mood。"""
-    decay = settings.mood_decay if decay is None else decay
-    neutral = settings.mood_neutral if neutral is None else neutral
+    默认参数读全局参数(Redis mood:params,回退 settings);显式传入优先。返回衰减后 mood。"""
+    if decay is None or neutral is None:
+        params = await service.get_params(redis)
+        decay = params["mood_decay"] if decay is None else decay
+        neutral = params["mood_neutral"] if neutral is None else neutral
     mood = await service.get_mood(redis, object_id)
     if mood > neutral:
         mood = max(neutral, mood - decay)

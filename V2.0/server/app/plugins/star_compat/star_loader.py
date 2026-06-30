@@ -18,6 +18,11 @@ registry 的 Star 类与 handler → 实例化 Star(注入 Context)→ 适配注
 2026-06-28
 变更说明:
   1. M6 新建 StarLoader:扫描加载 .star + Star 实例化 + handler 适配到 EventBus/ToolRegistry
+
+2026-06-30
+变更说明:
+  1. M7 新增 reload_file 增量热重载(精准 unload 单文件 + 重 import + adapt,避开 clear_registry 全清)
+     + __init__ 记录 _star_dir(定位文件);单例暴露在 star_compat/__init__.py(get/set_star_loader)
 """
 import importlib.util
 import logging
@@ -30,7 +35,7 @@ if str(_COMPAT_DIR) not in sys.path:
     sys.path.insert(0, str(_COMPAT_DIR))
 
 from astrbot._registry import (   # noqa: E402
-    EventType, get_star_classes, get_star_handlers, clear_registry,
+    EventType, get_star_classes, get_star_handlers, clear_registry, remove_by_module,
 )
 from astrbot.api.event import AstrMessageEvent   # noqa: E402
 from astrbot.api.star import Context   # noqa: E402
@@ -54,6 +59,7 @@ class StarLoader:
         self._stars: dict[str, object] = {}          # Star 名 → 实例
         self._cls_by_module: dict[str, str] = {}     # handler_module → Star 名(归属查找)
         self._registered: list[str] = []             # 已订阅 bus 的 plugin_name(unload 用)
+        self._star_dir: Path | None = None           # M7:.star 目录(reload_file 定位单文件)
 
     async def load_dir(self, star_dir) -> list[str]:
         """扫描 star_dir(*.py,跳过 _ 前缀)→ 加载 → 实例化 Star → 适配注册 handler。
@@ -63,6 +69,7 @@ class StarLoader:
         star_dir = Path(star_dir) if star_dir else None
         if not star_dir or not star_dir.is_dir():
             return loaded
+        self._star_dir = star_dir   # M7:记录目录,供 reload_file 定位单文件
         for py in sorted(star_dir.glob("*.py")):
             if py.name.startswith("_"):
                 continue
@@ -231,6 +238,75 @@ class StarLoader:
         self._cls_by_module.clear()
         self._registered.clear()
         clear_registry()
+
+    # —— M7 增量热重载(单文件,避开 clear_registry 全清)——
+
+    async def reload_file(self, name: str) -> bool:
+        """增量热重载单个 .star 文件:精准卸载该文件订阅+实例 → 清模块缓存重 import → 只 adapt 该 module。
+        避开 clear_registry(全清会误卸其他 .star)。文件不存在/未配目录/重载失败返回 False(隔离)。"""
+        if self._star_dir is None:
+            return False
+        py = self._star_dir / f"{name}.py"
+        if not py.is_file():
+            return False
+        mod_name = f"_mychat_star_{name}"
+        try:
+            await self._unload_single(mod_name)                  # 1. 卸载该文件旧订阅+实例+registry 项
+            sys.modules.pop(mod_name, None)                      # 2. 清模块缓存(使 @filter 副作用重发)
+            self._import_module(py)                              # 3. 重 import(Star/handler 重新注册)
+            await self._instantiate_and_adapt_single(mod_name)   # 4. 只实例化+adapt 该 module
+            return True
+        except Exception:
+            logger.exception(".star reload_file failed, isolated: %s", name)
+            return False
+
+    async def _unload_single(self, mod_name: str) -> None:
+        """精准卸载单 module:摘该 module handler 的 bus 订阅 → terminate Star 实例 → 清本地状态 → registry 移除该 module"""
+        # 1. 摘该 module 所有 handler 的订阅(plugin_name = "star:{handler_name}")
+        for h in [h for h in get_star_handlers() if h.handler_module == mod_name]:
+            plugin_name = f"star:{h.handler_name}"
+            self._bus.unsubscribe_plugin(plugin_name)
+            if plugin_name in self._registered:
+                self._registered.remove(plugin_name)
+        # 2. terminate 并移除该 module 的 Star 实例(cls_by_module 反查 Star 名)
+        star_names = [name for m, name in self._cls_by_module.items() if m == mod_name]
+        for name in star_names:
+            inst = self._stars.pop(name, None)
+            if inst is not None:
+                try:
+                    await inst.terminate()
+                except Exception:
+                    logger.exception("Star terminate failed (reload): %s", name)
+        # 3. 清 cls_by_module 中该 module 项
+        self._cls_by_module.pop(mod_name, None)
+        # 4. registry 移除该 module 元数据(防重 import 后残留重复)
+        remove_by_module(mod_name)
+
+    async def _instantiate_and_adapt_single(self, mod_name: str) -> None:
+        """只实例化 + adapt 该 module 的 Star/handler(reload 用,避开全量 _instantiate_and_adapt)"""
+        # 1. 实例化该 module 的 Star
+        for cls_md in get_star_classes():
+            if cls_md.module != mod_name:
+                continue
+            try:
+                instance = cls_md.star_cls(context=Context(redis=self._redis, settings=self._settings))
+                await instance.initialize()
+                self._stars[cls_md.name] = instance
+                self._cls_by_module[cls_md.module] = cls_md.name
+            except Exception:
+                logger.exception("instantiate Star failed (reload): %s", cls_md.name)
+        # 2. adapt 该 module 的 handler
+        for h_md in get_star_handlers():
+            if h_md.handler_module != mod_name:
+                continue
+            instance = self._stars.get(self._cls_by_module.get(h_md.handler_module, ""))
+            if instance is None:
+                logger.warning(".star handler %s 无归属 Star 实例,跳过 (reload)", h_md.handler_name)
+                continue
+            try:
+                self._adapt_handler(h_md, instance)
+            except Exception:
+                logger.exception("adapt handler failed (reload): %s", h_md.handler_name)
 
     def list_loaded(self) -> list[str]:
         return sorted(self._stars.keys())

@@ -3,6 +3,10 @@
 
 作者: 李文煜
 日期: 2026-06-28
+
+2026-06-30
+变更说明:
+  1. M7 新增 remove_by_module(精准移除指定 module 的 Star 类/handler,支撑 StarLoader.reload_file 增量热重载)
 """
 from dataclasses import dataclass
 from enum import Enum
@@ -77,3 +81,10 @@ def clear_registry() -> None:
     """清空(测试用 / reload)"""
     _star_classes.clear()
     _star_handlers.clear()
+
+
+def remove_by_module(module: str) -> None:
+    """精准移除指定 module 的 Star 类与 handler 元数据(M7 新增)。
+    供 StarLoader.reload_file 增量热重载用:卸载单文件时只清该 module,避免 clear_registry 全清误伤其他 .star。"""
+    _star_classes[:] = [c for c in _star_classes if c.module != module]
+    _star_handlers[:] = [h for h in _star_handlers if h.handler_module != module]

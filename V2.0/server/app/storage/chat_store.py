@@ -19,6 +19,10 @@ M2 实现:
 变更说明：
   1. M2 重写 chat_store:扁平 List → block 三层(会话/blocks/messages)
      静默分组(block_silence_min)、UUID mid、get_history 只读真实键、roleplay 物理隔离
+
+2026-06-30
+变更说明：
+  1. M7 新增 list_blocks(列会话所有 block 元数据 + msg_count,面板历史页 block 第一层浏览)
 """
 import json
 import time
@@ -266,6 +270,28 @@ async def list_messages(redis: Redis, object_id: str, *,
     items = [r for r in raws if r]
     items.sort(key=lambda d: int(d.get("ts", 0) or 0))
     return items[-limit:]
+
+
+async def list_blocks(redis: Redis, object_id: str, *, limit: int = 100) -> list[dict]:
+    """列会话所有 block(含 status/时间/summary),按 start_ts 倒序(最近在前),供 Web 面板历史页(M7)。
+    每块附 msg_count(block 内消息数)便于前端展示。无 block 返回空列表。"""
+    block_ids = await redis.zrevrange(_blocks_key(object_id), 0, limit - 1)   # 倒序:最近在前
+    if not block_ids:
+        return []
+    # pipeline 交替取 block 元数据 + 消息数(hgetall/zcard 配对,execute 返回扁平列表)
+    pipe = redis.pipeline()
+    for bid in block_ids:
+        pipe.hgetall(_block_key(bid))
+        pipe.zcard(_msgs_key(bid))
+    raws = await pipe.execute()
+    out = []
+    for i in range(0, len(raws), 2):
+        block = raws[i]
+        if not block:
+            continue
+        block["msg_count"] = raws[i + 1] if i + 1 < len(raws) else 0
+        out.append(block)
+    return out
 
 
 async def get_message(redis: Redis, mid: str) -> dict | None:

@@ -20,6 +20,11 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
   1. M2 扩展:搬入 V1.0 的 LLM Providers / 人设 / 四级记忆 / 插件 配置字段(copy 核心模块用)
   2. M2 新增:心情系统参数(docs/03 §4) + 聊天记录 block 参数(docs/02 §6/§7),均为 V2.0 原创
   3. 多模态(TTS/ASR/图像生成/Vision)留 M6,本里程碑不声明
+
+2026-06-30
+变更说明：
+  1. M7 新增 mood_history_keep(mood 历史曲线保留条数,面板实时监控页用)、
+     cors_origins(Web 面板 CORS 允许 origin,逗号分隔,空则用默认 dev origin)
 """
 from pathlib import Path
 
@@ -43,6 +48,7 @@ class Settings(BaseSettings):
     server_host: str = "0.0.0.0"
     server_port: int = 8000
     access_token: str = "change-me-please"  # 单人场景访问令牌(Web 面板 REST 鉴权,M7 用)
+    cors_origins: str = ""  # Web 面板 CORS 允许的 origin(逗号分隔;空则用默认 dev origin localhost:5173)
 
     # 2.Redis(云端 Docker)
     redis_url: str = "redis://redis:6379/0"
@@ -102,6 +108,7 @@ class Settings(BaseSettings):
     mood_decay: float = 0.05  # on_tick 向中性回归的衰减幅度
     mood_neutral: float = 0.5  # 中性 mood 值(衰减回归目标)
     mood_kaomoji_prob: float = 0.3  # QQ 回复末尾附颜文字的概率(0-1,docs/03 §7.2)
+    mood_history_keep: int = 100  # mood 历史曲线保留条数(M7 面板实时监控页,set_mood 写时 LTRIM)
 
     # 9.聊天记录 block 结构(M2 新增,docs/02 §6/§7/§10)
     block_silence_min: int = 10  # 静默分组阈值(分钟):超时关闭旧 block 开新 block

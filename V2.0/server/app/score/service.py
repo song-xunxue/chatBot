@@ -23,6 +23,10 @@ Redis 键:
   1. M3 新建 score service:LLM 评分(score_reply/_llm_score/_parse_score)+ classify 阈值归类
      + 样本收集(_collect_sample/list_samples)+ manual_set_score(手动改分重算)+
      get_score + persona_health(近 N 条均分/正负计数)
+
+2026-06-30
+变更说明:
+  1. M7 新增 record_negative_sample(公开写 neg 队列,供 rest_chat 软删联动扩充反推负样本)
 """
 import json
 import logging
@@ -265,3 +269,11 @@ async def list_samples(redis: Redis, object_id: str, kind: str) -> list[dict]:
         except (json.JSONDecodeError, TypeError):
             pass
     return out
+
+
+async def record_negative_sample(redis: Redis, object_id: str,
+                                 mid: str, text: str, score: int) -> None:
+    """公开入口:把一条负样本写入 neg 队列(供 reverse_infer 反推)。
+    供软删联动调用(rest_chat DELETE ai/proxy 消息时,扩充反推负样本数据源)。
+    内部复用 _collect_sample(kind="negative"),保证数据结构与评分自动归类一致({mid,text,score,ts})。"""
+    await _collect_sample(redis, object_id, "negative", mid, text, score)
