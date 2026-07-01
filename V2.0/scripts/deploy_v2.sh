@@ -37,9 +37,9 @@ echo ""
 echo "===== 2.健康检查(等 app 起来,最多 30s) ====="
 ok=0
 for i in $(seq 1 15); do
-  if curl -sf http://127.0.0.1:8001/health >/dev/null 2>&1; then
+  if curl -sf http://127.0.0.1:8000/health >/dev/null 2>&1; then
     echo "V2.0 health 通过(第 ${i} 次尝试)"
-    curl -s http://127.0.0.1:8001/health
+    curl -s http://127.0.0.1:8000/health
     echo ""
     ok=1
     break
