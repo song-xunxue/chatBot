@@ -51,6 +51,7 @@ from api.rest_persona import router as persona_router
 from api.rest_system import router as system_router
 from api.rest_takeover import router as takeover_router
 from api.rest_roleplay import router as roleplay_router
+from api.rest_multimodal import router as multimodal_router
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,8 @@ def create_app() -> FastAPI:
     # M8 挂载代答/roleplay REST 路由(/api/v1/takeover/...、/api/v1/roleplay/...)
     app.include_router(takeover_router)
     app.include_router(roleplay_router)
+    # M-vision 挂载图像理解 REST 路由(POST /api/v1/multimodal/vision 上传图→GLM 描述)
+    app.include_router(multimodal_router)
     # M7e 静态托管前端构建产物(生产同源省 CORS);dist 不存在则跳过(dev 用 vite :5173 + proxy)
     from fastapi.staticfiles import StaticFiles
     from core.config import PROJECT_ROOT

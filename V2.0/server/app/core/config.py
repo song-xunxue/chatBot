@@ -150,6 +150,12 @@ class Settings(BaseSettings):
     takeover_batch_max: int = 20  # 批量代答/录入条数上限(防滥用,截断)
     takeover_queue_orphan_scan_limit: int = 50  # resolve/list_queue 扫描孤儿 pid 上限(防雪崩)
 
+    # 15.多模态-图像理解(M-vision,2026-07-01):QQ 收图 → GLM vision 解析成文本 → 进 pipeline
+    multimodal_vision_enable: bool = True   # 图像理解总开关:收图消息时尝试解析;关则图片消息忽略/纯文本
+    multimodal_vision_provider: str = "glm"  # 图像理解 provider(glm 用 glm-4v;stub 占位;无 key 自动降级 stub)
+    glm_vision_model: str = "glm-4v-flash"   # GLM 视觉模型(free 轻量;可改 glm-4v / glm-4v-plus)
+    multimodal_vision_prompt: str = "请用中文简洁描述这张图片的内容(用于对话上下文)。"  # 视觉解析提示词
+
 
 # 全局配置单例
 settings = Settings()

@@ -43,7 +43,7 @@ from nacl.exceptions import BadSignatureError
 from nacl.signing import SigningKey, VerifyKey
 
 from core.config import settings
-from qq.api_client import send_c2c_message
+from qq.api_client import send_c2c_message, send_download
 from qq.types import C2CMessage
 from pipeline.context import MessageContext
 from pipeline.runner import run_stream
@@ -105,6 +105,7 @@ def parse_c2c_message(event_d: dict) -> C2CMessage:
         content=event_d.get("content", ""),     # 文本内容
         msg_id=event_d.get("id", ""),           # 平台方消息 id(被动回复必带)
         timestamp=event_d.get("timestamp", ""),  # RFC3339 时间
+        attachments=event_d.get("attachments", []) or [],  # 媒体附件(M-vision 图片解析用)
         raw=event_d,
     )
 
@@ -121,14 +122,62 @@ async def _schedule_debounce(msg: C2CMessage) -> None:
     async with _debounce_lock:
         state = _debounce.get(msg.openid)
         if state is None:
-            state = {"texts": [msg.content], "msg_id": msg.msg_id, "task": None}
+            state = {"texts": [msg.content], "msgs": [msg], "msg_id": msg.msg_id, "task": None}
             _debounce[msg.openid] = state
         else:
             state["texts"].append(msg.content)
+            state["msgs"].append(msg)            # 完整 msg(含 attachments,M-vision 图片解析用)
             state["msg_id"] = msg.msg_id   # 用最新 msg_id(被动回复 60min 窗口)
             if state["task"] is not None:
                 state["task"].cancel()      # 连发重置计时器
         state["task"] = asyncio.create_task(_flush(msg.openid))
+
+
+async def _resolve_msg_text(msg: C2CMessage) -> str:
+    """解析单条消息为 pipeline 输入文本:文本内容 + 图片附件的 GLM vision 描述。
+    图片解析全程软失败(失败返空串,不阻塞 pipeline)。"""
+    parts = []
+    if msg.content:
+        parts.append(msg.content)
+    if settings.multimodal_vision_enable and msg.attachments:
+        for att in msg.attachments:
+            if str(att.get("content_type", "")).startswith("image"):
+                desc = await _describe_image(att)
+                if desc:
+                    parts.append(f"[用户发了一张图片: {desc}]")
+                else:
+                    parts.append("[用户发了一张图片,但解析失败]")
+    return "\n".join(parts)
+
+
+async def _describe_image(att: dict) -> str:
+    """下载图片 + GLM vision 解析,返描述。任意步骤失败返空串(软失败)。"""
+    try:
+        url = att.get("url", "") or att.get("file_url", "")
+        if not url:
+            return ""
+        img_bytes = await send_download(url)   # QQ 附件需鉴权下载
+        if not img_bytes:
+            return ""
+        from modality import get_vision
+        vision = get_vision()
+        mime = _guess_image_mime(att.get("filename", "") or att.get("content_type", ""))
+        return await vision.understand(img_bytes, settings.multimodal_vision_prompt, mime)
+    except Exception as e:
+        logger.warning("图片 vision 解析失败(软失败,跳过): %s", e)
+        return ""
+
+
+def _guess_image_mime(hint: str) -> str:
+    """据文件名/content_type 猜 MIME(vision provider base64 编码用)"""
+    h = hint.lower()
+    if "png" in h:
+        return "image/png"
+    if "gif" in h:
+        return "image/gif"
+    if "webp" in h:
+        return "image/webp"
+    return "image/jpeg"
 
 
 async def _flush(openid: str) -> None:
@@ -142,7 +191,13 @@ async def _flush(openid: str) -> None:
         state = _debounce.pop(openid, None)
     if not state:
         return
-    combined = "\n".join(state["texts"])   # 合并连发为一次输入
+    # 解析每条消息为文本(文本内容 + 图片附件 vision 描述),合并为一次 pipeline 输入
+    parts = []
+    for m in state["msgs"]:
+        t = await _resolve_msg_text(m)
+        if t:
+            parts.append(t)
+    combined = "\n".join(parts) if parts else "\n".join(state["texts"])   # 兜底:全空用原始 texts
     msg_id = state["msg_id"]
     ctx = MessageContext(object_id=openid, user_text=combined,
                          created_ts=int(time.time() * 1000))

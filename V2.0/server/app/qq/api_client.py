@@ -66,3 +66,14 @@ async def send_c2c_message(openid: str, content: str, *, msg_id: str = "", msg_s
                               headers=headers, json=payload)
     resp.raise_for_status()
     return resp.json()
+
+
+async def send_download(url: str) -> bytes:
+    """下载 QQ 附件(图片等)原始 bytes。QQ 附件 CDN URL 需鉴权(QQBot access_token)。
+    M-vision:M2.6 图片消息解析时调,失败抛异常由调用方(webhook._describe_image)软失败兜底。"""
+    assert _client is not None, "httpx client 未初始化,请在 lifespan 调 init_client"
+    token = await get_access_token()
+    headers = {"Authorization": f"QQBot {token}"}
+    resp = await _client.get(url, headers=headers, follow_redirects=True)
+    resp.raise_for_status()
+    return resp.content

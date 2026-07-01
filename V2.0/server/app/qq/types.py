@@ -19,6 +19,13 @@ class C2CMessage:
     msg_id: str       # 平台方消息 id(取 d.id),被动回复 60 分钟窗口内必带
     timestamp: str    # 消息生产时间(取 d.timestamp,RFC3339 字符串)
     raw: dict         # 原始事件 d(调试用)
+    attachments: list = None  # 媒体附件(QQ d.attachments;图片/语音等,每项 {content_type,url,...});默认 None
+
+
+    def __post_init__(self):
+        # attachments 默认空 list(dataclass 可变默认需工厂,此处用 None+post_init 兜底)
+        if self.attachments is None:
+            self.attachments = []
 
 
 @dataclass
