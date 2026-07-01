@@ -49,10 +49,16 @@ def _qq_secret(monkeypatch):
 @pytest.fixture(autouse=True)
 def _no_real_llm(monkeypatch):
     """自动清空 LLM api key,使 available_providers() 返回 [](pytest 全程不真调 LLM)。
-    避免评分/反推/Memory 编码等 LLM 调用在测试中真烧 API;真实 LLM 验证走 scripts/real_llm_check.py。"""
+    避免评分/反推/Memory 编码等 LLM 调用在测试中真烧 API;真实 LLM 验证走 scripts/real_llm_check.py。
+    同时把 provider 选择项重置为默认 glm(隔离本地 .env 的 CHAT_PROVIDER/REVERSE_INFER_PROVIDER 覆盖,
+    使测试不依赖部署环境配置,固定按 glm mock 路径跑)。"""
     monkeypatch.setattr(settings, "glm_api_key", "")
     monkeypatch.setattr(settings, "deepseek_api_key", "")
     monkeypatch.setattr(settings, "siliconflow_api_key", "")
+    monkeypatch.setattr(settings, "chat_provider", "glm")
+    monkeypatch.setattr(settings, "reverse_infer_provider", "glm")
+    monkeypatch.setattr(settings, "score_provider", "")
+    monkeypatch.setattr(settings, "memory_summary_provider", "")
 
 
 @pytest.fixture(autouse=True)

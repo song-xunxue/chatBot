@@ -15,6 +15,7 @@
 """
 from dataclasses import dataclass, field
 
+from core.config import settings
 from llm.base import Message
 
 
@@ -25,7 +26,7 @@ class MessageContext:
     user_text: str = ""                                 # 用户本次消息文本
     history: list[Message] = field(default_factory=list)  # 对话历史(load_history 填充)
     system_prompt: str = ""                             # 人设 system prompt(persona_inject 填充)
-    provider_name: str = "glm"                          # 使用的 LLM provider 名
+    provider_name: str = ""                             # 空→兜底 settings.chat_provider(post_init 解析)
     model: str = ""                                     # 模型名(空则用 provider 默认模型)
     # 产出
     reply_text: str = ""                                # 最终回复文本(llm_stream 累积填充)
@@ -44,3 +45,8 @@ class MessageContext:
     # 富内容/插件协调
     rich: dict = field(default_factory=dict)            # 富内容收集(M6 多模态插件写入)
     plugin_meta: dict = field(default_factory=dict)     # 插件/stage 间协调状态(mood label/kaomoji 等)
+
+    def __post_init__(self):
+        # provider_name 留空时兜底用 settings.chat_provider(支持 .env 切换 provider,免改代码)
+        if not self.provider_name:
+            self.provider_name = settings.chat_provider

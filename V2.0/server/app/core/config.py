@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     glm_api_key: str = ""
     deepseek_api_key: str = ""
     siliconflow_api_key: str = ""
+    chat_provider: str = "glm"  # 默认聊天 provider(MessageContext 兜底;GLM 限流时 .env 设 CHAT_PROVIDER=deepseek 切换,免改代码)
 
     # 5.人设系统(M2 copy V1.0 persona 模块用)
     persona_active_id: str = "default"  # 未绑定对象时使用的默认人设 id

@@ -66,7 +66,7 @@ def classify(score: int) -> str:
 async def _llm_score(reply_text: str, persona_card, provider_name: str, model: str):
     """调 LLM 对照人设给回复打基础分 score_base(0-100,人设契合度,与心情无关)。
     返回 (score_base, reason);无可用 provider 或调用失败返回 None。"""
-    pname = provider_name or settings.score_provider or "glm"
+    pname = provider_name or settings.score_provider or settings.chat_provider
     if pname not in available_providers():
         logger.info("评分跳过:provider %s 未配置 key", pname)
         return None

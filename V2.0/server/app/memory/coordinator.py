@@ -302,8 +302,8 @@ async def get_memory_coordinator() -> MemoryCoordinator:
                     redis = await get_redis()
                     llm = None
                     try:
-                        pname = settings.memory_summary_provider or (
-                            available_providers()[0] if available_providers() else "")
+                        # 编码用 provider:优先 memory_summary_provider,否则跟 chat_provider 一致(避免 GLM 限流时记忆编码静默失败)
+                        pname = settings.memory_summary_provider or settings.chat_provider
                         if pname:
                             llm = get_provider(pname)
                     except Exception as e:
