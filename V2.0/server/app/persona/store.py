@@ -194,5 +194,20 @@ async def rollback_persona(redis: Redis, persona_id: str, version_no: int) -> Pe
 
 
 async def init_default_if_absent(redis: Redis) -> None:
-    """启动时确保默认人设存在(应用 lifespan 调用)"""
-    await get_default_persona(redis)
+    """启动时确保默认人设存在(应用 lifespan 调用)。
+    兼容迁移(一次性、幂等):
+      - 旧版 ModelBinding.provider 默认 "glm" → 重置为空(=继承全局 chat_provider,免锁死 glm)
+      - provider 空但 model 非空(孤立 model,如旧数据 "glm-5.2")→ 清 model
+        (避免下拉给该人设绑新 provider 时,孤立 model 名打到错 provider 报错)"""
+    card = await get_default_persona(redis)
+    if not (card and card.model):
+        return
+    changed = False
+    if card.model.provider == "glm":
+        card.model.provider = ""
+        changed = True
+    if not card.model.provider and card.model.model:
+        card.model.model = ""
+        changed = True
+    if changed:
+        await set_persona(redis, card)

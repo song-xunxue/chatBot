@@ -34,8 +34,9 @@ class SpecialReply:
 
 @dataclass
 class ModelBinding:
-    """模型绑定:该人设使用的 LLM provider/model/参数"""
-    provider: str = "glm"
+    """模型绑定:该人设使用的 LLM provider/model/参数。
+    provider 空=继承全局 settings.chat_provider(避免旧默认 glm 锁死人设,GLM 限流时切不动)"""
+    provider: str = ""
     model: str = ""
     params: dict = field(default_factory=dict)
 
