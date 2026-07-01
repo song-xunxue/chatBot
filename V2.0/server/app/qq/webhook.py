@@ -207,6 +207,9 @@ async def _flush(openid: str) -> None:
             pass
         reply = ctx.reply_text
         if reply:
+            # 回复安全守卫(#3):命中错误模式(堆栈/限流/内部URL)→ 降级兜底,绝不发原始错误文本给 QQ 用户
+            from qq.reply_guard import sanitize_reply
+            reply = sanitize_reply(reply)
             # 被动回复带 msg_id(60min 窗口/4 次);超时或超次 QQ 拒绝,M2 单测 mock 不触发,M9 真实场景注意
             await send_c2c_message(openid, reply, msg_id=msg_id)
     except Exception:
