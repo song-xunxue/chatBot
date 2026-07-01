@@ -29,8 +29,8 @@ async def test_stage_score_scores_ai_reply(fake_redis, make_provider, monkeypatc
     # 对话 LLM(stream)与评分 LLM 分别 mock(走不同模块的 get_provider)
     monkeypatch.setattr("pipeline.stages.get_provider", lambda n: make_provider("mock-reply"))
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
-    monkeypatch.setattr("score.service.get_provider",
-                        lambda n: make_provider('{"score": 88, "reason": "契合"}'))
+    monkeypatch.setattr("score.service.resolve_provider",
+                        lambda *a, **k: make_provider('{"score": 88, "reason": "契合"}'))
 
     ctx = MessageContext(object_id="u1", user_text="你好")
     async for _ in run_stream(ctx):
@@ -48,7 +48,7 @@ async def test_stage_score_disabled_skips(fake_redis, make_provider, monkeypatch
     monkeypatch.setattr(settings, "score_enabled", False)
     monkeypatch.setattr("pipeline.stages.get_provider", lambda n: make_provider("mock-reply"))
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
-    monkeypatch.setattr("score.service.get_provider", lambda n: make_provider('{"score": 88}'))
+    monkeypatch.setattr("score.service.resolve_provider", lambda *a, **k: make_provider('{"score": 88}'))
 
     ctx = MessageContext(object_id="u1", user_text="你好")
     async for _ in run_stream(ctx):
@@ -63,7 +63,7 @@ async def test_stage_score_llm_garbage_no_block(fake_redis, make_provider, monke
     await mood_service.seed_default_kinds(fake_redis)
     monkeypatch.setattr("pipeline.stages.get_provider", lambda n: make_provider("mock-reply"))
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
-    monkeypatch.setattr("score.service.get_provider", lambda n: make_provider("解析不了"))
+    monkeypatch.setattr("score.service.resolve_provider", lambda *a, **k: make_provider("解析不了"))
 
     ctx = MessageContext(object_id="u1", user_text="你好")
     async for _ in run_stream(ctx):

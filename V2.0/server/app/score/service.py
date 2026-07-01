@@ -35,7 +35,7 @@ import time
 from redis.asyncio import Redis
 
 from llm.base import Message
-from llm.registry import get_provider, available_providers
+from llm.resolver import resolve_provider, resolve_provider_name
 from persona.renderer import render_system_prompt
 from core.config import settings
 
@@ -66,11 +66,10 @@ def classify(score: int) -> str:
 async def _llm_score(reply_text: str, persona_card, provider_name: str, model: str):
     """调 LLM 对照人设给回复打基础分 score_base(0-100,人设契合度,与心情无关)。
     返回 (score_base, reason);无可用 provider 或调用失败返回 None。"""
-    pname = provider_name or settings.score_provider or settings.chat_provider
-    if pname not in available_providers():
-        logger.info("评分跳过:provider %s 未配置 key", pname)
+    provider = resolve_provider("score", provider_name)
+    if provider is None:
+        logger.info("评分跳过:provider 未配置 key(name=%s)", resolve_provider_name("score", provider_name))
         return None
-    provider = get_provider(pname)
     # 人设摘要作评审基准(renderer 输出 system_prompt 形态,含性格/画像/说话风格/示例对话)
     persona_brief = render_system_prompt(persona_card, None) if persona_card is not None else ""
     prompt = (

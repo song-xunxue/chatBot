@@ -47,10 +47,10 @@ def test_parse_score_invalid_returns_none():
 
 
 def _wire_provider(monkeypatch, make_provider, json_text):
-    """公用:装 key + 注入返回 json_text 的 mock provider 到 score.service.get_provider"""
+    """公用:装 key + 注入返回 json_text 的 mock provider 到 score.service.resolve_provider"""
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
     provider = make_provider(json_text)
-    monkeypatch.setattr("score.service.get_provider", lambda name: provider)
+    monkeypatch.setattr("score.service.resolve_provider", lambda *a, **k: provider)
     return provider
 
 

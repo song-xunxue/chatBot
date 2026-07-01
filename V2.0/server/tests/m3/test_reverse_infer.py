@@ -75,7 +75,7 @@ async def _add_sample(fake_redis, make_provider, monkeypatch, oid, text, base):
     """用 score_reply 产生一条评分样本(正/负由 base+mood 决定)"""
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
     sp = make_provider(f'{{"score": {base}, "reason": "r"}}')
-    monkeypatch.setattr("score.service.get_provider", lambda n: sp)
+    monkeypatch.setattr("score.service.resolve_provider", lambda *a, **k: sp)
     card = await persona_store.get_persona(fake_redis, await persona_store.get_object_persona_id(fake_redis, oid))
     mid = await chat_store.append_message(fake_redis, oid, sender="ai", content=text)
     await score_service.score_reply(fake_redis, oid, text, card, mid, mood_value=0.5)
@@ -88,7 +88,7 @@ async def test_infer_dry_run_returns_diff_and_token(fake_redis, make_provider, m
     await _add_sample(fake_redis, make_provider, monkeypatch, "u1", "温柔地回应对方", 95)  # positive
 
     rp = make_provider('{"personality":"温柔体贴","speech_style":"轻柔慢语","name":"应丢弃"}')
-    monkeypatch.setattr("score.reverse_infer.get_provider", lambda n: rp)
+    monkeypatch.setattr("score.reverse_infer.resolve_provider", lambda *a, **k: rp)
     res = await infer_and_merge(fake_redis, "u1", dry_run=True)
     assert "confirm_token" in res
     assert res["diff"]["personality"]["new"] == "温柔体贴"
@@ -104,7 +104,7 @@ async def test_infer_two_step_apply_merges(fake_redis, make_provider, monkeypatc
     await _add_sample(fake_redis, make_provider, monkeypatch, "u1", "温柔地回应", 95)
 
     rp = make_provider('{"personality":"温柔体贴","speech_style":"轻柔慢语"}')
-    monkeypatch.setattr("score.reverse_infer.get_provider", lambda n: rp)
+    monkeypatch.setattr("score.reverse_infer.resolve_provider", lambda *a, **k: rp)
     res = await infer_and_merge(fake_redis, "u1", dry_run=True)
     token = res["confirm_token"]
 
@@ -123,7 +123,7 @@ async def test_infer_apply_consumes_token(fake_redis, make_provider, monkeypatch
     await _setup_persona(fake_redis)
     await _add_sample(fake_redis, make_provider, monkeypatch, "u1", "温柔回应", 95)
     rp = make_provider('{"personality":"温柔"}')
-    monkeypatch.setattr("score.reverse_infer.get_provider", lambda n: rp)
+    monkeypatch.setattr("score.reverse_infer.resolve_provider", lambda *a, **k: rp)
     token = (await infer_and_merge(fake_redis, "u1", dry_run=True))["confirm_token"]
     await infer_and_merge(fake_redis, "u1", dry_run=False, confirm_token=token)
     again = await infer_and_merge(fake_redis, "u1", dry_run=False, confirm_token=token)
@@ -161,7 +161,7 @@ async def test_infer_llm_empty_aborts(fake_redis, make_provider, monkeypatch):
     await _setup_persona(fake_redis)
     await _add_sample(fake_redis, make_provider, monkeypatch, "u1", "温柔回应", 95)
     rp = make_provider("不是JSON")
-    monkeypatch.setattr("score.reverse_infer.get_provider", lambda n: rp)
+    monkeypatch.setattr("score.reverse_infer.resolve_provider", lambda *a, **k: rp)
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
     res = await infer_and_merge(fake_redis, "u1", dry_run=True)
     assert res["aborted_reason"] == "llm_empty_or_failed"

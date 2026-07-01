@@ -297,18 +297,9 @@ async def get_memory_coordinator() -> MemoryCoordinator:
             if _coordinator is None:
                 try:
                     from storage.redis_client import get_redis
-                    from llm.registry import get_provider, available_providers
-                    from core.config import settings
+                    from llm.resolver import resolve_provider
                     redis = await get_redis()
-                    llm = None
-                    try:
-                        # 编码用 provider:优先 memory_summary_provider,否则跟 chat_provider 一致(避免 GLM 限流时记忆编码静默失败)
-                        pname = settings.memory_summary_provider or settings.chat_provider
-                        if pname:
-                            llm = get_provider(pname)
-                    except Exception as e:
-                        logger.warning("memory LLM provider 初始化失败,编码将降级: %s", e)
-                        llm = None
+                    llm = resolve_provider("memory")   # key 未配返 None→编码降级;统一解析链免散落 or 兜底
                     _coordinator = MemoryCoordinator(redis, llm_provider=llm)
                 except Exception as e:
                     logger.warning("memory coordinator 初始化失败(redis 不可用?),降级空记忆: %s", e)

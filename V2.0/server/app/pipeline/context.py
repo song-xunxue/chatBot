@@ -47,6 +47,7 @@ class MessageContext:
     plugin_meta: dict = field(default_factory=dict)     # 插件/stage 间协调状态(mood label/kaomoji 等)
 
     def __post_init__(self):
-        # provider_name 留空时兜底用 settings.chat_provider(支持 .env 切换 provider,免改代码)
+        # provider_name 留空时走统一 resolver(chat 任务→chat_provider;与 score/reverse_infer/memory 同源)
         if not self.provider_name:
-            self.provider_name = settings.chat_provider
+            from llm.resolver import resolve_provider_name
+            self.provider_name = resolve_provider_name("chat")

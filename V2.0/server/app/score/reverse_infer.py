@@ -25,7 +25,7 @@ import logging
 import secrets
 
 from llm.base import Message
-from llm.registry import get_provider, available_providers
+from llm.resolver import resolve_provider
 from persona import store as persona_store
 from score import service as score_service
 from core.config import settings
@@ -203,10 +203,9 @@ async def infer_and_merge(redis, object_id: str, *,
         neg_texts = [s.get("text", "") for s in negatives if s.get("text")]
         if not pos_texts and not neg_texts:
             return {"aborted_reason": "no_samples", "diff": {}}
-        pname = provider_name or settings.reverse_infer_provider
-        if pname not in available_providers():
+        llm = resolve_provider("reverse_infer", provider_name)
+        if llm is None:
             return {"aborted_reason": "no_llm_provider", "diff": {}}
-        llm = get_provider(pname)
         extracted = await _llm_extract(pos_texts, neg_texts, llm)
         if not extracted:
             return {"aborted_reason": "llm_empty_or_failed", "diff": {}}

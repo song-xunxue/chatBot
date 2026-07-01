@@ -53,8 +53,8 @@ async def test_get_score_200_and_404(monkeypatch, fake_redis, make_provider):
     app = _wire(monkeypatch, fake_redis)
     await mood_service.seed_default_kinds(fake_redis)
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
-    monkeypatch.setattr("score.service.get_provider",
-                        lambda n: make_provider('{"score": 90, "reason": "好"}'))
+    monkeypatch.setattr("score.service.resolve_provider",
+                        lambda *a, **k: make_provider('{"score": 90, "reason": "好"}'))
     mid = await chat_store.append_message(fake_redis, "u1", sender="ai", content="温柔回复")
     await score_service.score_reply(fake_redis, "u1", "温柔回复", PersonaCard(id="d"), mid, mood_value=0.5)
 
@@ -72,8 +72,8 @@ async def test_manual_set_score(monkeypatch, fake_redis, make_provider):
     app = _wire(monkeypatch, fake_redis)
     await mood_service.seed_default_kinds(fake_redis)
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
-    monkeypatch.setattr("score.service.get_provider",
-                        lambda n: make_provider('{"score": 90, "reason": "好"}'))
+    monkeypatch.setattr("score.service.resolve_provider",
+                        lambda *a, **k: make_provider('{"score": 90, "reason": "好"}'))
     mid = await chat_store.append_message(fake_redis, "u1", sender="ai", content="x")
     await score_service.score_reply(fake_redis, "u1", "x", PersonaCard(id="d"), mid, mood_value=0.5)
 
@@ -123,13 +123,13 @@ async def test_reverse_infer_dry_run_and_apply(monkeypatch, fake_redis, make_pro
     await persona_store.bind_object_persona(fake_redis, "u1", "ptest")
     # 正样本
     monkeypatch.setattr(settings, "glm_api_key", "fake-key")
-    monkeypatch.setattr("score.service.get_provider",
-                        lambda n: make_provider('{"score": 95, "reason": "好"}'))
+    monkeypatch.setattr("score.service.resolve_provider",
+                        lambda *a, **k: make_provider('{"score": 95, "reason": "好"}'))
     mid = await chat_store.append_message(fake_redis, "u1", sender="ai", content="温柔地回应")
     await score_service.score_reply(fake_redis, "u1", "温柔地回应", card, mid, mood_value=0.5)
     # 反推 provider
-    monkeypatch.setattr("score.reverse_infer.get_provider",
-                        lambda n: make_provider('{"personality":"温柔体贴"}'))
+    monkeypatch.setattr("score.reverse_infer.resolve_provider",
+                        lambda *a, **k: make_provider('{"personality":"温柔体贴"}'))
 
     async with await _aclient(app) as ac:
         r = await ac.post("/api/v1/score/reverse_infer/u1/dry_run", json={}, headers=_H)
