@@ -53,6 +53,12 @@ async def stage_persona_inject(ctx: MessageContext, redis) -> None:
         card = await get_default_persona(redis)  # 兜底默认人设
     ctx.persona_card = card
     ctx.persona_id = card.id if card else pid
+    # 应用人设绑定的 provider/model:仅当 provider 非空才应用(空=继承全局 chat_provider);
+    # model 必须跟 provider 一起应用,否则孤立的 model 名(如旧数据 "glm-5.2")会打到别的 provider 报错
+    if card and card.model and card.model.provider:
+        ctx.provider_name = card.model.provider
+        if card.model.model:
+            ctx.model = card.model.model
     if not ctx.system_prompt:
         ctx.system_prompt = render_system_prompt(card, card.dynamic_state if card else None)
 
@@ -158,10 +164,17 @@ async def stage_tool_loop(ctx: MessageContext, redis: Redis) -> str | None:
     if not registry.all():
         return None
     provider = get_provider(ctx.provider_name)
-    tctx = ToolContext(redis=redis, object_id=ctx.object_id)
-    return await run_tool_loop(provider, ctx.system_prompt, ctx.user_text,
-                               ctx.history, registry, tctx,
-                               model=ctx.model, max_iterations=settings.tool_loop_max_iterations)
+    tctx = ToolContext(redis, object_id=ctx.object_id)
+    try:
+        return await run_tool_loop(provider, ctx.system_prompt, ctx.user_text,
+                                   ctx.history, registry, tctx,
+                                   model=ctx.model, max_iterations=settings.tool_loop_max_iterations)
+    except Exception as e:
+        # tool-loop 失败(provider 限流/超时/超上限):降级返回 None → runner 走 stage_llm_stream
+        # 兜底保证用户仍收到正常回复(无工具),绝不把错误堆栈当回复发给 QQ 用户
+        logger.warning("tool-loop 失败(provider=%s),降级 stream_chat: %s",
+                       ctx.provider_name, e)
+        return None
 
 
 async def stage_mood_update(ctx: MessageContext, redis) -> None:

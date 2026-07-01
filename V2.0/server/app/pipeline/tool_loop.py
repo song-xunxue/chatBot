@@ -32,12 +32,18 @@ async def run_tool_loop(provider, system_prompt: str, user_text: str,
     msgs += [{"role": m.role, "content": m.content} for m in history_messages]
     msgs.append({"role": "user", "content": user_text})
     last_text = ""
+    logger.info("tool-loop 启动 provider=%s iterations=%d", type(provider).__name__, max_iterations)
     for i in range(max_iterations):
         try:
             resp = await provider.chat_with_tools(msgs, model=model, tools=tools_schema)
         except Exception as e:
-            logger.warning("tool-loop LLM 调用失败(iter %d): %s", i, e)
-            return last_text or f"(工具循环调用失败: {e})"
+            # LLM 调用失败(如 provider 限流 429):有已产出文本则用它,否则重抛由 stage_tool_loop 兜底
+            # 绝不把错误堆栈当回复发给用户(bug 修复:此前 return f"(工具循环调用失败: {e})" 会直发 QQ)
+            logger.warning("tool-loop LLM 调用失败(iter %d, provider=%s): %s",
+                           i, type(provider).__name__, e)
+            if last_text:
+                return last_text
+            raise
         last_text = resp.text
         if not resp.tool_calls:
             return resp.text                    # 无工具调用 → 最终回复
