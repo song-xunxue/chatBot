@@ -4,13 +4,15 @@
  * + 按对象配置。对齐 V2.0 rest_plugin。
  * 作者: 李文煜
  */
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { NCard, NSpace, NButton, NSwitch, NTag, NInput, NEmpty, useMessage } from 'naive-ui'
 import { listPlugins, enablePlugin, disablePlugin, reloadPlugin, reloadStar, getObjectPlugins, setObjectPlugin } from '@/api'
+import { useObject } from '@/composables/useObject'
 
 const message = useMessage()
 const plugins = ref<any[]>([])
-const oid = ref('default')
+const { oid, reloadTick } = useObject()   // 全局共享 object_id + 刷新信号
+watch(reloadTick, () => loadObj())   // 头部 OID 回车 → 重载按对象配置(loadObj 而非 load 全局插件)
 const objPlugins = ref<any[]>([])
 
 async function load() { plugins.value = await listPlugins() }

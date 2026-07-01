@@ -4,12 +4,14 @@
  * 彩色类别标签 + 手动遗忘/锁定。对齐 V2.0 rest_memory。
  * 作者: 李文煜
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { NCard, NSpace, NInput, NButton, NStatistic, NGrid, NGi, NTag, NEmpty, NSelect, NPopconfirm, useMessage } from 'naive-ui'
 import { getMemory, getMemoryStats, forgetOneMemory, lockMemory } from '@/api'
+import { useObject } from '@/composables/useObject'
 
 const message = useMessage()
-const oid = ref('default')
+const { oid, reloadTick } = useObject()   // 全局共享 object_id + 刷新信号
+watch(reloadTick, () => load())   // 头部 OID 回车 → 重载本页
 const stats = ref<any>({})
 const data = ref<any>({})
 const loaded = ref(false)

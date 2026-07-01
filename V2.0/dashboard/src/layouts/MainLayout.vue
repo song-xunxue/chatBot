@@ -6,11 +6,13 @@
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NLayout, NLayoutHeader, NLayoutSider, NLayoutContent, NMenu, NButton } from 'naive-ui'
+import { NLayout, NLayoutHeader, NLayoutSider, NLayoutContent, NMenu, NButton, NInput } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
+import { useObject } from '@/composables/useObject'
 
 const route = useRoute()
 const router = useRouter()
+const { oid, triggerReload } = useObject()   // 全局共享 object_id + 回车触发当前页刷新
 
 const menuOptions: MenuOption[] = [
   { label: '人设管理', key: 'persona' },
@@ -45,7 +47,10 @@ function logout() {
     <n-layout>
       <n-layout-header bordered style="height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-weight:600">{{ title }}</span>
-        <n-button size="small" quaternary @click="logout">登出</n-button>
+        <div style="display:flex;align-items:center;gap:12px">
+          <n-input v-model:value="oid" placeholder="object_id(共享,回车刷新)" size="small" style="width:240px" @keyup.enter="triggerReload" />
+          <n-button size="small" quaternary @click="logout">登出</n-button>
+        </div>
       </n-layout-header>
       <n-layout-content content-style="padding:20px" :native-scrollbar="false">
         <router-view />

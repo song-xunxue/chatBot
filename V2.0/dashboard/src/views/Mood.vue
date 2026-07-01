@@ -4,7 +4,8 @@
  * 使用说明 / 档位管理(CRUD + 范围冲突校验)/ 全局参数 / 实时监控(mood 曲线)/ 评分试算器。
  * 作者: 李文煜
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useObject } from '@/composables/useObject'
 import { Line } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale } from 'chart.js'
 import {
@@ -54,7 +55,8 @@ async function saveParams() {
 }
 
 // —— 实时监控 ——
-const moodOid = ref('default')
+const { oid: moodOid, reloadTick } = useObject()   // 全局共享 object_id(别名 moodOid) + 刷新信号
+watch(reloadTick, () => loadMood())   // 头部 OID 回车 → 重载本页 mood
 const moodInfo = ref<any>(null)
 const moodHistory = ref<any[]>([])
 const setMoodVal = ref(0.5)

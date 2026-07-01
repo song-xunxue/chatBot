@@ -4,15 +4,17 @@
  * 编辑(updateMessage → status=edited)+ 软删(联动负样本)+ 手动关 block。对齐 V2.0 rest_chat。
  * 作者: 李文煜
  */
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import {
   NSpace, NInput, NButton, NTag, NPopconfirm, NEmpty, NCollapse, NCollapseItem,
   useMessage,
 } from 'naive-ui'
 import { listBlocks, listMessages, deleteMessage, closeBlock } from '@/api'
+import { useObject } from '@/composables/useObject'
 
 const message = useMessage()
-const oid = ref('default')
+const { oid, reloadTick } = useObject()   // 全局共享 object_id + 刷新信号
+watch(reloadTick, () => load())   // 头部 OID 回车 → 重载本页(load 为函数声明,已提升)
 const blocks = ref<any[]>([])
 
 async function load() {

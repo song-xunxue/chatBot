@@ -4,12 +4,15 @@
  * 对齐 V2.0 rest_persona(create 要求 id;model 绑定走 PUT /persona/{id}/model)。
  * 作者: 李文煜
  */
-import { ref, h, onMounted } from 'vue'
+import { ref, h, onMounted, computed } from 'vue'
 import {
-  NDataTable, NButton, NSpace, NModal, NForm, NFormItem, NInput, NUpload,
+  NDataTable, NButton, NSpace, NModal, NForm, NFormItem, NInput, NSelect, NUpload,
   useMessage, useDialog, type DataTableColumns,
 } from 'naive-ui'
-import { listPersonas, createPersona, updatePersona, deletePersona, importPersona, bindPersonaModel } from '@/api'
+import {
+  listPersonas, createPersona, updatePersona, deletePersona, importPersona, bindPersonaModel,
+  getSystemConfig,
+} from '@/api'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -17,7 +20,31 @@ const list = ref<any[]>([])
 const loading = ref(false)
 const showModal = ref(false)
 const editing = ref<any>(null)
-const form = ref({ id: '', name: '', description: '', creator_notes: '', provider: 'glm', model: '' })
+const form = ref({ id: '', name: '', description: '', creator_notes: '', provider: 'deepseek', model: '' })
+// 可选 provider 列表(从 /api/v1/system/config 拉,只展示已配置 key 的项)
+const providers = ref<{ name: string; configured: boolean }[]>([])
+
+async function loadProviders() {
+  try {
+    const cfg = await getSystemConfig()
+    providers.value = cfg?.providers || []
+  } catch (e: any) {
+    providers.value = []   // 拉取失败不阻塞,下拉为空(用户可改 .env 配 key 后刷新)
+  }
+}
+// 下拉选项:已配置的可选;未配置的灰显(标"未配置")并禁用;当前值即使未配置也纳入(避免编辑丢失)
+const providerOptions = computed(() => {
+  const cur = form.value.provider
+  const list = providers.value.map((p) => ({
+    label: `${p.name}${p.configured ? '' : '(未配置)'}`,
+    value: p.name,
+    disabled: !p.configured,
+  }))
+  if (cur && !providers.value.some((p) => p.name === cur)) {
+    list.unshift({ label: `${cur}(未配置)`, value: cur, disabled: false })
+  }
+  return list
+})
 
 async function load() {
   loading.value = true
@@ -25,18 +52,18 @@ async function load() {
   catch (e: any) { message.error('加载失败: ' + e) }
   finally { loading.value = false }
 }
-onMounted(load)
+onMounted(() => { load(); loadProviders() })
 
 function openCreate() {
   editing.value = null
-  form.value = { id: '', name: '', description: '', creator_notes: '', provider: 'glm', model: '' }
+  form.value = { id: '', name: '', description: '', creator_notes: '', provider: 'deepseek', model: '' }
   showModal.value = true
 }
 function openEdit(p: any) {
   editing.value = p
   form.value = {
     id: p.id, name: p.name, description: p.description || '', creator_notes: p.creator_notes || '',
-    provider: p.model?.provider || 'glm', model: p.model?.model || '',
+    provider: p.model?.provider || 'deepseek', model: p.model?.model || '',
   }
   showModal.value = true
 }
@@ -101,7 +128,7 @@ const columns: DataTableColumns<any> = [
         <n-form-item label="名称"><n-input v-model:value="form.name" /></n-form-item>
         <n-form-item label="描述"><n-input v-model:value="form.description" type="textarea" /></n-form-item>
         <n-form-item label="创作备注 creator_notes"><n-input v-model:value="form.creator_notes" type="textarea" /></n-form-item>
-        <n-form-item label="模型 provider"><n-input v-model:value="form.provider" placeholder="glm/deepseek/siliconflow" /></n-form-item>
+        <n-form-item label="模型 provider"><n-select v-model:value="form.provider" :options="providerOptions" placeholder="选择已配置的 provider" /></n-form-item>
         <n-form-item label="模型 model"><n-input v-model:value="form.model" placeholder="具体模型号(可空)" /></n-form-item>
         <n-space justify="end">
           <n-button @click="showModal = false">取消</n-button>

@@ -4,14 +4,16 @@
  * roleplay 物理隔离,不进 LLM 上下文,作反推正样本来源。
  * 作者: 李文煜
  */
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import {
   NSpace, NInput, NButton, NSelect, NTag, NPopconfirm, NEmpty, NCard, useMessage,
 } from 'naive-ui'
 import { addRoleplay, addRoleplayBatch, listRoleplay, updateRoleplay, deleteRoleplay } from '@/api'
+import { useObject } from '@/composables/useObject'
 
 const message = useMessage()
-const oid = ref('default')
+const { oid, reloadTick } = useObject()   // 全局共享 object_id + 刷新信号
+watch(reloadTick, () => load())   // 头部 OID 回车 → 重载本页
 const samples = ref<any[]>([])
 const role = ref('user')
 const content = ref('')
