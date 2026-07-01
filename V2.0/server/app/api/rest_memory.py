@@ -18,25 +18,17 @@
 变更说明:
   1. M4 新建 rest_memory:查看/统计/手动遗忘/恢复/锁定/批量遗忘
 """
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from core.config import settings
 from storage.redis_client import get_redis
+from api._auth import verify_token
 from memory import store
 
 router = APIRouter(prefix="/api/v1", tags=["memory"])
 
 
-async def _auth(token: str = Header(default="", alias="X-Access-Token"),
-                q_token: str = Query(default="", alias="token")):
-    """access_token 鉴权依赖:Header 或 query 任一通过;显式拒绝空 token"""
-    supplied = token or q_token
-    if not settings.access_token or not supplied or supplied != settings.access_token:
-        raise HTTPException(status_code=401, detail="invalid access token")
-    return True
-
-
-@router.get("/memory/{object_id}", dependencies=[Depends(_auth)])
+@router.get("/memory/{object_id}", dependencies=[Depends(verify_token)])
 async def view_memory(object_id: str,
                       layer: str = Query(default="all"),
                       category: str = Query(default=""),
@@ -57,7 +49,7 @@ async def view_memory(object_id: str,
     return out
 
 
-@router.get("/memory/{object_id}/stats", dependencies=[Depends(_auth)])
+@router.get("/memory/{object_id}/stats", dependencies=[Depends(verify_token)])
 async def memory_stats(object_id: str):
     """记忆统计:各层数量 + long-term 遗忘数"""
     redis = await get_redis()
@@ -72,7 +64,7 @@ async def memory_stats(object_id: str):
     }
 
 
-@router.delete("/memory/{object_id}/{mid}", dependencies=[Depends(_auth)])
+@router.delete("/memory/{object_id}/{mid}", dependencies=[Depends(verify_token)])
 async def manual_forget(object_id: str, mid: str):
     """手动遗忘单条(置 forgotten=True,可恢复)"""
     from memory.coordinator import get_memory_coordinator
@@ -83,7 +75,7 @@ async def manual_forget(object_id: str, mid: str):
     return {"forgotten": True}
 
 
-@router.post("/memory/{object_id}/{mid}/restore", dependencies=[Depends(_auth)])
+@router.post("/memory/{object_id}/{mid}/restore", dependencies=[Depends(verify_token)])
 async def restore(object_id: str, mid: str):
     """恢复已遗忘单条"""
     from memory.coordinator import get_memory_coordinator
@@ -94,7 +86,7 @@ async def restore(object_id: str, mid: str):
     return {"restored": True}
 
 
-@router.post("/memory/{object_id}/{mid}/lock", dependencies=[Depends(_auth)])
+@router.post("/memory/{object_id}/{mid}/lock", dependencies=[Depends(verify_token)])
 async def lock(object_id: str, mid: str, body: dict = Body(default={})):
     """锁定/解锁单条(防遗忘)。body: {"locked": bool}(默认 True)"""
     redis = await get_redis()
@@ -104,7 +96,7 @@ async def lock(object_id: str, mid: str, body: dict = Body(default={})):
     return {"locked": locked}
 
 
-@router.post("/memory/{object_id}/forget", dependencies=[Depends(_auth)])
+@router.post("/memory/{object_id}/forget", dependencies=[Depends(verify_token)])
 async def batch_forget(object_id: str, body: dict = Body(default={})):
     """批量遗忘:body {"category"?, "keyword"?}。返回遗忘条数"""
     from memory.coordinator import get_memory_coordinator

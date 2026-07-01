@@ -21,24 +21,16 @@
 变更说明:
   1. M7 补 GET /score/samples/{oid}(暴露 list_samples,供面板正反样例页)
 """
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from core.config import settings
 from storage.redis_client import get_redis
+from api._auth import verify_token
 
 router = APIRouter(prefix="/api/v1", tags=["score"])
 
 
-async def _auth(token: str = Header(default="", alias="X-Access-Token"),
-                q_token: str = Query(default="", alias="token")):
-    """access_token 鉴权依赖:Header 或 query 任一通过;显式拒绝空 token(与 V1.0 各 router 一致)"""
-    supplied = token or q_token
-    if not settings.access_token or not supplied or supplied != settings.access_token:
-        raise HTTPException(status_code=401, detail="invalid access token")
-    return True
-
-
-@router.get("/chat/messages/{mid}/score", dependencies=[Depends(_auth)])
+@router.get("/chat/messages/{mid}/score", dependencies=[Depends(verify_token)])
 async def get_score(mid: str):
     """取该消息 score 四元组(+ score_reason/score_manual 标记)"""
     from score import service as score_service
@@ -49,7 +41,7 @@ async def get_score(mid: str):
     return data
 
 
-@router.patch("/chat/messages/{mid}/score", dependencies=[Depends(_auth)])
+@router.patch("/chat/messages/{mid}/score", dependencies=[Depends(verify_token)])
 async def manual_set_score(mid: str, body: dict):
     """手动改分:覆盖 score_base,重算 score(保留历史 mood_bias)。body: {"score_base": int}"""
     from score import service as score_service
@@ -66,7 +58,7 @@ async def manual_set_score(mid: str, body: dict):
     return data
 
 
-@router.get("/chat/{object_id}/health", dependencies=[Depends(_auth)])
+@router.get("/chat/{object_id}/health", dependencies=[Depends(verify_token)])
 async def persona_health(object_id: str, window: int = Query(default=0, ge=0)):
     """人设健康度:近 window 条 ai/proxy 消息 score 均分 + 正/负/中样本计数。
     window=0 时用默认 score_health_window。低均分预警人设跑偏。"""
@@ -75,7 +67,7 @@ async def persona_health(object_id: str, window: int = Query(default=0, ge=0)):
     return await score_service.persona_health(redis, object_id, window=window or None)
 
 
-@router.post("/score/reverse_infer/{object_id}/dry_run", dependencies=[Depends(_auth)])
+@router.post("/score/reverse_infer/{object_id}/dry_run", dependencies=[Depends(verify_token)])
 async def reverse_infer_dry_run(object_id: str, body: dict = Body(default={})):
     """反推预览:取评分正/负样本→LLM 提炼→构建 diff→返回 {diff, confirm_token, ...}。
     body 可选: {"mode": "fill_empty|overwrite", "provider": "..."}。
@@ -90,7 +82,7 @@ async def reverse_infer_dry_run(object_id: str, body: dict = Body(default={})):
     )
 
 
-@router.post("/score/reverse_infer/{object_id}/apply", dependencies=[Depends(_auth)])
+@router.post("/score/reverse_infer/{object_id}/apply", dependencies=[Depends(verify_token)])
 async def reverse_infer_apply(object_id: str, body: dict):
     """反推落库:凭 confirm_token 取暂存 diff→snapshot→合并→set。body: {"confirm_token": "..."}"""
     if not settings.reverse_infer_enabled:
@@ -103,7 +95,7 @@ async def reverse_infer_apply(object_id: str, body: dict):
     return await infer_and_merge(redis, object_id, dry_run=False, confirm_token=token)
 
 
-@router.get("/score/samples/{object_id}", dependencies=[Depends(_auth)])
+@router.get("/score/samples/{object_id}", dependencies=[Depends(verify_token)])
 async def list_samples(object_id: str, kind: str = Query(default="negative")):
     """列正/负评分样本(驱动反推,供 Web 面板正反样例页)。kind=positive/negative。"""
     from score import service as score_service
