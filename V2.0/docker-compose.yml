@@ -37,8 +37,9 @@ services:
     depends_on:
       - redis
     ports:
-      # 仅本机映射(调试/健康检查直连);公网入口走 nginx-ssl 443 反代,不暴露 8001
-      - "127.0.0.1:8001:8000"
+      # 公网映射 8000(songqingxun.icu 未备案,腾讯封域名 80/443 公网;用 IP+8000 绕开备案访问面板)
+      # V1.0 原 mychat-server 占 8000 已停;nginx-ssl 443 走容器内网名与此无关
+      - "8000:8000"
     volumes:
       # 人设 JSON 双写 / .star 插件 / 桌宠头像等运行时数据持久(容器重建不丢)
       - ./server/data:/app/server/data
