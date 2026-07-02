@@ -14,29 +14,24 @@ import logging
 from fastapi import APIRouter, Depends
 
 from api._auth import verify_token
-from llm.registry import available_providers
+from llm.registry import available_providers, provider_specs
 from core.config import settings, Settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["system"])
 
-# provider 显示名 → settings 中 api_key 字段
-_PROVIDERS = [
-    ("glm", "glm_api_key"),
-    ("deepseek", "deepseek_api_key"),
-    ("siliconflow", "siliconflow_api_key"),
-]
-
 
 @router.get("/system/config", dependencies=[Depends(verify_token)])
 async def system_config():
-    """provider 配置状态(展示名 + available/configured,不暴露 api_key)"""
+    """provider 配置状态(展示名 + available/configured,不暴露 api_key)。
+    从 llm.registry.provider_specs() 生成(单一注册表,#7 不再维护第三份 provider 名单)。"""
     avail = set(available_providers())
     return {
         "providers": [
-            {"name": name, "available": name in avail,
-             "configured": bool(getattr(settings, key, ""))}
-            for name, key in _PROVIDERS
+            {"name": s.name, "display": s.display,
+             "available": s.name in avail,
+             "configured": bool(getattr(settings, s.key_attr, ""))}
+            for s in provider_specs()
         ],
         "available": sorted(avail),
     }
