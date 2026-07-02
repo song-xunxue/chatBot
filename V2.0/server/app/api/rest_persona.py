@@ -108,7 +108,8 @@ async def export_persona(pid: str):
 
 @router.put("/persona/{pid}/model", dependencies=[Depends(verify_token)])
 async def bind_model(pid: str, body: dict = Body(default={})):
-    """绑定模型(provider/model/params)"""
+    """绑定模型(provider/model/params)。原子约束:model 必须与 provider 同时设定——
+    孤立 model(provider 空)会打到全局 chat_provider 的别的厂商 API 导致报错(#6 写缝隙守不变量)。"""
     redis = await get_redis()
     card = await persona_store.get_persona(redis, pid)
     if card is None:
@@ -119,6 +120,10 @@ async def bind_model(pid: str, body: dict = Body(default={})):
         card.model.model = body["model"]
     if "params" in body:
         card.model.params = body["params"] or {}
+    # 原子约束:合并后 model 非空必须带 provider(无论本次传入还是卡片已有),杜绝孤立 model
+    if card.model.model and not card.model.provider:
+        raise HTTPException(status_code=400,
+                            detail="绑定 model 必须同时指定 provider(model 不能脱离 provider 单独存在)")
     await persona_store.set_persona(redis, card)
     return {"id": pid, "model": {"provider": card.model.provider,
                                   "model": card.model.model, "params": card.model.params}}
