@@ -135,3 +135,12 @@ async def delete_message(oid: str, mid: str):
     if not hit:
         raise HTTPException(status_code=404, detail="message not found")
     return {"deleted": True}
+
+
+@router.delete("/roleplay/blocks/{block_id}", dependencies=[Depends(verify_token)])
+async def delete_session(block_id: str):
+    """物理删单个 roleplay 会话(block + 其全部消息,2026-07-06 训练样本删会话)。
+    删前清各消息 score 样本(评分联动过的)。返回 {deleted_msgs}。"""
+    redis = await get_redis()
+    r = await chat_store.delete_roleplay_block(redis, block_id)
+    return {"deleted": True, **r}

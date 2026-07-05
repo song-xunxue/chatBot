@@ -12,7 +12,7 @@ import {
 } from 'naive-ui'
 import {
   listRoleplaySessions, newRoleplaySession, addRoleplay, listRoleplay,
-  updateRoleplay, setRoleplayScore, deleteRoleplay,
+  updateRoleplay, setRoleplayScore, deleteRoleplay, deleteRoleplaySession,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
 
@@ -161,6 +161,17 @@ async function del(mid: string) {
   } catch (e: any) { message.error('' + e) }
 }
 
+async function delSession(s: any) {
+  try {
+    await deleteRoleplaySession(s.block_id)
+    message.success(`已删除会话(${s.msg_count} 条)`)
+    if (activeBlockId.value === s.block_id) {
+      activeBlockId.value = ''; messages.value = []
+    }
+    await loadSessions()
+  } catch (e: any) { message.error('' + e) }
+}
+
 async function poll() {
   if (typeof document !== 'undefined' && document.hidden) return
   await loadSessions()
@@ -195,7 +206,15 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
           <span style="font-weight:600; font-size:13px">{{ fmtTs(s.start_ts) }}</span>
           <n-tag size="tiny" :type="s.status === 'open' ? 'success' : 'default'">{{ s.status === 'open' ? '进行中' : '已结束' }}</n-tag>
         </div>
-        <div style="font-size:11px; color:#999; margin-top:2px">{{ relTs(s.start_ts) }} · {{ s.msg_count }} 条</div>
+        <div style="font-size:11px; color:#999; margin-top:2px; display:flex; justify-content:space-between; align-items:center">
+          <span>{{ relTs(s.start_ts) }} · {{ s.msg_count }} 条</span>
+          <n-popconfirm @positive-click="delSession(s)">
+            <template #trigger>
+              <n-button size="tiny" text type="error" @click.stop>删除</n-button>
+            </template>
+            删除该会话({{ s.msg_count }} 条)?物理删不可恢复。
+          </n-popconfirm>
+        </div>
       </div>
     </div>
 

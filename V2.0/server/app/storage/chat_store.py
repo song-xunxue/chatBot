@@ -721,3 +721,36 @@ async def set_roleplay_score(redis: Redis, object_id: str, mid: str, score_base:
     except Exception:
         pass
     return {"mid": mid, "score_base": score_base, "score": score_base}
+
+
+async def delete_roleplay_block(redis: Redis, block_id: str) -> dict:
+    """物理删单个 roleplay 会话(block + 其全部消息,2026-07-06 训练样本删会话)。
+    删前清各消息在 score 样本队列的样本(评分联动过的清掉,避免脏反推数据)。
+    返回 {deleted_msgs}。block 不存在返回 {deleted_msgs:0}。"""
+    block = await redis.hgetall(_rp_block_key(block_id))
+    if not block:
+        return {"deleted_msgs": 0}
+    object_id = block.get("object_id", "")
+    mids = await redis.zrange(_rp_msgs_key(block_id), 0, -1)
+    # 清各消息的 score 样本(评分联动过的 assistant 回复删后不残留驱动反推)
+    from score import service as score_service
+    for mid in mids:
+        try:
+            await score_service.remove_sample_by_mid(redis, object_id, mid)
+        except Exception:
+            pass
+    # 物理删(block + msgs 索引 + 各 msg + 从 blocks ZSet 移除)
+    pipe = redis.pipeline()
+    for mid in mids:
+        pipe.delete(_rp_msg_key(mid))
+    pipe.delete(_rp_msgs_key(block_id))
+    pipe.delete(_rp_block_key(block_id))
+    if object_id:
+        pipe.zrem(_rp_blocks_key(object_id), block_id)
+    await pipe.execute()
+    # 若该 block 正是 active,清掉(下次录入开新会话)
+    if object_id:
+        active = await redis.get(_rp_active_key(object_id))
+        if active == block_id:
+            await redis.delete(_rp_active_key(object_id))
+    return {"deleted_msgs": len(mids)}

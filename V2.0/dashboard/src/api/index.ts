@@ -115,6 +115,8 @@ export const listRoleplaySessions = (oid: string) =>
   api.get(`/api/v1/roleplay/${oid}/sessions`).then((r) => r.data)
 export const newRoleplaySession = (oid: string) =>
   api.post(`/api/v1/roleplay/${oid}/sessions`).then((r) => r.data)
+export const deleteRoleplaySession = (blockId: string) =>
+  api.delete(`/api/v1/roleplay/blocks/${blockId}`).then((r) => r.data)
 export const addRoleplay = (oid: string, body: { role: string; content: string; score_base?: number }) =>
   api.post(`/api/v1/roleplay/${oid}/messages`, body).then((r) => r.data)
 export const addRoleplayBatch = (oid: string, items: { role: string; content: string; score_base?: number }[]) =>

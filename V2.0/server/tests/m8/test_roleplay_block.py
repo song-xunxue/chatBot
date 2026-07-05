@@ -148,3 +148,23 @@ async def test_set_roleplay_score(fake_redis):
     rps = await chat_store.list_roleplay(fake_redis, "u1")
     assert rps[0]["score"] == "30"
     assert await chat_store.set_roleplay_score(fake_redis, "u1", "rp_none", 50) is None   # 不存在
+
+
+async def test_delete_roleplay_block(fake_redis):
+    """删整个 roleplay 会话:block + 其消息物理删 + 清 score 样本(2026-07-06)"""
+    # 会话1:1 条评分回复(联动 pos 样本)
+    await chat_store.append_roleplay_message(
+        fake_redis, "u1", role="assistant", content="评分回复", score_base=88)
+    b1 = await fake_redis.get(chat_store._rp_active_key("u1"))
+    assert len(await fake_redis.lrange("mychat:score:pos:u1", 0, -1)) == 1
+    await chat_store.new_roleplay_block(fake_redis, "u1")   # 关 b1 开 b2(使 b1 非 active)
+    # 删会话1
+    r = await chat_store.delete_roleplay_block(fake_redis, b1)
+    assert r["deleted_msgs"] == 1
+    assert await fake_redis.exists(chat_store._rp_block_key(b1)) == 0
+    assert await fake_redis.exists(chat_store._rp_msgs_key(b1)) == 0
+    assert len(await fake_redis.lrange("mychat:score:pos:u1", 0, -1)) == 0   # pos 样本已清
+    # 会话2 仍在
+    assert len(await chat_store.list_roleplay_blocks(fake_redis, "u1")) == 1
+    # 删不存在 block → deleted_msgs:0
+    assert (await chat_store.delete_roleplay_block(fake_redis, "rp_nonexistent"))["deleted_msgs"] == 0
