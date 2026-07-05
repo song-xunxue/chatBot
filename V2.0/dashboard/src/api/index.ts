@@ -91,6 +91,8 @@ export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => 
 export const getQQCredentials = () => api.get('/api/v1/system/qq-credentials').then((r) => r.data)
 export const setQQCredentials = (body: { app_id: string; app_secret: string }) =>
   api.put('/api/v1/system/qq-credentials', body).then((r) => r.data)
+export const resetAllData = () =>
+  api.post('/api/v1/system/reset', { confirm: '清空' }).then((r) => r.data)
 
 // —— 代答 takeover(M8)——
 export const toggleTakeover = (oid: string, enabled: boolean) =>

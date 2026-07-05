@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * 系统配置页(M7):LLM provider 配置状态(只读)+ 重载配置 + QQ 机器人凭证管理(2026-07-05)。
+ * 系统配置页(M7):LLM provider 配置状态(只读)+ 重载配置 + QQ 机器人凭证管理 + 清空所有数据(2026-07-05)。
  * QQ 凭证持久化 Redis(后端),保存后立即生效(下次 webhook 用新凭证换 token/验签,无需重启)。
+ * 清空所有数据:删运行时数据(对话/记忆/训练样本/评分/mood值/代答),保留人设+配置,需输入"清空"确认。
  * 作者: 李文煜
  */
 import { ref, onMounted } from 'vue'
-import { NCard, NSpace, NButton, NTag, NSpin, NEmpty, NInput, useMessage } from 'naive-ui'
-import { getSystemConfig, reloadSystem, getQQCredentials, setQQCredentials } from '@/api'
+import { NCard, NSpace, NButton, NTag, NSpin, NEmpty, NInput, NModal, useMessage } from 'naive-ui'
+import { getSystemConfig, reloadSystem, getQQCredentials, setQQCredentials, resetAllData } from '@/api'
 
 const message = useMessage()
 const config = ref<any>(null)
@@ -15,6 +16,11 @@ const reloading = ref(false)
 const qq = ref({ app_id: '', app_secret: '', has_secret: false })
 const savingQQ = ref(false)
 const showSecret = ref(false)
+
+// 清空所有数据(危险操作)
+const resetShow = ref(false)
+const resetConfirm = ref('')
+const resetting = ref(false)
 
 async function load() {
   loading.value = true
@@ -47,6 +53,22 @@ async function saveQQ() {
     qq.value.app_secret = ''; qq.value.has_secret = true   // 清输入,标记已配置
   } catch (e: any) { message.error('' + e) }
   finally { savingQQ.value = false }
+}
+
+function openReset() {
+  resetConfirm.value = ''
+  resetShow.value = true
+}
+
+async function doReset() {
+  if (resetConfirm.value !== '清空') { message.warning('请输入"清空"二字确认'); return }
+  resetting.value = true
+  try {
+    const r = await resetAllData()
+    message.success(`已清空(删 ${r.deleted} 键,保留 ${r.kept} 键)`)
+    resetShow.value = false
+  } catch (e: any) { message.error('' + e) }
+  finally { resetting.value = false }
 }
 
 onMounted(load)
@@ -91,5 +113,27 @@ onMounted(load)
         </n-space>
       </n-space>
     </n-card>
+    <n-card title="危险操作">
+      <n-space vertical size="large">
+        <span style="color:#999;font-size:12px">
+          清空所有运行时数据(对话历史/训练样本/记忆/评分/mood值/代答队列),保留人设 + QQ凭证 + 心情档位 + 插件开关。<b style="color:#d03050">不可恢复</b>。
+        </span>
+        <n-button type="error" @click="openReset">清空所有数据</n-button>
+      </n-space>
+    </n-card>
+
+    <!-- 清空确认弹窗(输入"清空"二次确认) -->
+    <n-modal v-model:show="resetShow" preset="card" title="清空所有数据(危险操作)" style="width:480px;max-width:92vw">
+      <n-space vertical :size="12">
+        <div style="color:#d03050;font-size:13px">
+          将清空:对话历史 / 训练样本 / 四级记忆 / 评分样本 / mood值+历史 / 代答队列。保留:人设 / QQ凭证 / 心情档位 / 插件开关 / token缓存。<b>不可恢复</b>。
+        </div>
+        <n-input v-model:value="resetConfirm" placeholder='输入"清空"二字确认' autofocus />
+        <n-space justify="end">
+          <n-button @click="resetShow = false">取消</n-button>
+          <n-button type="error" :loading="resetting" :disabled="resetConfirm !== '清空'" @click="doReset">确认清空</n-button>
+        </n-space>
+      </n-space>
+    </n-modal>
   </n-space>
 </template>
