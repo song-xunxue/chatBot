@@ -49,8 +49,7 @@ class WriteMemoryTool(Tool):
     }
 
     async def execute(self, args: dict, ctx) -> str:
-        from memory import store
-        from memory.coordinator import MemoryCoordinator, get_memory_coordinator
+        from memory.coordinator import MemoryCoordinator
         from memory.models import Category
         content = (args.get("content") or "").strip()
         if not content:
@@ -60,19 +59,16 @@ class WriteMemoryTool(Tool):
         except ValueError:
             cat = Category.FACT
         importance = max(0.0, min(1.0, float(args.get("importance", 0.5))))
-        # 优先用 ctx.redis(pipeline 注入,与当前会话一致);缺失时降级 coordinator 单例的 redis
+        # 走 coordinator 的公开 upsert_fact(架构 #6 收口):不再访问私有 _upsert_fact_dedup/_lock。
+        # 用 ctx.redis 实例化(pipeline 注入,与当前会话同源 redis;测试隔离);无状态单条写不需单例生命周期
         redis = ctx.redis
         if redis is None:
-            redis = (await get_memory_coordinator()).redis
-        if redis is None:
             return "(记忆系统不可用)"
-        coord = MemoryCoordinator(redis, llm_provider=None)   # 临时实例(用 ctx.redis,去重合并)
-        existing = await store.get_all_long_term(redis, ctx.object_id)
-        async with coord._lock(ctx.object_id):
-            await coord._upsert_fact_dedup(ctx.object_id, {
-                "content": content, "category": cat.value,
-                "importance": importance, "emotion": 0.0,
-            }, existing)
+        coord = MemoryCoordinator(redis, llm_provider=None)
+        await coord.upsert_fact(ctx.object_id, {
+            "content": content, "category": cat.value,
+            "importance": importance, "emotion": 0.0,
+        })
         return f"已写入记忆: {content}"
 
 

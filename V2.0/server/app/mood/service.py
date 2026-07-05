@@ -266,6 +266,36 @@ def compute_mood_bias(mood: float, kinds: list[dict]) -> float:
     return bias + random.uniform(-noise, noise)
 
 
+# ================ 回合级聚合(架构 #5 收口:pipeline/score 不再各自 list_kinds+lookup)================
+
+async def inject_hint(redis: Redis, object_id: str) -> dict:
+    """聚合:取 mood + 查档位 + 拼 prompt_hint(供 pipeline 注入 system_prompt)。
+    返回 {mood, hint, label, kaomoji};无匹配档位时 hint=""/label=""/kaomoji=""。
+    prompt_hint 拼装格式 "\\n[当前心情:label kaomoji,prompt_hint]" 由本函数 own
+    (此前漏给 pipeline/stages.mood_inject 手拼,docs/03 §7.1)。"""
+    mood = await get_mood(redis, object_id)
+    kinds = await list_kinds(redis)
+    kind = lookup_kind(mood, kinds)
+    if not kind:
+        return {"mood": mood, "hint": "", "label": "", "kaomoji": ""}
+    return {
+        "mood": mood,
+        "hint": f"\n[当前心情:{kind['label']} {kind['kaomoji']},{kind['prompt_hint']}]",
+        "label": kind["label"],
+        "kaomoji": kind["kaomoji"],
+    }
+
+
+async def bias_for(redis: Redis, mood: float | None = None, *, object_id: str | None = None) -> float:
+    """聚合:mood 的评分补偿(档位.score_bias + 噪声)。供 score 评分调用,封装 list_kinds+compute_mood_bias。
+    mood 缺省时从 object_id 读(均缺省取中性 0.5)。(架构 #5 收口:score 不再各自 list_kinds+compute;
+    rest_mood.mood_calc 试算需多次采样均值,仍直接用 compute_mood_bias。)"""
+    if mood is None:
+        mood = await get_mood(redis, object_id) if object_id else 0.5
+    kinds = await list_kinds(redis)
+    return compute_mood_bias(mood, kinds)
+
+
 # ================ 全局参数 + 历史曲线(M7 面板用)================
 
 async def get_params(redis: Redis) -> dict:

@@ -41,7 +41,8 @@ def looks_like_error(text: str) -> bool:
 
 def sanitize_reply(text: str) -> str:
     """回复安全守卫:命中错误模式 → 记录原文本(排障)+ 返回拟人化兜底;否则原样返回。
-    这是 QQ 出口的软失败不变量守卫,调用方在 send_c2c_message 前调用。"""
+    QQ 出口的软失败不变量守卫——由 send_c2c_message 在内部对机器产出内容默认调用
+    (human_authored=False);人类手打代答(human_authored=True)显式跳过。"""
     if looks_like_error(text):
         logger.warning("回复命中错误模式,降级兜底(原回复前 200 字符):%.200s", text)
         return _FALLBACK

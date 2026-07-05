@@ -81,20 +81,16 @@ async def stage_memory_retrieve(ctx: MessageContext, redis) -> None:
 
 async def stage_mood_inject(ctx: MessageContext, redis) -> None:
     """阶段②.6:心情注入(在调 LLM 前)。
-    读当前 mood → 查档位 → 把档位 prompt_hint + 颜文字追加到 system_prompt(影响回复语气),
-    并写 ctx.plugin_meta 供 QQ 回复/面板展示。对应 docs/03 §7.1。"""
+    mood.inject_hint 聚合:取 mood + 查档位 + 拼 prompt_hint(格式由 mood own,架构 #5 收口)。
+    hint 追加到 system_prompt(影响回复语气),label/kaomoji 写 ctx.plugin_meta 供 QQ 回复/面板展示。"""
     from mood import service
-    mood = await service.get_mood(redis, ctx.object_id)
-    ctx.mood_value = mood
-    kinds = await service.list_kinds(redis)
-    kind = service.lookup_kind(mood, kinds)
-    if kind:
+    state = await service.inject_hint(redis, ctx.object_id)
+    ctx.mood_value = state["mood"]
+    if state["hint"]:
         if ctx.system_prompt:
-            ctx.system_prompt += (
-                f"\n[当前心情:{kind['label']} {kind['kaomoji']},{kind['prompt_hint']}]"
-            )
-        ctx.plugin_meta["mood"] = kind["label"]
-        ctx.plugin_meta["mood_kaomoji"] = kind["kaomoji"]
+            ctx.system_prompt += state["hint"]
+        ctx.plugin_meta["mood"] = state["label"]
+        ctx.plugin_meta["mood_kaomoji"] = state["kaomoji"]
 
 
 async def stage_build_messages(ctx: MessageContext) -> list[Message]:
@@ -120,35 +116,43 @@ async def stage_llm_stream(ctx: MessageContext) -> AsyncIterator[str]:
         yield delta.text
 
 
-async def stage_save(ctx: MessageContext, redis: Redis) -> None:
-    """阶段④:把本次用户消息 + AI 回复写入历史(block 三层,落当前 open block)。
-    V2.0 sender 用 user/ai(弃 V1.0 role),source=live。user/ai 用递增 ts 保证时序(user 先,ai 后)。
-    ai 消息 mid 存 ctx.reply_mid,供 stage_score 评分定位。"""
-    base_ts = ctx.created_ts or int(time.time() * 1000)
+async def stage_save(ctx: MessageContext, redis: Redis, *,
+                     reply_sender: str = "ai", reply_source: str = "live",
+                     user_ts: int | None = None, reply_ts: int | None = None) -> None:
+    """阶段④:把本次用户消息 + 回复写入历史(block 三层,落当前 open block)。
+    reply_sender/reply_source:pipeline 'ai'/'live';takeover 'proxy'/'proxy'(代答)。
+    user_ts/reply_ts:显式 ts(代答同 block 递增保对话连续);None→ctx.created_ts or now / base+1。
+    回复 mid 存 ctx.reply_mid,供 stage_score 评分定位。"""
+    base_ts = user_ts if user_ts else (ctx.created_ts or int(time.time() * 1000))
     await chat_store.append_message(redis, ctx.object_id,
                                     sender="user", content=ctx.user_text,
                                     source="live", ts=base_ts)
+    r_ts = reply_ts if reply_ts else base_ts + 1
     ctx.reply_mid = await chat_store.append_message(redis, ctx.object_id,
-                                                    sender="ai", content=ctx.reply_text,
-                                                    source="live", ts=base_ts + 1)
+                                                    sender=reply_sender, content=ctx.reply_text,
+                                                    source=reply_source, ts=r_ts)
 
 
-async def stage_score(ctx: MessageContext, redis: Redis) -> None:
-    """阶段④.5:对本次 ai 回复自动 LLM 评分(对照人设)+ 心情补偿 + 写 score 四元组 + 样本归类。
-    在 stage_save 后执行(用 ctx.reply_mid 定位);score_enabled=False 或评分失败则跳过(不阻塞)。
-    对应 docs/01 §4 / docs/02 §5 / docs/03 §5。评分用对话同款 provider(ctx.provider_name)。"""
+async def stage_score(ctx: MessageContext, redis: Redis, *,
+                      mood_value: float | None = None,
+                      provider_name: str = "") -> dict | None:
+    """阶段④.5:对回复自动 LLM 评分(对照人设)+ 心情补偿 + 写 score 四元组 + 样本归类。
+    在 stage_save 后执行(用 ctx.reply_mid 定位);score_enabled=False 或无 reply_mid/text 则跳过。
+    mood_value/provider_name:pipeline 传 ctx.mood_value/ctx.provider_name;takeover 传 None/""(读 get_mood/默认)。
+    软失败(评分异常 → 记日志返回 None,不阻塞)。返回 score 四元组(或 None)。"""
     if not settings.score_enabled:
-        return
+        return None
     if not ctx.reply_mid or not ctx.reply_text:
-        return
+        return None
     from score import service as score_service
     try:
-        await score_service.score_reply(
+        return await score_service.score_reply(
             redis, ctx.object_id, ctx.reply_text, ctx.persona_card, ctx.reply_mid,
-            mood_value=ctx.mood_value, provider_name=ctx.provider_name,
+            mood_value=mood_value, provider_name=provider_name,
         )
     except Exception:
         logger.exception("score stage failed")   # 评分失败不阻塞主流程与记忆编码
+        return None
 
 
 async def stage_tool_loop(ctx: MessageContext, redis: Redis) -> str | None:
@@ -186,17 +190,24 @@ async def stage_mood_update(ctx: MessageContext, redis) -> None:
         await service.apply_emotion(redis, ctx.object_id, ctx.reply_text)
 
 
-async def stage_memory_write(ctx: MessageContext, redis: Redis) -> None:
-    """阶段⑤:记忆编码(流结束后异步触发,失败不阻塞回复)
-    触发 coordinator.on_turn_complete:Episodic 摘要/反思 + Long-term 事实抽取。
-    memory_enabled=False 时跳过。"""
+async def stage_memory_write(ctx: MessageContext, redis: Redis, *,
+                              await_memory: bool = False) -> None:
+    """阶段⑤:记忆编码,触发 coordinator.on_turn_complete(Episodic 摘要/反思 + Long-term 事实抽取)。
+    memory_enabled=False 跳过。await_memory=False(默认,pipeline):fire-and-forget 后台 task,不阻塞回复 yield;
+    True(takeover):同步 await,等编码完再进入下发。软失败(_safe_on_turn 或同步 try 吞,不阻塞)。"""
     if not settings.memory_enabled:
         return
     from memory.coordinator import get_memory_coordinator
     coord = await get_memory_coordinator()
-    task = asyncio.create_task(_safe_on_turn(coord, ctx))
-    _BG_TASKS.add(task)                          # 持强引用,防 GC 提前取消
-    task.add_done_callback(_BG_TASKS.discard)    # 完成后自动移除,避免集合无限增长
+    if await_memory:
+        try:
+            await coord.on_turn_complete(ctx)
+        except Exception:
+            logger.exception("memory on_turn_complete failed")
+    else:
+        task = asyncio.create_task(_safe_on_turn(coord, ctx))
+        _BG_TASKS.add(task)                          # 持强引用,防 GC 提前取消
+        task.add_done_callback(_BG_TASKS.discard)    # 完成后自动移除,避免集合无限增长
 
 
 async def _safe_on_turn(coord, ctx) -> None:
@@ -205,3 +216,22 @@ async def _safe_on_turn(coord, ctx) -> None:
         await coord.on_turn_complete(ctx)
     except Exception:
         logger.exception("memory write failed")
+
+
+async def run_post_reply_chain(ctx: MessageContext, redis: Redis, *,
+                                reply_sender: str = "ai", reply_source: str = "live",
+                                user_ts: int | None = None, reply_ts: int | None = None,
+                                score_mood_value: float | None = None,
+                                score_provider: str = "",
+                                await_memory: bool = False) -> dict | None:
+    """统一回合后副作用链(架构 #1,pipeline 与 takeover 共用):stage_save → stage_score → stage_memory_write。
+    消除此前 run_stream 与 resolve_and_deliver 两套手撸编排(save/score/memory 顺序 + 软/硬失败发散、
+    append_message ts+1 时序两处手撸)。顺序不变量:score 需 stage_save 写入的 ctx.reply_mid;memory 需 ctx.reply_text。
+    save 硬(落库是回合契约);score/memory 软(各自 try 吞,不阻塞)。返回 score 四元组(或 None)。
+    mood_update 不在此链——pipeline 在 save 前(后接 ON_MESSAGE_OUT 钩子,可能改 reply_text)、
+    takeover 在 memory 后,时序语义不同且与 reply_text 修改耦合,各调用方按既有时机调 stage_mood_update。"""
+    await stage_save(ctx, redis, reply_sender=reply_sender, reply_source=reply_source,
+                     user_ts=user_ts, reply_ts=reply_ts)
+    score = await stage_score(ctx, redis, mood_value=score_mood_value, provider_name=score_provider)
+    await stage_memory_write(ctx, redis, await_memory=await_memory)
+    return score

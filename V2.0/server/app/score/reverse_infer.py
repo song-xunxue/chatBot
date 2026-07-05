@@ -99,17 +99,9 @@ def _set_card_value(card, field: str, value) -> None:
 # —— JSON 解析(容忍 LLM 输出前后多余文本)——
 
 def _parse_json_object(text: str) -> dict:
-    """从 LLM 输出解析首个 JSON 对象(raw_decode 容忍前后多余文本)"""
-    decoder = json.JSONDecoder()
-    for i, ch in enumerate(text or ""):
-        if ch != "{":
-            continue
-        try:
-            obj, _ = decoder.raw_decode(text[i:])
-            return obj if isinstance(obj, dict) else {}
-        except json.JSONDecodeError:
-            continue
-    return {}
+    """从 LLM 输出解析首个 JSON 对象(raw_decode 容忍前后多余文本)。解析收口于 llm.json_extract。"""
+    from llm.json_extract import extract_json_object
+    return extract_json_object(text) or {}
 
 
 # —— diff 构建(白名单 + 幅度 + 截断)——

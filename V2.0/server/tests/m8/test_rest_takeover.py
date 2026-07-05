@@ -30,7 +30,7 @@ async def _aclient(app):
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")
 
 
-async def _noop_send(oid, content, *, msg_id="", msg_seq=1):
+async def _noop_send(oid, content, *, msg_id="", msg_seq=1, human_authored=False):
     return {"id": "MSG"}
 
 

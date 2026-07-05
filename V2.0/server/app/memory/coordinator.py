@@ -146,10 +146,24 @@ class MemoryCoordinator:
         except Exception as e:
             logger.exception("memory on_turn_complete failed: %s", e)
 
+    async def upsert_fact(self, oid: str, fact: dict) -> bool:
+        """公开:写入一条长期事实(去重合并 + 上限淘汰)。供外部单条写入(如 write_memory 工具)——
+        不再让外部深入私有 _upsert_fact_dedup/_lock(架构 #6 收口)。
+        内部持 _lock(oid) 串行化 + 拉 existing,委托 _upsert_fact_dedup(批量内部用,调用方持锁)。
+        redis 不可用返 False。"""
+        if self.redis is None:
+            return False
+        async with self._lock(oid):
+            existing = await store.get_all_long_term(self.redis, oid)
+            await self._upsert_fact_dedup(oid, fact, existing)
+        return True
+
     async def _upsert_fact_dedup(self, oid: str, fact: dict,
                                  existing: list | None = None) -> None:
         """事实去重合并(精确归一化 + Jaccard);existing 复用避免重复 HGETALL;
-        新增后调 _enforce_max_facts 上限淘汰。调用方须持 _lock(oid)"""
+        新增后调 _enforce_max_facts 上限淘汰。
+        内部原语:调用方须持 _lock(oid)(on_turn_complete 批量 / consolidate_sleep 巩固);
+        外部单条写入走公开 upsert_fact(自管锁,架构 #6)。"""
         if existing is None:
             existing = await store.get_all_long_term(self.redis, oid)
         for m in existing:

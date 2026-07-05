@@ -20,7 +20,7 @@ def _http_error(status: int) -> httpx.HTTPStatusError:
     return httpx.HTTPStatusError(f"rejected {status}", request=req, response=resp)
 
 
-async def _noop_send(oid, content, *, msg_id="", msg_seq=1):
+async def _noop_send(oid, content, *, msg_id="", msg_seq=1, human_authored=False):
     """默认 mock:下发成功"""
     return {"id": "MSG"}
 
@@ -48,7 +48,7 @@ async def test_passive_success(fake_redis, monkeypatch):
     monkeypatch.setattr(settings, "memory_enabled", False)
     sent = []
 
-    async def fake_send(oid, content, *, msg_id="", msg_seq=1):
+    async def fake_send(oid, content, *, msg_id="", msg_seq=1, human_authored=False):
         sent.append(msg_id)
         return {"id": "MSG"}
     monkeypatch.setattr("qq.api_client.send_c2c_message", fake_send)
@@ -64,7 +64,7 @@ async def test_passive_rejected_fallback_active(fake_redis, monkeypatch):
     monkeypatch.setattr(settings, "memory_enabled", False)
     calls = []
 
-    async def fake_send(oid, content, *, msg_id="", msg_seq=1):
+    async def fake_send(oid, content, *, msg_id="", msg_seq=1, human_authored=False):
         calls.append(msg_id)
         if msg_id:                  # 被动(带 msg_id)被拒
             raise _http_error(400)
@@ -81,7 +81,7 @@ async def test_both_fail_delivered_false(fake_redis, monkeypatch):
     """被动主动都失败 → delivered=False(消息已落库不回滚)"""
     monkeypatch.setattr(settings, "memory_enabled", False)
 
-    async def fake_send(oid, content, *, msg_id="", msg_seq=1):
+    async def fake_send(oid, content, *, msg_id="", msg_seq=1, human_authored=False):
         raise _http_error(400)
     monkeypatch.setattr("qq.api_client.send_c2c_message", fake_send)
     await takeover_store.enqueue(fake_redis, "u1", user_text="hi", msg_id="MID")

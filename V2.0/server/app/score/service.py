@@ -90,23 +90,24 @@ async def _llm_score(reply_text: str, persona_card, provider_name: str, model: s
 
 
 def _parse_score(text: str):
-    """从 LLM 输出解析 {score, reason}。容错:扫描首个含 score 的 JSON 对象。"""
-    decoder = json.JSONDecoder()
-    s = text or ""
-    for i, ch in enumerate(s):
-        if ch != "{":
-            continue
+    """从 LLM 输出解析 {score, reason}。容错:扫描首个 score 可解析为整数的 JSON 对象
+    (含 score 但值非数的对象跳过继续找,保留原语义)。解析逻辑收口于 llm.json_extract。"""
+    from llm.json_extract import extract_json_object
+
+    def _valid_score(d):
+        if "score" not in d:
+            return False
         try:
-            obj, _ = decoder.raw_decode(s[i:])
-        except json.JSONDecodeError:
-            continue
-        if isinstance(obj, dict) and "score" in obj:
-            try:
-                sc = int(round(float(obj["score"])))
-            except (TypeError, ValueError):
-                continue
-            return max(0, min(100, sc)), str(obj.get("reason", ""))
-    return None
+            int(round(float(d["score"])))
+            return True
+        except (TypeError, ValueError):
+            return False
+
+    obj = extract_json_object(text, predicate=_valid_score)
+    if obj is None:
+        return None
+    sc = max(0, min(100, int(round(float(obj["score"])))))
+    return sc, str(obj.get("reason", ""))
 
 
 # ================ 自动评分主入口(pipeline 调)================
@@ -127,8 +128,7 @@ async def score_reply(redis: Redis, object_id: str, reply_text: str,
     score_base, reason = result
     # 评分时刻 mood(mood_bias 补偿依据;优先用调用方传入的 ctx.mood_value,避免重复读)
     mood = mood_value if mood_value is not None else await mood_service.get_mood(redis, object_id)
-    kinds = await mood_service.list_kinds(redis)
-    mood_bias = mood_service.compute_mood_bias(mood, kinds)
+    mood_bias = await mood_service.bias_for(redis, mood)   # list_kinds+compute_mood_bias 收口(架构 #5)
     # 写 score 四元组(chat_store.set_score 算 score=clamp(base+bias))
     quad = await chat_store.set_score(redis, mid,
                                       score_base=score_base, mood_value=mood, mood_bias=mood_bias)
@@ -184,8 +184,7 @@ async def manual_set_score(redis: Redis, mid: str, score_base: int) -> dict | No
         # 原未自动评分过:用原 mood_at_score 重算一次 mood_bias(保留心情影响语义)
         oid = msg.get("object_id", "")
         if oid:
-            kinds = await mood_service.list_kinds(redis)
-            mood_bias = mood_service.compute_mood_bias(mood_value, kinds)
+            mood_bias = await mood_service.bias_for(redis, mood_value)   # 收口(架构 #5)
     quad = await chat_store.set_score(redis, mid,
                                       score_base=score_base, mood_value=mood_value, mood_bias=mood_bias)
     await redis.hset(f"mychat:msg:{mid}", "score_manual", "1")   # 标记手动覆盖(面板区分)

@@ -10,7 +10,6 @@ summarize(对话摘要) + reflect(反思归纳) + extract_facts(事实抽取带 
 变更说明：
   1. M2 从 V1.0 移植编码管线到 V2.0(零业务改动;summarize/reflect/extract_facts + JSON 解析降级)
 """
-import json
 import logging
 import re
 
@@ -73,29 +72,24 @@ async def extract_facts(user_text: str, reply_text: str, llm: LLMProvider | None
 
 
 def _parse_facts(text: str) -> list[dict]:
-    """从 LLM 输出解析 JSON 事实数组。
-    用 raw_decode 从每个 '[' 尝试解析首个完整 JSON 数组,容忍前后多余文本与嵌套"""
-    decoder = json.JSONDecoder()
-    for i, ch in enumerate(text):
-        if ch != "[":
+    """从 LLM 输出解析 JSON 事实数组(首个数组,容忍前后多余文本/嵌套);每元素做结构校验。
+    数组提取收口于 llm.json_extract。"""
+    from llm.json_extract import extract_json_array
+    arr = extract_json_array(text)
+    if not arr:
+        return []
+    facts = []
+    for f in arr:
+        if not isinstance(f, dict) or not f.get("content"):
             continue
-        try:
-            arr, _ = decoder.raw_decode(text[i:])
-        except json.JSONDecodeError:
-            continue
-        facts = []
-        for f in arr:
-            if not isinstance(f, dict) or not f.get("content"):
-                continue
-            cat = f.get("category", "fact")
-            facts.append({
-                "content": str(f["content"]),
-                "importance": _clamp(float(f.get("importance", 0.5))),
-                "emotion": _clamp(float(f.get("emotion", 0.0))),
-                "category": cat if cat in _VALID_CATEGORIES else "fact",
-            })
-        return facts
-    return []
+        cat = f.get("category", "fact")
+        facts.append({
+            "content": str(f["content"]),
+            "importance": _clamp(float(f.get("importance", 0.5))),
+            "emotion": _clamp(float(f.get("emotion", 0.0))),
+            "category": cat if cat in _VALID_CATEGORIES else "fact",
+        })
+    return facts
 
 
 async def consolidate_facts(episodic_summaries: list[str], llm: LLMProvider | None,

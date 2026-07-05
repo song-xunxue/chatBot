@@ -23,6 +23,7 @@ import httpx
 
 from core.config import settings
 from qq.auth import get_access_token
+from qq.reply_guard import sanitize_reply
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,8 @@ async def close_client() -> None:
         _client = None
 
 
-async def send_c2c_message(openid: str, content: str, *, msg_id: str = "", msg_seq: int = 1) -> dict:
+async def send_c2c_message(openid: str, content: str, *, msg_id: str = "", msg_seq: int = 1,
+                           human_authored: bool = False) -> dict:
     """发私聊消息(被动回复优先:带 msg_id 不耗主动月配额,60 分钟窗口内有效)
 
     参数:
@@ -53,10 +55,17 @@ async def send_c2c_message(openid: str, content: str, *, msg_id: str = "", msg_s
         content: 文本内容
         msg_id:  用户消息 id(被动回复必填;留空则成主动消息,耗月配额,M8 代人聊天用)
         msg_seq: 回复序号,与 msg_id 联用防同 msg_id 重复发送(QQ 规则:相同 msg_id+msg_seq 重复会失败)
+        human_authored: True=content 是人类手打(如 Web 面板代答),**跳过出站守卫**;
+            False(默认)= 机器产出(LLM/stream/tool-loop),先过 sanitize_reply 再发。
+            出站守卫(架构 #3)作为本 send 缝隙的不变量:机器产出的错误文本(429/堆栈/内部URL)
+            绝不流到 QQ 用户;新调用方默认受保护,人类文本显式 opt-out(避免误伤合法 admin 文本)。
     返回:
         QQ 响应 {"id": 消息id, "timestamp": 发送时间}
     """
     assert _client is not None, "httpx client 未初始化,请在 lifespan 调 init_client"
+    # 出站守卫:机器产出默认过守卫;human_authored=True(如 admin 手打代答)显式跳过
+    if not human_authored:
+        content = sanitize_reply(content)
     token = await get_access_token()
     headers = {"Authorization": f"QQBot {token}", "Content-Type": "application/json"}
     payload: dict = {"content": content, "msg_type": 0, "msg_seq": msg_seq}

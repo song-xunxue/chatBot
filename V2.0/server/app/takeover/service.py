@@ -51,9 +51,11 @@ async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, 
     delivered = False
     mode = ""
     from qq.api_client import send_c2c_message
+    # content 是 admin 手打代答(人类产出),显式 human_authored=True 跳过出站守卫(#3)——
+    # 守卫针对机器产出(LLM/工具)的错误文本泄漏;admin 文本即使含错误模式关键词也应原样发(如转述日志给用户)
     if msg_id:   # 1) 被动回复(msg_id 非空,省月配额)
         try:
-            await send_c2c_message(oid, content, msg_id=msg_id, msg_seq=msg_seq)
+            await send_c2c_message(oid, content, msg_id=msg_id, msg_seq=msg_seq, human_authored=True)
             delivered, mode = True, "passive"
         except httpx.HTTPStatusError as e:
             logger.warning("代答被动回复被拒(超时/超次) oid=%s pid=%s status=%s,降级主动",
@@ -62,7 +64,7 @@ async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, 
             logger.warning("代答被动回复异常 oid=%s pid=%s: %s", oid, pid, e)
     if not delivered:   # 2) 降级主动消息(msg_id="",耗月配额)
         try:
-            await send_c2c_message(oid, content, msg_id="", msg_seq=msg_seq)
+            await send_c2c_message(oid, content, msg_id="", msg_seq=msg_seq, human_authored=True)
             delivered, mode = True, "active"
         except httpx.HTTPStatusError as e:
             logger.error("代答主动消息也失败(配额尽?) oid=%s pid=%s status=%s",
@@ -74,8 +76,9 @@ async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, 
 
 async def resolve_and_deliver(redis, oid: str, pid, answer: str, *, persona_card=None) -> dict:
     """代答单条全链路(管理员手打 answer 下发用户)。
-    出队 → 落 user+proxy 消息(同 block 递增 ts)→ 评分 → 记忆编码 → 心情 → 下发 QQ。
-    落消息前硬失败抛 TakeoverNotFound;其后各步软失败不阻塞。返回 {pid, proxy_mid, delivered, mode, score?}。"""
+    出队 → persona 解析 → [统一副作用链 run_post_reply_chain: 落 user+proxy 消息 → 评分 → 记忆编码(sync)]
+    → msg_seq → 心情 → 下发 QQ。副作用链与 pipeline 共用(架构 #1,消除双份编排);
+    落消息前硬失败抛 TakeoverNotFound,其后各步软失败不阻塞。返回 {pid, proxy_mid, delivered, mode, score?}。"""
     # A. 出队(硬失败:pending 不存在/过期/不匹配)
     pending = await takeover_store.resolve(redis, oid, pid)
     if pending is None:
@@ -85,13 +88,7 @@ async def resolve_and_deliver(redis, oid: str, pid, answer: str, *, persona_card
     real_pid = pending.get("pid", "")
     base_ts = int(pending.get("created_ts", 0) or 0) or int(time.time() * 1000)
 
-    # B. 落消息(硬成功:user 真实发言 + proxy 代答,同 block 递增 ts 保持对话连续)
-    await chat_store.append_message(redis, oid, sender="user", content=user_text,
-                                    source="live", ts=base_ts)
-    proxy_mid = await chat_store.append_message(redis, oid, sender="proxy", content=answer,
-                                                source="proxy", ts=base_ts + 1)
-
-    # C. persona_card 解析(软失败,降级 None,评分/反推时容错)
+    # C. persona_card 解析(软失败,降级 None;score 评分基准)—— 先于副作用链
     if persona_card is None:
         try:
             persona_card = await _resolve_persona(redis, oid)
@@ -99,27 +96,21 @@ async def resolve_and_deliver(redis, oid: str, pid, answer: str, *, persona_card
             logger.exception("代答 persona 解析失败 oid=%s", oid)
             persona_card = None
 
-    # D. msg_seq(per-oid 递增,防 QQ 同 msg_id+msg_seq 去重)
+    # B+E+F 统一回合后副作用链(架构 #1,与 pipeline 共用):
+    #   save(user+proxy 同 block 递增 ts)→ score(mood=None 读 get_mood, provider="")→ memory(sync await)
+    # mood_update 留在链后调(takeover 时序=memory 后,与 reply_text 修改无耦合)
+    from pipeline.stages import run_post_reply_chain
+    ctx = MessageContext(object_id=oid, user_text=user_text, reply_text=answer,
+                         persona_card=persona_card, created_ts=base_ts)
+    score = await run_post_reply_chain(ctx, redis,
+                                       reply_sender="proxy", reply_source="proxy",
+                                       user_ts=base_ts, reply_ts=base_ts + 1,
+                                       score_mood_value=None, score_provider="",
+                                       await_memory=True)
+    proxy_mid = ctx.reply_mid   # stage_save 写入(proxy 消息 mid)
+
+    # D. msg_seq(per-oid 递增,防 QQ 同 msg_id+msg_seq 去重)—— deliver 用
     msg_seq = await takeover_store.next_msg_seq(redis, oid)
-
-    # E. 评分(软失败:对 proxy 消息打分 → 驱动反推正样本,代答作高质量示范)
-    score = None
-    try:
-        from score.service import score_reply
-        score = await score_reply(redis, oid, answer, persona_card, proxy_mid, provider_name="")
-    except Exception:
-        logger.exception("代答 score_reply 失败 oid=%s mid=%s", oid, proxy_mid)
-
-    # F. 记忆编码(软失败:代答进四级记忆作 assistant,对应 V1.0 D6)
-    try:
-        if settings.memory_enabled:
-            from memory.coordinator import get_memory_coordinator
-            coord = await get_memory_coordinator()
-            ctx = MessageContext(object_id=oid, user_text=user_text,
-                                 reply_text=answer, created_ts=base_ts)
-            await coord.on_turn_complete(ctx)
-    except Exception:
-        logger.exception("代答 memory on_turn_complete 失败 oid=%s", oid)
 
     # G. 心情更新(软失败:按代答回复关键词调整 mood)
     try:

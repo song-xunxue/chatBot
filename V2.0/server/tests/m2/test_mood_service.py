@@ -114,3 +114,30 @@ async def test_list_mood_objects(fake_redis):
     await service.set_mood(fake_redis, "u1", 0.6)
     await service.set_mood(fake_redis, "u2", 0.4)
     assert set(await service.list_mood_objects(fake_redis)) == {"u1", "u2"}
+
+
+async def test_inject_hint_format(fake_redis):
+    """inject_hint(架构 #5):拼好的 prompt_hint 格式 + mood + label/kaomoji(格式由 mood own)"""
+    await service.seed_default_kinds(fake_redis)
+    await service.set_mood(fake_redis, "u1", 0.8)   # happy 档
+    state = await service.inject_hint(fake_redis, "u1")
+    assert state["mood"] == 0.8
+    assert state["label"] == "开心"
+    assert state["kaomoji"] == "◍˃ᵕ˂◍"
+    assert state["hint"] == "\n[当前心情:开心 ◍˃ᵕ˂◍,语气轻快热情,多用感叹和颜文字]"
+
+
+async def test_inject_hint_no_kind_empty(fake_redis):
+    """无档位(种表空)→ hint/label 空,mood 仍返回"""
+    state = await service.inject_hint(fake_redis, "u1")
+    assert state["hint"] == ""
+    assert state["label"] == ""
+    assert state["mood"] == 0.5
+
+
+async def test_bias_for_aggregates_kinds(fake_redis):
+    """bias_for(架构 #5):封装 list_kinds+compute_mood_bias;happy 档 score_bias 6 ± noise 3 → [3,9]"""
+    await service.seed_default_kinds(fake_redis)
+    for _ in range(20):   # 噪声随机,多次验证范围
+        bias = await service.bias_for(fake_redis, 0.8)
+        assert 3 <= bias <= 9

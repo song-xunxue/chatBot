@@ -30,6 +30,7 @@ async def test_get_persona_returns_string(fake_redis):
 
 
 async def test_write_memory_writes(fake_redis):
+    """write_memory 走 coordinator.upsert_fact 公开接口(架构 #6);用 ctx.redis 实例化保持测试隔离"""
     from memory import store
     out = await WriteMemoryTool().execute(
         {"content": "用户喜欢猫", "category": "preference", "importance": 0.8},
@@ -42,6 +43,30 @@ async def test_write_memory_writes(fake_redis):
 async def test_write_memory_empty_content(fake_redis):
     out = await WriteMemoryTool().execute({"content": ""}, ToolContext(redis=fake_redis, object_id="u1"))
     assert "空" in out
+
+
+async def test_upsert_fact_public_writes(fake_redis):
+    """coordinator.upsert_fact 公开接口(架构 #6):外部单条写入走它,不再访问私有 _upsert_fact_dedup"""
+    from memory.coordinator import MemoryCoordinator
+    from memory import store
+    coord = MemoryCoordinator(fake_redis, llm_provider=None)
+    ok = await coord.upsert_fact("u1", {"content": "用户养了只猫", "category": "fact",
+                                         "importance": 0.7, "emotion": 0.0})
+    assert ok is True
+    items = await store.get_all_long_term(fake_redis, "u1")
+    assert any("猫" in m.content for m in items)
+
+
+async def test_upsert_fact_dedup_merges(fake_redis):
+    """upsert_fact 去重:相同内容合并(access_count++),不重复新增"""
+    from memory.coordinator import MemoryCoordinator
+    from memory import store
+    coord = MemoryCoordinator(fake_redis, llm_provider=None)
+    fact = {"content": "用户喜欢猫", "category": "preference", "importance": 0.8, "emotion": 0.0}
+    await coord.upsert_fact("u1", fact)
+    await coord.upsert_fact("u1", fact)   # 相同内容,应去重合并
+    items = await store.get_all_long_term(fake_redis, "u1")
+    assert len(items) == 1   # 去重,不重复
 
 
 class _DDGFake:

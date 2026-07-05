@@ -10,9 +10,9 @@ LLM + tools → function calling 决策 tool_calls → 执行工具 → 结果�
 变更说明:
   1. M5 新建 tool-loop 引擎:run_tool_loop(chat_with_tools→tool_calls→执行→回填→再推理)
 """
-import json
 import logging
 
+from llm.json_extract import extract_json_object
 from tools.base import ToolContext
 
 logger = logging.getLogger(__name__)
@@ -58,10 +58,7 @@ async def run_tool_loop(provider, system_prompt: str, user_text: str,
             ],
         })
         for tc in resp.tool_calls:
-            try:
-                args = json.loads(tc["arguments"] or "{}")
-            except json.JSONDecodeError:
-                args = {}
+            args = extract_json_object(tc["arguments"]) or {}
             try:
                 result = await registry.call(tc["name"], args, tctx)
                 logger.info("tool-loop 调用工具 %s args=%s → %s",

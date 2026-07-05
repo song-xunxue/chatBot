@@ -137,5 +137,8 @@ async def mood_calc(object_id: str, body: dict):
     kinds = await mood_service.list_kinds(redis)
     biases = [mood_service.compute_mood_bias(mood, kinds) for _ in range(_CALC_SAMPLES)]
     mood_bias = round(sum(biases) / len(biases), 2)
-    score = max(0, min(100, round(score_base + mood_bias)))
-    return {"score_base": score_base, "mood": mood, "mood_bias": mood_bias, "score": score}
+    # 公式收口于 score.quad(架构 #2,与 chat_store.set_score 同源);响应键用 mood(试算非真实评分事件)
+    from score.quad import compute_quad
+    quad = compute_quad(score_base, mood, mood_bias)
+    return {"score_base": quad["score_base"], "mood": mood,
+            "mood_bias": quad["mood_bias"], "score": quad["score"]}

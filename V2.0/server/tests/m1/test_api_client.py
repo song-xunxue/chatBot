@@ -62,3 +62,23 @@ async def test_send_c2c_raises_on_http_error(fake_redis, api_client, monkeypatch
     monkeypatch.setattr(qq_api._client, "post", _bad_post)
     with pytest.raises(httpx.HTTPStatusError):
         await send_c2c_message("OID-1", "x", msg_id="M")
+
+
+async def test_send_sanitizes_machine_output_by_default(fake_redis, api_client):
+    """出站守卫(架构 #3,#4 下沉到 send):默认 human_authored=False → 机器产出的错误文本过守卫降级"""
+    await _seed_token(fake_redis)
+    bad = "Client error '429 Too Many Requests' for url 'https://api.deepseek.com/x'"
+    await send_c2c_message("OID", bad, msg_id="M")
+    payload = json.loads(api_client["requests"][-1].content)
+    assert "429" not in payload["content"]
+    assert "deepseek" not in payload["content"]
+
+
+async def test_send_human_authored_bypasses_guard(fake_redis, api_client):
+    """human_authored=True(代答):admin 文本原样发,即使含错误模式关键词也不降级"""
+    await _seed_token(fake_redis)
+    # 这段文本若过守卫会被降级(命中 Client error '429 / api.deepseek.com)
+    text = "调试日志: Client error '429 Too Many Requests' for url 'https://api.deepseek.com/x'"
+    await send_c2c_message("OID", text, msg_id="M", human_authored=True)
+    payload = json.loads(api_client["requests"][-1].content)
+    assert payload["content"] == text   # 原样,未被守卫改动

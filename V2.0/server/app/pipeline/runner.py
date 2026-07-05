@@ -21,8 +21,8 @@ from typing import AsyncIterator
 from pipeline.context import MessageContext
 from pipeline.stages import (
     stage_load_history, stage_persona_inject, stage_memory_retrieve,
-    stage_mood_inject, stage_llm_stream, stage_tool_loop, stage_save, stage_score,
-    stage_mood_update, stage_memory_write,
+    stage_mood_inject, stage_llm_stream, stage_tool_loop, stage_mood_update,
+    run_post_reply_chain,
 )
 from storage.redis_client import get_redis
 from plugins import get_event_bus
@@ -79,9 +79,10 @@ async def run_stream(ctx: MessageContext) -> AsyncIterator[str]:
     # on_message_out:回复增强/多段合并;置于 stage_save 之前,使其对 reply_text 的改写入历史
     if bus is not None and not skip_out:
         await bus.fire(ON_MESSAGE_OUT, ctx)
-    # ④存历史(用户消息 + 最终回复,落当前 open block)
-    await stage_save(ctx, redis)
-    # ④.5评分(M3):对 ai 回复自动 LLM 评分 + 心情补偿 + 写 score 四元组 + 样本归类(失败不阻塞)
-    await stage_score(ctx, redis)
-    # ⑤记忆编码(异步触发:摘要/反思/事实抽取,不阻塞回复)
-    await stage_memory_write(ctx, redis)
+    # ④④.5⑤ 统一回合后副作用链 save→score→memory(架构 #1,与 takeover 共用);
+    # mood_update 已在上方 on_message_out 前调过(pipeline 时序)
+    await run_post_reply_chain(ctx, redis,
+                               reply_sender="ai", reply_source="live",
+                               score_mood_value=ctx.mood_value,
+                               score_provider=ctx.provider_name,
+                               await_memory=False)
