@@ -9,13 +9,14 @@
   POST  /plugin/{name}/disable           禁用(原生全局开关)
   POST  /plugin/{name}/reload            热重载(原生 reload;若为 .star 走 star reload_file)
   POST  /plugin/star/{name}/reload       .star 增量热重载(reload_file)
-  GET   /plugin/object/{oid}             列某对象的插件启用状态(原生)
-  PUT   /plugin/object/{oid}/{name}      设置某对象插件配置(原生)
+
+单人设简化(2026-07-05):去 per-object 配置端点(单人设下 object 维度无意义);manager 内
+is_enabled_for 等方法保留(gate 仍调,单人设下默认 True 等价全局开关,行为不变)。
 
 作者: 李文煜
 日期: 2026-06-30
 """
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api._auth import verify_token
 from plugins import get_plugin_manager
@@ -111,30 +112,3 @@ async def reload_star(name: str):
     if not await star.reload_file(name):
         raise HTTPException(status_code=404, detail="star plugin not found or reload failed")
     return {"name": name, "type": "star", "reloaded": True}
-
-
-@router.get("/plugin/object/{oid}", dependencies=[Depends(verify_token)])
-async def object_plugins(oid: str):
-    """列某对象的插件启用状态(原生 is_enabled_for)"""
-    mgr = get_plugin_manager()
-    if mgr is None:
-        return []
-    out = []
-    for name in mgr.list_loaded():
-        out.append({"name": name, "type": "native", "enabled": await mgr.is_enabled_for(name, oid)})
-    return out
-
-
-@router.put("/plugin/object/{oid}/{name}", dependencies=[Depends(verify_token)])
-async def set_object_plugin(oid: str, name: str, body: dict = Body(default={})):
-    """设置某对象插件配置(原生)。body: {enabled?, params?}"""
-    mgr = get_plugin_manager()
-    if mgr is None or name not in mgr.list_loaded():
-        raise HTTPException(status_code=404, detail="native plugin not found")
-    try:
-        await mgr.set_object_config(name, oid,
-                                    enabled=body.get("enabled"),
-                                    params=body.get("params"))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return {"name": name, "object_id": oid, "params": await mgr.get_params(name, oid)}

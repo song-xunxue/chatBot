@@ -1,44 +1,34 @@
 <script setup lang="ts">
 /**
- * 人设管理(V2.0 M7):列表 / 新建(必填 id)/ 编辑 / 删除 / 导入 + 模型绑定(provider/model)。
- * 对齐 V2.0 rest_persona(create 要求 id;model 绑定走 PUT /persona/{id}/model)。
+ * 人设管理(V2.0 简化 2026-07-04):单人设模式(只有 1 个人设、以后也是),
+ * 去掉新建/删除/导入/多人设切换,固定编辑当前唯一人设 + 模型绑定。
+ * 底层 persona/store 多 pid 结构保留(pipeline 解析依赖);仅 UI/REST 简化(去 create/delete/import)。
  * 作者: 李文煜
  */
-import { ref, h, onMounted, computed } from 'vue'
-import {
-  NDataTable, NButton, NSpace, NModal, NForm, NFormItem, NInput, NSelect, NUpload,
-  useMessage, useDialog, type DataTableColumns,
-} from 'naive-ui'
-import {
-  listPersonas, createPersona, updatePersona, deletePersona, importPersona, bindPersonaModel,
-  getSystemConfig,
-} from '@/api'
+import { ref, onMounted, computed } from 'vue'
+import { NButton, NSpace, NForm, NFormItem, NInput, NSelect, NSpin, NTag, NEmpty, useMessage } from 'naive-ui'
+import { listPersonas, updatePersona, bindPersonaModel, getSystemConfig } from '@/api'
 
 const message = useMessage()
-const dialog = useDialog()
-const list = ref<any[]>([])
 const loading = ref(false)
-const showModal = ref(false)
-const editing = ref<any>(null)
-const form = ref({ id: '', name: '', description: '', creator_notes: '', provider: 'deepseek', model: '' })
-// 可选 provider 列表(从 /api/v1/system/config 拉,只展示已配置 key 的项)
+const saving = ref(false)
+const persona = ref<any>(null)   // 当前唯一人设(单人设)
+const form = ref({ name: '', description: '', creator_notes: '', provider: 'deepseek', model: '' })
 const providers = ref<{ name: string; configured: boolean }[]>([])
 
 async function loadProviders() {
   try {
     const cfg = await getSystemConfig()
     providers.value = cfg?.providers || []
-  } catch (e: any) {
-    providers.value = []   // 拉取失败不阻塞,下拉为空(用户可改 .env 配 key 后刷新)
+  } catch {
+    providers.value = []   // 拉取失败不阻塞,下拉为空
   }
 }
-// 下拉选项:已配置的可选;未配置的灰显(标"未配置")并禁用;当前值即使未配置也纳入(避免编辑丢失)
+// 下拉选项:已配置可选;未配置灰显禁用;当前值即使未配置也纳入(避免编辑丢失)
 const providerOptions = computed(() => {
   const cur = form.value.provider
   const list = providers.value.map((p) => ({
-    label: `${p.name}${p.configured ? '' : '(未配置)'}`,
-    value: p.name,
-    disabled: !p.configured,
+    label: `${p.name}${p.configured ? '' : '(未配置)'}`, value: p.name, disabled: !p.configured,
   }))
   if (cur && !providers.value.some((p) => p.name === cur)) {
     list.unshift({ label: `${cur}(未配置)`, value: cur, disabled: false })
@@ -48,93 +38,58 @@ const providerOptions = computed(() => {
 
 async function load() {
   loading.value = true
-  try { list.value = await listPersonas() }
-  catch (e: any) { message.error('加载失败: ' + e) }
+  try {
+    const list = await listPersonas()
+    if (!list.length) { message.warning('无人设(预期应有默认人设,检查 lifespan seed)'); return }
+    persona.value = list[0]   // 单人设:取第一个(唯一)
+    form.value = {
+      name: persona.value.name || '',
+      description: persona.value.description || '',
+      creator_notes: persona.value.creator_notes || '',
+      provider: persona.value.model?.provider || 'deepseek',
+      model: persona.value.model?.model || '',
+    }
+  } catch (e: any) { message.error('加载失败: ' + e) }
   finally { loading.value = false }
 }
-onMounted(() => { load(); loadProviders() })
 
-function openCreate() {
-  editing.value = null
-  form.value = { id: '', name: '', description: '', creator_notes: '', provider: 'deepseek', model: '' }
-  showModal.value = true
-}
-function openEdit(p: any) {
-  editing.value = p
-  form.value = {
-    id: p.id, name: p.name, description: p.description || '', creator_notes: p.creator_notes || '',
-    provider: p.model?.provider || 'deepseek', model: p.model?.model || '',
-  }
-  showModal.value = true
-}
 async function save() {
+  if (!persona.value) return
+  saving.value = true
   try {
-    if (editing.value) {
-      await updatePersona(editing.value.id, {
-        name: form.value.name, description: form.value.description, creator_notes: form.value.creator_notes,
-      })
-      await bindPersonaModel(editing.value.id, { provider: form.value.provider, model: form.value.model })
-    } else {
-      if (!form.value.id) { message.warning('新建人设需填写 id'); return }
-      await createPersona({
-        id: form.value.id, name: form.value.name,
-        description: form.value.description, creator_notes: form.value.creator_notes,
-      })
-      await bindPersonaModel(form.value.id, { provider: form.value.provider, model: form.value.model })
-    }
-    message.success('已保存'); showModal.value = false; load()
+    await updatePersona(persona.value.id, {
+      name: form.value.name, description: form.value.description, creator_notes: form.value.creator_notes,
+    })
+    await bindPersonaModel(persona.value.id, { provider: form.value.provider, model: form.value.model })
+    message.success('已保存')
+    await load()
   } catch (e: any) { message.error('保存失败: ' + e) }
-}
-function remove(p: any) {
-  dialog.warning({
-    title: '删除人设', content: `确定删除「${p.name}」？`, positiveText: '删除', negativeText: '取消',
-    onPositiveClick: async () => { await deletePersona(p.id); message.success('已删除'); load() },
-  })
-}
-async function onImport(file: File) {
-  try { await importPersona(file); message.success('导入成功'); load() }
-  catch (e: any) { message.error('导入失败: ' + e) }
+  finally { saving.value = false }
 }
 
-const columns: DataTableColumns<any> = [
-  { title: 'ID', key: 'id', width: 140 },
-  { title: '名称', key: 'name' },
-  { title: '描述', key: 'description', ellipsis: { tooltip: true } },
-  { title: '模型', key: 'model', render: (p) => p.model?.provider ? `${p.model.provider}/${p.model.model || ''}` : '—' },
-  {
-    title: '操作', key: 'actions', width: 160,
-    render: (p) => h('div', { style: 'display:flex;gap:8px' }, [
-      h(NButton, { size: 'small', onClick: () => openEdit(p) }, () => '编辑'),
-      h(NButton, { size: 'small', type: 'error', ghost: true, onClick: () => remove(p) }, () => '删除'),
-    ]),
-  },
-]
+onMounted(() => { load(); loadProviders() })
 </script>
 
 <template>
-  <n-space vertical size="large">
-    <n-space>
-      <n-button type="primary" @click="openCreate">新建人设</n-button>
-      <n-upload :show-file-list="false" accept=".json"
-                :custom-request="(opt: any) => { if (opt.file?.file) onImport(opt.file.file) }">
-        <n-button>导入 persona_*.json</n-button>
-      </n-upload>
-      <n-button @click="load" :loading="loading">刷新</n-button>
-    </n-space>
-    <n-data-table :columns="columns" :data="list" :loading="loading" :bordered="false" />
-    <n-modal v-model:show="showModal" preset="card" :title="editing ? '编辑人设' : '新建人设'" style="width: 480px">
-      <n-form label-placement="top">
-        <n-form-item label="ID(新建必填,编辑不可改)"><n-input v-model:value="form.id" :disabled="!!editing" /></n-form-item>
+  <n-spin :show="loading">
+    <n-space vertical size="large">
+      <n-space align="center">
+        <span style="font-weight:600">编辑人设</span>
+        <n-tag v-if="persona" size="small" :bordered="false">ID: {{ persona.id }}</n-tag>
+        <span style="color:#999;font-size:12px">单人设模式(只编辑,不新建/删除)</span>
+        <n-button @click="load" :loading="loading">刷新</n-button>
+      </n-space>
+      <n-form v-if="persona" label-placement="top" style="max-width:560px">
         <n-form-item label="名称"><n-input v-model:value="form.name" /></n-form-item>
         <n-form-item label="描述"><n-input v-model:value="form.description" type="textarea" /></n-form-item>
         <n-form-item label="创作备注 creator_notes"><n-input v-model:value="form.creator_notes" type="textarea" /></n-form-item>
         <n-form-item label="模型 provider"><n-select v-model:value="form.provider" :options="providerOptions" placeholder="选择已配置的 provider" /></n-form-item>
         <n-form-item label="模型 model"><n-input v-model:value="form.model" placeholder="具体模型号(可空)" /></n-form-item>
-        <n-space justify="end">
-          <n-button @click="showModal = false">取消</n-button>
-          <n-button type="primary" @click="save">保存</n-button>
+        <n-space>
+          <n-button type="primary" :loading="saving" @click="save">保存</n-button>
         </n-space>
       </n-form>
-    </n-modal>
-  </n-space>
+      <n-empty v-else description="无人设" />
+    </n-space>
+  </n-spin>
 </template>

@@ -68,6 +68,9 @@ async def lifespan(app: FastAPI):
     # Redis 预热(惰性首连)+ 种子数据初始化
     from storage.redis_client import get_redis
     redis = await get_redis()
+    # 灌入面板改过的 QQ 凭证(Redis 覆盖 env;容器重启后从 Redis 恢复,rest_system.PUT 写入)
+    from api.rest_system import _apply_credential_overrides
+    await _apply_credential_overrides(settings)
     from persona.store import init_default_if_absent
     await init_default_if_absent(redis)         # 默认人设 seed
     from mood.service import seed_default_kinds
@@ -168,12 +171,28 @@ def create_app() -> FastAPI:
     app.include_router(roleplay_router)
     # M-vision 挂载图像理解 REST 路由(POST /api/v1/multimodal/vision 上传图→GLM 描述)
     app.include_router(multimodal_router)
-    # M7e 静态托管前端构建产物(生产同源省 CORS);dist 不存在则跳过(dev 用 vite :5173 + proxy)
-    from fastapi.staticfiles import StaticFiles
+    # M7e 静态托管前端构建产物 + SPA history mode 兜底(修子路由刷新 404);dist 不存在则跳过(dev 走 vite proxy)
+    from fastapi.responses import FileResponse
+    from fastapi import HTTPException
     from core.config import PROJECT_ROOT
     _dist = PROJECT_ROOT / "dashboard" / "dist"
     if _dist.is_dir():
-        app.mount("/", StaticFiles(directory=str(_dist), html=True), name="dashboard")
+        _dist_resolved = _dist.resolve()
+
+        @app.get("/{full_path:path}")
+        async def spa_serve(full_path: str):
+            """SPA 静态托管 + history mode 兜底(替代 StaticFiles mount)。
+            API/health/qq 路由由上方 include_router 先声明优先匹配,不被吞。
+            dist 下真实文件(/assets/*.js 等)→ FileResponse 该文件;否则 → index.html(Vue Router 接管刷新/深链)。
+            path traversal 防护:解析后必须仍在 _dist 下。"""
+            target = (_dist / full_path).resolve()
+            try:
+                target.relative_to(_dist_resolved)
+            except ValueError:
+                raise HTTPException(status_code=404)
+            if full_path and target.is_file():
+                return FileResponse(str(target))
+            return FileResponse(str(_dist / "index.html"))
     return app
 
 

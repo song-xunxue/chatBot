@@ -32,12 +32,12 @@ const routerPush = hoisted.routerPush
 const apiMethods = hoisted.apiMethods
 
 import {
-  listPersonas, createPersona, deletePersona, bindPersonaModel,
+  listPersonas, bindPersonaModel,
   listBlocks, listMessages, deleteMessage,
   getSamples, reverseInferDryRun, reverseInferApply,
   getMoodParams, setMoodParams, moodCalc,
   restoreMemory, lockMemory,
-  enablePlugin, reloadStar, setObjectPlugin,
+  enablePlugin, reloadStar,
   getSystemConfig, reloadSystem,
   toggleTakeover, getTakeoverStatus, listTakeoverQueue, answerTakeover, answerTakeoverBatch, skipTakeover,
   addRoleplay, addRoleplayBatch, listRoleplay, updateRoleplay, deleteRoleplay,
@@ -69,13 +69,9 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(ret.id).toBe('p1')
   })
 
-  it('persona: list/create/delete/bindModel', async () => {
+  it('persona: list/bindModel(单人设简化:无 create/delete)', async () => {
     mockResolve('get', {}); await listPersonas()
     expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/persona')
-    mockResolve('post', {}); await createPersona({ name: 'x' })
-    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/persona', { name: 'x' })
-    mockResolve('delete', {}); await deletePersona('p1')
-    expect(apiMethods.delete).toHaveBeenCalledWith('/api/v1/persona/p1')
     mockResolve('put', {}); await bindPersonaModel('p', { provider: 'glm' })
     expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/persona/p/model', { provider: 'glm' })
   })
@@ -119,8 +115,6 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/plugin/tts/enable')
     await reloadStar('s1')
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/plugin/star/s1/reload')
-    mockResolve('put', {}); await setObjectPlugin('o', 'tts', { enabled: true })
-    expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/plugin/object/o/tts', { enabled: true })
   })
 
   it('system: config/reload', async () => {

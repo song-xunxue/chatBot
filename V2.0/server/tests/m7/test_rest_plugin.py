@@ -38,9 +38,6 @@ def _mock_manager(loaded=("p1",)):
     mgr.set_global_enabled = AsyncMock(return_value=None)
     mgr.get_global_enabled = AsyncMock(return_value=True)
     mgr.reload = AsyncMock(return_value=None)
-    mgr.is_enabled_for = AsyncMock(return_value=True)
-    mgr.set_object_config = AsyncMock(return_value=None)
-    mgr.get_params = AsyncMock(return_value={})
     return mgr
 
 

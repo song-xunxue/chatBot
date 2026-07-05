@@ -98,3 +98,18 @@ async def test_close_block(monkeypatch, fake_redis):
     block = await chat_store.list_blocks(fake_redis, "u1")
     assert block[0]["status"] == "closed"
     assert block[0]["close_reason"] == "manual"
+
+
+async def test_list_sessions(monkeypatch, fake_redis):
+    """GET /chat/sessions 列最近活跃会话(无 token→401;有 token→两会话 + last_ts/block_count)"""
+    app = _wire(monkeypatch, fake_redis)
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="a")
+    await chat_store.append_message(fake_redis, "u2", sender="user", content="b")
+    async with await _ac(app) as ac:
+        assert (await ac.get("/api/v1/chat/sessions")).status_code == 401
+        r = await ac.get("/api/v1/chat/sessions", headers=_H)
+        assert r.status_code == 200
+        data = r.json()
+        assert {s["object_id"] for s in data} == {"u1", "u2"}
+        for s in data:
+            assert "last_ts" in s and "block_count" in s

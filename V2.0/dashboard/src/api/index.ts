@@ -9,14 +9,7 @@ import { api } from './client'
 // —— 人设 persona ——
 export const listPersonas = () => api.get('/api/v1/persona').then((r) => r.data)
 export const getPersona = (id: string) => api.get(`/api/v1/persona/${id}`).then((r) => r.data)
-export const createPersona = (body: any) => api.post('/api/v1/persona', body).then((r) => r.data)
 export const updatePersona = (id: string, body: any) => api.put(`/api/v1/persona/${id}`, body).then((r) => r.data)
-export const deletePersona = (id: string) => api.delete(`/api/v1/persona/${id}`).then((r) => r.data)
-export const importPersona = (file: File) => {
-  const fd = new FormData()
-  fd.append('file', file)
-  return api.post('/api/v1/persona/import', fd).then((r) => r.data)
-}
 export const exportPersona = (id: string) => api.get(`/api/v1/persona/${id}/export`).then((r) => r.data)
 export const bindPersonaModel = (id: string, body: any) =>
   api.put(`/api/v1/persona/${id}/model`, body).then((r) => r.data)
@@ -25,6 +18,8 @@ export const rollbackPersona = (id: string, version_no: number) =>
   api.post(`/api/v1/persona/${id}/rollback`, { version_no }).then((r) => r.data)
 
 // —— 聊天历史 chat(block 三层)——
+export const listSessions = (limit = 50) =>
+  api.get('/api/v1/chat/sessions', { params: { limit } }).then((r) => r.data)
 export const listBlocks = (oid: string, limit = 100) =>
   api.get(`/api/v1/chat/${oid}/blocks`, { params: { limit } }).then((r) => r.data)
 export const listMessages = (oid: string, params: { block_id?: string; limit?: number } = {}) =>
@@ -83,13 +78,13 @@ export const enablePlugin = (name: string) => api.post(`/api/v1/plugin/${name}/e
 export const disablePlugin = (name: string) => api.post(`/api/v1/plugin/${name}/disable`).then((r) => r.data)
 export const reloadPlugin = (name: string) => api.post(`/api/v1/plugin/${name}/reload`).then((r) => r.data)
 export const reloadStar = (name: string) => api.post(`/api/v1/plugin/star/${name}/reload`).then((r) => r.data)
-export const getObjectPlugins = (oid: string) => api.get(`/api/v1/plugin/object/${oid}`).then((r) => r.data)
-export const setObjectPlugin = (oid: string, name: string, body: any) =>
-  api.put(`/api/v1/plugin/object/${oid}/${name}`, body).then((r) => r.data)
 
 // —— 系统 system ——
 export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) => r.data)
 export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => r.data)
+export const getQQCredentials = () => api.get('/api/v1/system/qq-credentials').then((r) => r.data)
+export const setQQCredentials = (body: { app_id: string; app_secret: string }) =>
+  api.put('/api/v1/system/qq-credentials', body).then((r) => r.data)
 
 // —— 代答 takeover(M8)——
 export const toggleTakeover = (oid: string, enabled: boolean) =>

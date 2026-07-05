@@ -12,6 +12,11 @@ M7 面板本地验收启动器(本地开发/演示用工具,不入镜像仅本�
 2026-07-02
 变更说明：
   1. 入库(原"不入库"措辞修正):与 real_*_check.py 同为开发工具,一致入库,便于他人本地验收面板
+
+2026-07-04
+变更说明：
+  1. 种子扩充:3 会话(demo/demo2_alice/demo3_bob)+ demo 含代答 proxy 消息,
+     验证对话历史 IM 布局(会话列表多会话切换 + ai/proxy 内联改分 + 评分总览)
 """
 import asyncio
 import json
@@ -34,7 +39,7 @@ redis_client._redis = fakeredis.FakeAsyncRedis(decode_responses=True)
 
 
 async def _seed():
-    """种子示例数据,让面板各页验收有内容可看"""
+    """种子示例数据(3 会话 + 代答 proxy),让面板各页验收有内容可看"""
     from storage.redis_client import get_redis
     from persona.store import init_default_if_absent
     from mood.service import seed_default_kinds, set_mood
@@ -44,14 +49,27 @@ async def _seed():
     await init_default_if_absent(r)          # 默认人设(Persona 页)
     await seed_default_kinds(r)              # mood 默认 5 档(Mood 档位管理)
     oid = "demo"
-    # 示例对话(同一 block,History 页)
+    # 示例对话(demo,同一 block,2 轮 ai + 1 条代答 proxy,验证 ai/proxy 内联改分)
     await chat_store.append_message(r, oid, sender="user", content="你好呀,今天过得怎么样?")
     mid_good = await chat_store.append_message(r, oid, sender="ai", content="嘿嘿,今天心情很不错呢 ◍˃ᵕ˂◍ 想你啦~")
     await chat_store.set_score(r, mid_good, score_base=88, mood_value=0.8, mood_bias=2)
     await chat_store.append_message(r, oid, sender="user", content="随便敷衍一下就行")
     mid_bad = await chat_store.append_message(r, oid, sender="ai", content="哦。")
     await chat_store.set_score(r, mid_bad, score_base=38, mood_value=0.3, mood_bias=-1)
-    # 正负样本(Score 页正反样例)
+    # 代答消息(验证 proxy 改分;takeover 落盘 sender=proxy)
+    await chat_store.append_message(r, oid, sender="user", content="帮我约下周末")
+    mid_proxy = await chat_store.append_message(r, oid, sender="proxy", content="好呀,周末有空,咱们去吃那家新开的店吧~")
+    await chat_store.set_score(r, mid_proxy, score_base=82, mood_value=0.7, mood_bias=1)
+    # 第二会话(验证左侧会话列表多会话切换)
+    oid2 = "demo2_alice"
+    await chat_store.append_message(r, oid2, sender="user", content="在吗")
+    mid2 = await chat_store.append_message(r, oid2, sender="ai", content="在的在的,怎么啦?")
+    await chat_store.set_score(r, mid2, score_base=75, mood_value=0.6, mood_bias=1)
+    # 第三会话(更旧,验证排序)
+    oid3 = "demo3_bob"
+    await chat_store.append_message(r, oid3, sender="user", content="晚安")
+    await chat_store.append_message(r, oid3, sender="ai", content="晚安好梦~")
+    # 正负样本(评分总览正反样例)
     await score_service.record_negative_sample(r, oid, mid_bad, "哦。", 37)
     await r.lpush(f"mychat:score:pos:{oid}", json.dumps(
         {"mid": mid_good, "text": "嘿嘿,今天心情很不错呢 ◍˃ᵕ˂◍ 想你啦~",
@@ -59,7 +77,7 @@ async def _seed():
     # mood 历史曲线(Mood 实时监控页)
     for m in (0.35, 0.5, 0.55, 0.7, 0.8, 0.75):
         await set_mood(r, oid, m)
-    print("[panel_dev] 种子完成: object_id=demo(2 轮对话 正88/负37 + 正负样本 + mood 历史 6 点)")
+    print("[panel_dev] 种子完成: 3 会话(demo 含 ai+proxy 改分 / demo2_alice / demo3_bob)+ 正负样本 + mood 历史 6 点")
 
 
 asyncio.run(_seed())

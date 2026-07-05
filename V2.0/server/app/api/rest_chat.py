@@ -22,6 +22,14 @@ from storage import chat_store
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
+@router.get("/chat/sessions", dependencies=[Depends(verify_token)])
+async def list_sessions(limit: int = Query(default=50, ge=1, le=500)):
+    """列最近活跃会话(跨所有 object_id,按最近活跃倒序),供面板历史页自动展示(无需手输 object_id)。
+    返回 [{object_id, last_ts, block_count}]。"""
+    redis = await get_redis()
+    return await chat_store.list_recent_sessions(redis, limit=limit)
+
+
 @router.get("/chat/{object_id}/blocks", dependencies=[Depends(verify_token)])
 async def list_blocks(object_id: str, limit: int = Query(default=100, ge=1, le=1000)):
     """列出会话所有 block(按 start_ts 倒序,最近在前),含 status/时间/summary/msg_count"""

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 主布局(V2.0 M7):左侧栏导航 + 顶栏(标题/登出)+ 内容区。
- * 菜单:人设/历史/评分/记忆/心情/插件/系统。
+ * 主布局(V2.0 M7):左侧栏导航 + 顶栏(标题/全局 oid/登出)+ 内容区。
+ * 菜单:人设/历史/记忆/心情/插件/系统/代人代答/训练样本(评分已并入对话历史,2026-07-03)。
  * 作者: 李文煜
  */
 import { computed } from 'vue'
@@ -17,7 +17,6 @@ const { oid, triggerReload } = useObject()   // 全局共享 object_id + 回车�
 const menuOptions: MenuOption[] = [
   { label: '人设管理', key: 'persona' },
   { label: '对话历史', key: 'history' },
-  { label: '评分健康', key: 'score' },
   { label: '记忆查看', key: 'memory' },
   { label: '心情系统', key: 'mood' },
   { label: '插件管理', key: 'plugin' },

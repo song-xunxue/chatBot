@@ -30,6 +30,11 @@ M2 实现:
      与 live 结构对齐(独立前缀,get_history 只读 live 键天然隔离);
      新增 close_roleplay_block(手动分段)/ append_roleplay_batch(批量录连发);
      update/delete 从 O(N) 重建 List 改为 O(1) hset / ZREM+DEL;签名向后兼容(list_roleplay 返回含 content)
+
+2026-07-03
+变更说明：
+  1. 新增 list_recent_sessions(跨 object_id 列最近活跃会话,SCAN blocks 键聚合 last_ts/block_count),
+     供面板历史页自动展示会话列表(解决"看不到 openid"导致查不到历史)
 """
 import json
 import time
@@ -321,6 +326,27 @@ async def list_blocks(redis: Redis, object_id: str, *, limit: int = 100) -> list
     return out
 
 
+async def list_recent_sessions(redis: Redis, *, limit: int = 50) -> list[dict]:
+    """列最近活跃会话(跨所有 object_id),按最近 block 的 start_ts 倒序,供面板自动展示(M7 改造)。
+    SCAN mychat:chat:*:blocks 聚合:object_id + 最近 block 的 start_ts(作 last_ts 近似活跃度)+ block 总数。
+    会话数少时 SCAN 安全;后续会话增长可改为 append_message 维护 sessions ZSet(本次不做)。无会话返回空列表。"""
+    sessions: list[dict] = []
+    async for raw_key in redis.scan_iter(match="mychat:chat:*:blocks", count=100):
+        key = raw_key.decode() if isinstance(raw_key, bytes) else raw_key
+        prefix, suffix = "mychat:chat:", ":blocks"
+        if not (key.startswith(prefix) and key.endswith(suffix)):
+            continue
+        object_id = key[len(prefix):-len(suffix)]
+        if not object_id:
+            continue
+        last = await redis.zrange(key, -1, -1, withscores=True)   # 末位 block_id + 其 start_ts(score)
+        block_count = await redis.zcard(key)
+        last_ts = int(last[0][1]) if last else 0
+        sessions.append({"object_id": object_id, "last_ts": last_ts, "block_count": block_count})
+    sessions.sort(key=lambda d: d["last_ts"], reverse=True)
+    return sessions[:limit]
+
+
 async def get_message(redis: Redis, mid: str) -> dict | None:
     """按 mid 取单条(全局 UUID,稳定外键)"""
     raw = await redis.hgetall(_msg_key(mid))
@@ -367,17 +393,12 @@ async def delete_message(redis: Redis, mid: str, *, reason: str = "out_of_charac
 
 async def set_score(redis: Redis, mid: str, *,
                     score_base: int, mood_value: float, mood_bias: float) -> dict:
-    """写入 score 四元组:mood_at_score=mood_value,score=clamp(round(score_base+mood_bias),0,100)。
-    返回完整四元组,供反推判断(M3)。仅 ai/proxy 消息应调用。"""
+    """写入 score 四元组(score 由 score.quad.compute_quad 计算,公式收口于彼,架构 #2)。
+    返回完整四元组,供反推判断(M3)。仅 ai/proxy 消息应调用。消息不存在返 {}。"""
     if not await redis.exists(_msg_key(mid)):
         return {}
-    score = max(0, min(100, round(score_base + mood_bias)))
-    quad = {
-        "score_base": score_base,
-        "mood_at_score": mood_value,
-        "mood_bias": mood_bias,
-        "score": score,
-    }
+    from score.quad import compute_quad   # 公式唯一来源;lazy import 避免 storage↔score 导入环
+    quad = compute_quad(score_base, mood_value, mood_bias)
     await redis.hset(_msg_key(mid), mapping=quad)
     return quad
 

@@ -2,13 +2,10 @@
 人设管理 REST 接口(M7):CRUD + 导入/导出 + 模型绑定 + 快照/回滚。
 复用 persona/store.py + importer.parse_persona_json。鉴权 X-Access-Token。
 
-路由(prefix /api/v1):
-  GET    /persona                       列所有人设
+路由(prefix /api/v1)—— 单人设简化(2026-07-04):只有 1 个人设,以后也是,去 create/delete/import:
+  GET    /persona                       列所有人设(单人设下返回 1 条)
   GET    /persona/{pid}                 取单个
-  POST   /persona                       新建(body = PersonaCard dict)
   PUT    /persona/{pid}                 更新(合并现有 + body 覆盖)
-  DELETE /persona/{pid}                 删除(Redis + 文件)
-  POST   /persona/import                导入(FormData persona_*.json,兼容嵌套/扁平两形态)
   GET    /persona/{pid}/export          导出(嵌套 prompts 形态)
   PUT    /persona/{pid}/model           绑定模型(provider/model/params)
   POST   /persona/{pid}/snapshot        快照(反推前留底,返回 version_no)
@@ -17,9 +14,7 @@
 作者: 李文煜
 日期: 2026-06-30
 """
-import json
-
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api._auth import verify_token
 from storage.redis_client import get_redis
@@ -44,16 +39,6 @@ async def get_persona(pid: str):
     return card.to_dict()
 
 
-@router.post("/persona", dependencies=[Depends(verify_token)])
-async def create_persona(body: dict):
-    redis = await get_redis()
-    card = PersonaCard.from_dict(body)
-    if not card.id:
-        raise HTTPException(status_code=400, detail="persona id required")
-    await persona_store.set_persona(redis, card)
-    return card.to_dict()
-
-
 @router.put("/persona/{pid}", dependencies=[Depends(verify_token)])
 async def update_persona(pid: str, body: dict):
     """更新:现有字段 + body 覆盖(保留 id)"""
@@ -65,34 +50,6 @@ async def update_persona(pid: str, body: dict):
     merged.update(body)
     merged["id"] = pid
     card = PersonaCard.from_dict(merged)
-    await persona_store.set_persona(redis, card)
-    return card.to_dict()
-
-
-@router.delete("/persona/{pid}", dependencies=[Depends(verify_token)])
-async def delete_persona(pid: str):
-    redis = await get_redis()
-    existed = await persona_store.delete_persona(redis, pid)
-    if not existed:
-        raise HTTPException(status_code=404, detail="persona not found")
-    return {"deleted": True, "id": pid}
-
-
-@router.post("/persona/import", dependencies=[Depends(verify_token)])
-async def import_persona(file: UploadFile = File(...)):
-    """导入 persona_*.json(importer.parse_persona_json 兼容嵌套/扁平两形态)"""
-    from persona.importer import parse_persona_json
-    raw = await file.read()
-    try:
-        data = json.loads(raw)
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        raise HTTPException(status_code=400, detail=f"invalid json: {e}")
-    pid = (data.get("data", {}).get("id") if isinstance(data.get("data"), dict) else "") \
-        or data.get("id", "") or ""
-    card = parse_persona_json(data, pid)
-    if not card.id:
-        raise HTTPException(status_code=400, detail="parse failed: no id")
-    redis = await get_redis()
     await persona_store.set_persona(redis, card)
     return card.to_dict()
 
