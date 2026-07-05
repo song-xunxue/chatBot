@@ -6,7 +6,7 @@
  * 作者: 李文煜
  */
 import { ref, onMounted, computed } from 'vue'
-import { NButton, NSpace, NForm, NFormItem, NInput, NSelect, NSpin, NEmpty, NModal, useMessage } from 'naive-ui'
+import { NButton, NSpace, NForm, NFormItem, NInput, NSelect, NSpin, NEmpty, NModal, NGrid, NGi, useMessage } from 'naive-ui'
 import { listPersonas, updatePersona, bindPersonaModel, getSystemConfig } from '@/api'
 
 const message = useMessage()
@@ -108,23 +108,35 @@ onMounted(() => { load(); loadProviders() })
         <span style="color:#999;font-size:12px">单人设模式</span>
         <n-button @click="load" :loading="loading">刷新</n-button>
       </n-space>
-      <n-form v-if="persona" label-placement="top" style="max-width:680px">
-        <n-form-item label="名称"><n-input v-model:value="form.name" /></n-form-item>
-        <!-- 长文本字段:紧凑预览(只读) + 展开编辑按钮 → 大窗口弹窗 -->
+      <n-form v-if="persona" label-placement="top" style="max-width:720px">
+        <!-- 名称:短输入限宽,不占整行 -->
+        <n-form-item label="名称">
+          <n-input v-model:value="form.name" style="max-width:320px" />
+        </n-form-item>
+        <!-- 长文本字段:大预览(只读整宽 rows=4) + 展开编辑按钮在下方 -->
         <n-form-item v-for="lf in LONG_FIELDS" :key="lf.field" :label="lf.label">
-          <n-space vertical style="width:100%" :size="6">
-            <div style="font-size:12px;color:#999">{{ lf.hint }}</div>
-            <n-space align="center" :wrap="false" style="width:100%">
-              <n-input :value="(form as any)[lf.field]" type="textarea" :rows="2" readonly
-                       placeholder="(空)" style="flex:1" />
-              <n-button @click="openEdit(lf.field)">展开编辑</n-button>
-            </n-space>
-          </n-space>
+          <div style="width:100%">
+            <div style="font-size:12px;color:#999;margin-bottom:6px">{{ lf.hint }}</div>
+            <n-input :value="(form as any)[lf.field]" type="textarea" :rows="4" readonly
+                     placeholder="(空)" style="width:100%" />
+            <div style="text-align:right;margin-top:6px">
+              <n-button size="small" @click="openEdit(lf.field)">展开编辑</n-button>
+            </div>
+          </div>
         </n-form-item>
-        <n-form-item label="模型 provider">
-          <n-select v-model:value="form.provider" :options="providerOptions" placeholder="选择已配置的 provider" />
-        </n-form-item>
-        <n-form-item label="模型 model"><n-input v-model:value="form.model" placeholder="具体模型号(可空)" /></n-form-item>
+        <!-- 模型 provider + model:一行两列(短输入不各占整行) -->
+        <n-grid :cols="2" :x-gap="16">
+          <n-gi>
+            <n-form-item label="模型 provider">
+              <n-select v-model:value="form.provider" :options="providerOptions" placeholder="选择已配置的 provider" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="模型 model">
+              <n-input v-model:value="form.model" placeholder="具体模型号(可空)" />
+            </n-form-item>
+          </n-gi>
+        </n-grid>
         <n-space>
           <n-button type="primary" :loading="saving" @click="save">保存</n-button>
         </n-space>

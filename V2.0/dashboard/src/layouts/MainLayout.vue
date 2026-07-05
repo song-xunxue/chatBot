@@ -40,7 +40,7 @@ function logout() {
 <template>
   <n-layout has-sider style="height: 100vh">
     <n-layout-sider bordered :width="200" content-style="padding:8px">
-      <div style="padding:12px;font-weight:700;font-size:16px">🐱 MyChat V2.0</div>
+      <div style="padding:12px;font-weight:700;font-size:16px">MyChatBot V2.0</div>
       <n-menu :value="activeKey" :options="menuOptions" @update:value="onSelect" />
     </n-layout-sider>
     <n-layout>
