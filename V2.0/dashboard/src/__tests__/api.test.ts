@@ -41,6 +41,7 @@ import {
   getSystemConfig, reloadSystem,
   toggleTakeover, getTakeoverStatus, listTakeoverQueue, answerTakeover, answerTakeoverBatch, skipTakeover,
   addRoleplay, addRoleplayBatch, listRoleplay, updateRoleplay, deleteRoleplay,
+  listRoleplaySessions, newRoleplaySession,
 } from '@/api'
 
 function mockResolve(method: 'get' | 'post' | 'put' | 'delete', responseData: any) {
@@ -139,13 +140,19 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/skip', { pid: 'p1' })
   })
 
-  it('roleplay: add/batch/list/update/delete', async () => {
+  it('roleplay: add/sessions/batch/list/update/delete', async () => {
     mockResolve('post', {}); await addRoleplay('o', { role: 'user', content: 'hi' })
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { role: 'user', content: 'hi' })
-    await addRoleplayBatch('o', [{ role: 'user', content: 'x' }])
+    mockResolve('post', {}); await newRoleplaySession('o')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/sessions')
+    mockResolve('get', {}); await listRoleplaySessions('o')
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/roleplay/o/sessions')
+    mockResolve('post', {}); await addRoleplayBatch('o', [{ role: 'user', content: 'x' }])
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/batch', { items: [{ role: 'user', content: 'x' }] })
     mockResolve('get', {}); await listRoleplay('o')
-    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { params: { limit: 1000 } })
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { params: {} })
+    await listRoleplay('o', { block_id: 'b1', limit: 50 })
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { params: { block_id: 'b1', limit: 50 } })
     mockResolve('put', {}); await updateRoleplay('o', 'm1', 'new')
     expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/m1', { content: 'new' })
     mockResolve('delete', {}); await deleteRoleplay('o', 'm1')

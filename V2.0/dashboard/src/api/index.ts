@@ -110,14 +110,20 @@ export const skipTakeover = (oid: string, pid?: string) =>
 export const sendTakeover = (oid: string, content: string) =>
   api.post(`/api/v1/takeover/${oid}/send`, { content }).then((r) => r.data)
 
-// —— roleplay 训练样本(M8)——
-export const addRoleplay = (oid: string, body: { role: string; content: string }) =>
+// —— roleplay 训练样本(M8 + 2026-07-05 多会话+评分)——
+export const listRoleplaySessions = (oid: string) =>
+  api.get(`/api/v1/roleplay/${oid}/sessions`).then((r) => r.data)
+export const newRoleplaySession = (oid: string) =>
+  api.post(`/api/v1/roleplay/${oid}/sessions`).then((r) => r.data)
+export const addRoleplay = (oid: string, body: { role: string; content: string; score_base?: number }) =>
   api.post(`/api/v1/roleplay/${oid}/messages`, body).then((r) => r.data)
-export const addRoleplayBatch = (oid: string, items: { role: string; content: string }[]) =>
+export const addRoleplayBatch = (oid: string, items: { role: string; content: string; score_base?: number }[]) =>
   api.post(`/api/v1/roleplay/${oid}/messages/batch`, { items }).then((r) => r.data)
-export const listRoleplay = (oid: string, limit = 1000) =>
-  api.get(`/api/v1/roleplay/${oid}/messages`, { params: { limit } }).then((r) => r.data)
+export const listRoleplay = (oid: string, params: { block_id?: string; limit?: number } = {}) =>
+  api.get(`/api/v1/roleplay/${oid}/messages`, { params }).then((r) => r.data)
 export const updateRoleplay = (oid: string, mid: string, content: string) =>
   api.put(`/api/v1/roleplay/${oid}/messages/${mid}`, { content }).then((r) => r.data)
+export const setRoleplayScore = (oid: string, mid: string, score_base: number) =>
+  api.patch(`/api/v1/roleplay/${oid}/messages/${mid}/score`, { score_base }).then((r) => r.data)
 export const deleteRoleplay = (oid: string, mid: string) =>
   api.delete(`/api/v1/roleplay/${oid}/messages/${mid}`).then((r) => r.data)

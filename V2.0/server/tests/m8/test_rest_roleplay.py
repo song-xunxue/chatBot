@@ -75,3 +75,33 @@ async def test_invalid_role_400(monkeypatch, fake_redis):
         r = await ac.post("/api/v1/roleplay/u1/messages",
                           json={"role": "robot", "content": "x"}, headers=_H)
         assert r.status_code == 400
+
+
+async def test_sessions_and_score(monkeypatch, fake_redis):
+    """新建会话 + 列会话 + 录 assistant(带分) + 改分(2026-07-05)"""
+    app = _wire(monkeypatch, fake_redis)
+    async with await _aclient(app) as ac:
+        # 新建会话
+        r = await ac.post("/api/v1/roleplay/u1/sessions", headers=_H)
+        bid = r.json()["block_id"]
+        assert bid
+        # 列会话
+        r = await ac.get("/api/v1/roleplay/u1/sessions", headers=_H)
+        assert len(r.json()) == 1
+        # 录 assistant + score
+        r = await ac.post("/api/v1/roleplay/u1/messages",
+                          json={"role": "assistant", "content": "hi", "score_base": 90}, headers=_H)
+        mid = r.json()["mid"]
+        # 改分
+        r = await ac.patch(f"/api/v1/roleplay/u1/messages/{mid}/score",
+                           json={"score_base": 50}, headers=_H)
+        assert r.json()["score"] == 50
+        # 列消息含 score
+        r = await ac.get("/api/v1/roleplay/u1/messages", headers=_H)
+        assert r.json()["messages"][0]["score"] == "50"
+        # 改分缺 score_base → 400
+        r = await ac.patch(f"/api/v1/roleplay/u1/messages/{mid}/score", json={}, headers=_H)
+        assert r.status_code == 400
+        # block_id 过滤
+        r = await ac.get(f"/api/v1/roleplay/u1/messages?block_id={bid}", headers=_H)
+        assert len(r.json()["messages"]) == 1

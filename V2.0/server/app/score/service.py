@@ -275,3 +275,24 @@ async def record_negative_sample(redis: Redis, object_id: str,
     供软删联动调用(rest_chat DELETE ai/proxy 消息时,扩充反推负样本数据源)。
     内部复用 _collect_sample(kind="negative"),保证数据结构与评分自动归类一致({mid,text,score,ts})。"""
     await _collect_sample(redis, object_id, "negative", mid, text, score)
+
+
+async def record_score_sample(redis: Redis, object_id: str,
+                              mid: str, text: str, score: int) -> None:
+    """按 score 阈值归类记录到 pos/neg 样本队列(2026-07-05 roleplay 评分联动反推用)。
+    neutral 不记。复用 _collect_sample。改分/删前应先 remove_sample_by_mid 清旧,避免脏数据。"""
+    kind = classify(score)
+    if kind in ("positive", "negative"):
+        await _collect_sample(redis, object_id, kind, mid, text, score)
+
+
+async def remove_sample_by_mid(redis: Redis, object_id: str, mid: str) -> None:
+    """从 pos/neg 样本队列移除指定 mid 的样本(2026-07-05 改分/删除前清旧)。
+    队列短(≤score_sample_keep)遍历 + lrem 精确删 payload。无该 mid 无副作用。"""
+    for key in (_K_POS.format(oid=object_id), _K_NEG.format(oid=object_id)):
+        for it in await redis.lrange(key, 0, -1):
+            try:
+                if json.loads(it).get("mid") == mid:
+                    await redis.lrem(key, 1, it)
+            except (json.JSONDecodeError, TypeError):
+                pass

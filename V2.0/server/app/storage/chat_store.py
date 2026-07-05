@@ -562,14 +562,18 @@ async def close_roleplay_block(redis: Redis, object_id: str, *, reason: str = "m
 
 
 async def append_roleplay_message(redis: Redis, object_id: str, *,
-                                  role: str, content: str, ts: int = 0) -> str:
+                                  role: str, content: str, ts: int = 0,
+                                  score_base: int | None = None) -> str:
     """录单条 roleplay 训练样本(独立 block 三层,绝不污染 get_history)。
-    落当前 open roleplay block;返回 mid(rp_ 前缀便于辨识)。"""
+    落当前 open roleplay block;返回 mid(rp_ 前缀便于辨识)。
+    score_base(可选,2026-07-05,assistant 角色回复评分):非 None 时写 msg.score_base/score
+    (roleplay 不走心情,score 直接=score_base)+ 按 classify 阈值联动 score 正/负样本队列(驱动反推,
+    与 live 评分机制一致;reverse_infer 只读队列故零改动)。"""
     ts = ts or _now_ms()
     block = await _rp_open_or_get_block(redis, object_id)
     block_id = block["block_id"]
     mid = _gen_id("rp_")
-    msg = {
+    msg: dict = {
         "mid": mid,
         "block_id": block_id,
         "object_id": object_id,
@@ -579,28 +583,46 @@ async def append_roleplay_message(redis: Redis, object_id: str, *,
         "source": "roleplay",
         "status": "active",
     }
+    if score_base is not None:
+        score_base = max(0, min(100, int(round(score_base))))
+        msg["score_base"] = str(score_base)
+        msg["score"] = str(score_base)   # roleplay 无 mood_bias,score 直接=score_base
     pipe = redis.pipeline()
     pipe.hset(_rp_msg_key(mid), mapping=msg)
     pipe.zadd(_rp_msgs_key(block_id), {mid: ts})
     pipe.hset(_rp_block_key(block_id), "end_ts", ts)
     await pipe.execute()
+    # 联动反推样本队列(仅 assistant 评分才有反推意义;软失败不阻塞录入)
+    if score_base is not None and role == "assistant":
+        from score import service as score_service
+        try:
+            await score_service.record_score_sample(
+                redis, object_id, mid, content, score_base)
+        except Exception:
+            pass
     return mid
 
 
 async def append_roleplay_batch(redis: Redis, object_id: str, *, items: list[dict]) -> list[str]:
-    """批量录 roleplay(同一 open block,连发场景)。items 每项 {role, content, ts?}。返回 mid 列表。"""
+    """批量录 roleplay(同一 open block,连发场景)。items 每项 {role, content, ts?, score_base?}。返回 mid 列表。"""
     mids: list[str] = []
     for item in items:
         mid = await append_roleplay_message(
             redis, object_id,
-            role=item["role"], content=item["content"], ts=item.get("ts", 0))
+            role=item["role"], content=item["content"], ts=item.get("ts", 0),
+            score_base=item.get("score_base"))
         mids.append(mid)
     return mids
 
 
-async def list_roleplay(redis: Redis, object_id: str, *, limit: int = 1000) -> list[dict]:
-    """列 roleplay 样本(跨 block,按 ts 正序,取最近 limit 条)。完整字段含 role/content/mid。"""
-    block_ids = await redis.zrange(_rp_blocks_key(object_id), 0, -1)
+async def list_roleplay(redis: Redis, object_id: str, *,
+                        block_id: str | None = None, limit: int = 1000) -> list[dict]:
+    """列 roleplay 样本(按 ts 正序)。block_id 指定只列该会话;否则跨所有 block。取最近 limit 条。
+    完整字段含 role/content/mid/score(2026-07-05 加)。"""
+    if block_id:
+        block_ids = [block_id]
+    else:
+        block_ids = await redis.zrange(_rp_blocks_key(object_id), 0, -1)
     if not block_ids:
         return []
     pipe = redis.pipeline()
@@ -628,8 +650,8 @@ async def update_roleplay(redis: Redis, object_id: str, mid: str, content: str) 
 
 
 async def delete_roleplay(redis: Redis, object_id: str, mid: str) -> bool:
-    """按 mid 删单条 roleplay 样本(物理删:ZREM 出 block + DEL msg Hash)+ 写 neg 队列(训练负信号)。
-    命中返回 True。roleplay 无 score,物理删比软删干净,neg 队列已留训练负信号。"""
+    """按 mid 删单条 roleplay 样本(物理删:ZREM 出 block + DEL msg Hash)+ 写 roleplay neg 队列(训练负信号)
+    + 清 score 正/负样本队列里该 mid 的样本(2026-07-05,评分联动过的删后不应再驱动反推)。命中返回 True。"""
     msg = await redis.hgetall(_rp_msg_key(mid))
     if not msg:
         return False
@@ -642,4 +664,60 @@ async def delete_roleplay(redis: Redis, object_id: str, mid: str) -> bool:
         {"text": msg.get("content", ""), "mid": mid, "ts": msg.get("ts", 0),
          "role": msg.get("role", ""), "reason": "roleplay_deleted"}, ensure_ascii=False))
     await pipe.execute()
+    # 清 score 样本队列里该 mid 的样本(评分联动过的 assistant 回复删后不残留)
+    from score import service as score_service
+    try:
+        await score_service.remove_sample_by_mid(redis, object_id, mid)
+    except Exception:
+        pass
     return True
+
+
+async def new_roleplay_block(redis: Redis, object_id: str) -> dict:
+    """新建会话(2026-07-05 多会话管理):关闭当前 open roleplay block(若有)+ 开新 open block。
+    返回新 block dict。前端"新建会话"调,使后续录入落到新会话段。"""
+    active = await redis.get(_rp_active_key(object_id))
+    if active:
+        await close_roleplay_block(redis, object_id, reason="new_session")
+    return await _rp_new_block(redis, object_id)
+
+
+async def list_roleplay_blocks(redis: Redis, object_id: str, *, limit: int = 100) -> list[dict]:
+    """列 roleplay 会话(各 block 元数据 + msg_count,按 start_ts 倒序),供面板训练样本页左栏(2026-07-05)。
+    每段 block = 一个训练会话。无会话返回空列表。"""
+    block_ids = await redis.zrevrange(_rp_blocks_key(object_id), 0, limit - 1)
+    if not block_ids:
+        return []
+    pipe = redis.pipeline()
+    for bid in block_ids:
+        pipe.hgetall(_rp_block_key(bid))
+        pipe.zcard(_rp_msgs_key(bid))
+    raws = await pipe.execute()
+    out = []
+    for i in range(0, len(raws), 2):
+        block = raws[i]
+        if not block:
+            continue
+        block["msg_count"] = raws[i + 1] if i + 1 < len(raws) else 0
+        out.append(block)
+    return out
+
+
+async def set_roleplay_score(redis: Redis, object_id: str, mid: str, score_base: int) -> dict | None:
+    """改 roleplay 消息评分(2026-07-05):重写 msg.score_base/score + 调整 score 样本队列
+    (先 remove 旧样本,再按新分归类记录,驱动反推)。消息不存在返回 None。"""
+    if not await redis.exists(_rp_msg_key(mid)):
+        return None
+    score_base = max(0, min(100, int(round(score_base))))
+    await redis.hset(_rp_msg_key(mid), mapping={"score_base": str(score_base), "score": str(score_base)})
+    msg = await redis.hgetall(_rp_msg_key(mid))
+    role = msg.get("role", "")
+    content = msg.get("content", "")
+    from score import service as score_service
+    try:
+        await score_service.remove_sample_by_mid(redis, object_id, mid)
+        if role == "assistant":
+            await score_service.record_score_sample(redis, object_id, mid, content, score_base)
+    except Exception:
+        pass
+    return {"mid": mid, "score_base": score_base, "score": score_base}

@@ -77,3 +77,74 @@ async def test_isolation_from_history(fake_redis):
     assert all("训练样本" not in m.content for m in history)
     assert len(history) == 1
     assert (await chat_store.list_roleplay(fake_redis, "u1"))[0]["content"] == "训练样本"
+
+
+# —— 2026-07-05 多会话 + 评分联动反推 ——
+
+async def test_append_with_score_links_sample(fake_redis):
+    """append assistant + 高分 → msg.score + 联动 pos 样本队列(驱动反推);中性分不进队列"""
+    await chat_store.append_roleplay_message(
+        fake_redis, "u1", role="assistant", content="好回复", score_base=88)
+    rps = await chat_store.list_roleplay(fake_redis, "u1")
+    assert rps[0]["score"] == "88"
+    assert len(await fake_redis.lrange("mychat:score:pos:u1", 0, -1)) == 1   # 88≥85 → pos
+    # 中性分 70 不进任何队列
+    await chat_store.append_roleplay_message(
+        fake_redis, "u1", role="assistant", content="中回复", score_base=70)
+    assert len(await fake_redis.lrange("mychat:score:pos:u1", 0, -1)) == 1
+    assert len(await fake_redis.lrange("mychat:score:neg:u1", 0, -1)) == 0
+
+
+async def test_user_score_not_linked(fake_redis):
+    """user 角色评分不联动样本队列(仅 assistant 才有反推意义)"""
+    await chat_store.append_roleplay_message(
+        fake_redis, "u1", role="user", content="用户消息", score_base=90)
+    assert len(await fake_redis.lrange("mychat:score:pos:u1", 0, -1)) == 0
+
+
+async def test_new_roleplay_block(fake_redis):
+    """新建会话:关当前 open + 开新 block;后续 append 进新会话"""
+    await chat_store.append_roleplay_message(fake_redis, "u1", role="user", content="会话1")
+    b1 = await fake_redis.get(chat_store._rp_active_key("u1"))
+    new_block = await chat_store.new_roleplay_block(fake_redis, "u1")
+    assert new_block["block_id"] != b1
+    assert new_block["status"] == "open"
+    await chat_store.append_roleplay_message(fake_redis, "u1", role="user", content="会话2")
+    b2 = await fake_redis.get(chat_store._rp_active_key("u1"))
+    assert b2 == new_block["block_id"]   # 新消息进新会话
+
+
+async def test_list_roleplay_blocks(fake_redis):
+    """列会话(block 元数据 + msg_count,倒序最近在前)"""
+    await chat_store.append_roleplay_message(fake_redis, "u1", role="user", content="a")
+    await chat_store.new_roleplay_block(fake_redis, "u1")
+    await chat_store.append_roleplay_message(fake_redis, "u1", role="user", content="b")
+    blocks = await chat_store.list_roleplay_blocks(fake_redis, "u1")
+    assert len(blocks) == 2
+    assert all("msg_count" in b for b in blocks)
+    assert blocks[0]["msg_count"] == 1   # 最近会话(第二个)在前,各 1 条
+
+
+async def test_list_roleplay_by_block(fake_redis):
+    """list_roleplay block_id 过滤:只列选中会话"""
+    await chat_store.append_roleplay_message(fake_redis, "u1", role="user", content="s1")
+    await chat_store.new_roleplay_block(fake_redis, "u1")   # 关 block1 开 block2
+    b2 = await fake_redis.get(chat_store._rp_active_key("u1"))
+    await chat_store.append_roleplay_message(fake_redis, "u1", role="user", content="s2")
+    rps = await chat_store.list_roleplay(fake_redis, "u1", block_id=b2)
+    assert [r["content"] for r in rps] == ["s2"]            # 仅该会话
+    assert len(await chat_store.list_roleplay(fake_redis, "u1")) == 2   # 跨所有
+
+
+async def test_set_roleplay_score(fake_redis):
+    """改分:msg.score 更新 + 样本队列调整(旧移除新归类)"""
+    mid = await chat_store.append_roleplay_message(
+        fake_redis, "u1", role="assistant", content="回复", score_base=88)
+    assert len(await fake_redis.lrange("mychat:score:pos:u1", 0, -1)) == 1
+    r = await chat_store.set_roleplay_score(fake_redis, "u1", mid, 30)   # 改低分
+    assert r["score"] == 30
+    assert len(await fake_redis.lrange("mychat:score:pos:u1", 0, -1)) == 0   # pos 清
+    assert len(await fake_redis.lrange("mychat:score:neg:u1", 0, -1)) == 1   # neg 加
+    rps = await chat_store.list_roleplay(fake_redis, "u1")
+    assert rps[0]["score"] == "30"
+    assert await chat_store.set_roleplay_score(fake_redis, "u1", "rp_none", 50) is None   # 不存在
