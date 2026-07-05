@@ -1,17 +1,22 @@
 <script setup lang="ts">
 /**
- * 记忆查看(V2.0 改造 2026-07-05):去 object_id 输入框,启动自动加载全局 oid(单人设/单用户场景)。
- * 统计(core/episodic/long_term_active/forgotten)+ 类别筛选 + 彩色类别标签 + 手动遗忘/锁定。对齐 V2.0 rest_memory。
+ * 记忆查看(V2.0 改造 2026-07-05;2026-07-06 加编辑):
+ * 去 object_id 输入框,启动自动加载全局 oid(单人设/单用户场景)。
+ * 统计(core/episodic/long_term_active/forgotten)+ 类别筛选 + 彩色标签 + 手动遗忘/锁定 + 编辑记忆。
+ * 编辑:手动修正错误记忆(如人称混淆——记忆应以角色第一人称记录,"我"指角色,区分角色与用户)。
  * 作者: 李文煜
  */
 import { ref, computed, watch, onMounted } from 'vue'
-import { NCard, NSpace, NButton, NStatistic, NGrid, NGi, NTag, NEmpty, NSelect, NPopconfirm, useMessage } from 'naive-ui'
-import { getMemory, getMemoryStats, forgetOneMemory, lockMemory } from '@/api'
+import {
+  NCard, NSpace, NButton, NStatistic, NGrid, NGi, NTag, NEmpty, NSelect, NPopconfirm,
+  NModal, NInput, NInputNumber, useMessage,
+} from 'naive-ui'
+import { getMemory, getMemoryStats, forgetOneMemory, lockMemory, updateMemory } from '@/api'
 import { useObject } from '@/composables/useObject'
 
 const message = useMessage()
-const { oid, reloadTick, ensureOid } = useObject()   // 全局共享 object_id + 刷新信号 + 启动自动取 oid
-watch(reloadTick, () => load())   // 头部 OID 回车 → 重载本页
+const { oid, reloadTick, ensureOid } = useObject()
+watch(reloadTick, () => load())
 const stats = ref<any>({})
 const data = ref<any>({})
 const loaded = ref(false)
@@ -25,6 +30,14 @@ const catOptions = [
   { label: '事件 event', value: 'event' },
   { label: '性格 personality', value: 'personality' },
 ]
+const catEditOptions = catOptions.slice(1)   // 编辑用(无"全部")
+
+// —— 编辑记忆 ——
+const editShow = ref(false)
+const editMid = ref('')
+const editContent = ref('')
+const editCategory = ref('fact')
+const editImportance = ref(0.5)
 
 async function load() {
   if (!oid.value || oid.value === 'default') return
@@ -49,6 +62,24 @@ async function forget(mid: string) {
 async function toggleLock(m: any) {
   try { await lockMemory(oid.value, m.id, !m.locked); message.success(m.locked ? '已解锁' : '已锁定(防遗忘)'); load() }
   catch (e: any) { message.error('' + e) }
+}
+function openEdit(m: any) {
+  editMid.value = m.id
+  editContent.value = m.content || ''
+  editCategory.value = m.category || 'fact'
+  editImportance.value = Number(m.importance ?? 0.5)
+  editShow.value = true
+}
+async function applyEdit() {
+  if (!editMid.value) return
+  try {
+    await updateMemory(oid.value, editMid.value, {
+      content: editContent.value, category: editCategory.value, importance: editImportance.value,
+    })
+    message.success('已修改')
+    editShow.value = false; editMid.value = ''
+    await load()
+  } catch (e: any) { message.error('' + e) }
 }
 const ltFiltered = computed(() => {
   const list = data.value.long_term || []
@@ -88,11 +119,12 @@ onMounted(async () => { await ensureOid(); await load() })
           </n-space>
           <n-space>
             <span style="font-size:11px;color:#aaa">{{ fmtTs(m.created_ts) }}</span>
+            <n-button size="tiny" @click="openEdit(m)">编辑</n-button>
             <n-button size="tiny" @click="toggleLock(m)">{{ m.locked ? '解锁' : '锁定' }}</n-button>
             <n-popconfirm @positive-click="forget(m.id)"><template #trigger><n-button size="tiny" type="error" ghost>遗忘</n-button></template>确认遗忘这条？</n-popconfirm>
           </n-space>
         </n-space>
-        <div style="margin-top:6px">{{ m.content }}</div>
+        <div style="margin-top:6px;white-space:pre-wrap">{{ m.content }}</div>
       </n-card>
     </n-card>
 
@@ -110,5 +142,24 @@ onMounted(async () => { await ensureOid(); await load() })
       </n-space>
       <n-empty v-else description="无" />
     </n-card>
+
+    <!-- 编辑记忆弹窗(content 用角色第一人称) -->
+    <n-modal v-model:show="editShow" preset="card" title="编辑记忆" style="width:600px;max-width:92vw">
+      <n-space vertical :size="12">
+        <n-input v-model:value="editContent" type="textarea" :rows="5" autofocus
+                 placeholder="用角色第一人称记录,'我'指角色自己(区分角色与用户)。如'我叫清浔''用户喜欢动漫''用户希望被称为煜'" />
+        <n-space align="center" :wrap="false">
+          <n-select v-model:value="editCategory" :options="catEditOptions" style="width:200px" />
+          <n-space align="center" :size="6">
+            <span style="font-size:12px;color:#999">重要度</span>
+            <n-input-number v-model:value="editImportance" :min="0" :max="1" :step="0.1" style="width:120px" />
+          </n-space>
+        </n-space>
+        <n-space justify="end">
+          <n-button @click="editShow = false">取消</n-button>
+          <n-button type="primary" @click="applyEdit">确定</n-button>
+        </n-space>
+      </n-space>
+    </n-modal>
   </n-space>
 </template>

@@ -145,6 +145,24 @@ async def set_locked(redis: Redis, oid: str, mid: str, locked: bool) -> bool:
     return True
 
 
+async def update_long_term(redis: Redis, oid: str, mid: str, *,
+                           content: str | None = None,
+                           category=None, importance: float | None = None) -> bool:
+    """编辑长期记忆条目(content/category/importance 任一,2026-07-06 手动修正)。
+    返回是否找到。其他字段(access_count/locked/forgotten/...)保留不变。"""
+    m = await get_long_term(redis, oid, mid)
+    if not m:
+        return False
+    if content is not None:
+        m.content = content
+    if category is not None:
+        m.category = category
+    if importance is not None:
+        m.importance = max(0.0, min(1.0, float(importance)))
+    await upsert_long_term(redis, oid, m)
+    return True
+
+
 # ===== State 动态状态(Hash)=====
 async def get_state(redis: Redis, oid: str) -> dict:
     return await redis.hgetall(_K_STATE.format(oid=oid))

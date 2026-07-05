@@ -57,11 +57,15 @@ async def extract_facts(user_text: str, reply_text: str, llm: LLMProvider | None
     if not llm:
         return []
     prompt = (
-        "从以下用户与助手的对话中,抽取值得长期记住的关于用户的事实/偏好/关系/事件(没有则返回空数组 [])。\n"
-        f"用户: {user_text}\n助手: {reply_text}\n"
+        "你在为【角色本人】整理长期记忆。请以角色第一人称('我'指角色自己)视角,"
+        "从以下对话中抽取角色值得长期记住的认知——关于【用户】(对方)的特点/偏好/事件、"
+        "角色与用户的关系、以及角色自身的事(如角色的名字/身份/喜好)。\n"
+        "关键:严格区分'我'(角色)与'用户'(对方),切勿把角色自己的名字或特征记成用户的。"
+        "content 用角色口吻,例如'我叫清浔''用户希望被称为煜''用户喜欢动漫''我和用户是同学'。\n"
+        f"用户: {user_text}\n角色(我): {reply_text}\n"
         "严格只输出一个 JSON 数组,每个元素形如 "
         '{"content": str, "importance": 0-1, "emotion": 0-1, '
-        '"category": "fact|preference|relationship|event|personality"},不要解释。'
+        '"category": "fact|preference|relationship|event|personality"},没有则返回 []。'
     )
     try:
         resp = await llm.chat([Message(role="user", content=prompt)], model=model)
@@ -100,11 +104,14 @@ async def consolidate_facts(episodic_summaries: list[str], llm: LLMProvider | No
         return []
     joined = "\n".join(f"- {s}" for s in episodic_summaries[-20:])   # 最近 20 条摘要,控 token
     prompt = (
-        "以下是关于某用户的若干段对话情景摘要。请从中提炼值得长期记住的关于用户的事实/偏好/关系/事件"
-        "(没有则返回空数组 [])。\n" + joined +
+        "你在为【角色本人】整理长期记忆。以下是角色与用户若干段对话的情景摘要。"
+        "请以角色第一人称('我'指角色自己)视角,从中提炼角色值得长期记住的认知——"
+        "关于用户的特点/偏好、角色与用户的关系、角色自身的事。\n"
+        "关键:严格区分'我'(角色)与'用户'(对方),切勿把角色名字/特征记成用户的。"
+        "content 用角色口吻(如'我叫清浔''用户喜欢动漫')。\n" + joined +
         "\n严格只输出一个 JSON 数组,每个元素形如 "
         '{"content": str, "importance": 0-1, "emotion": 0-1, '
-        '"category": "fact|preference|relationship|event|personality"},不要解释。'
+        '"category": "fact|preference|relationship|event|personality"},没有则返回 []。'
     )
     try:
         resp = await llm.chat([Message(role="user", content=prompt)], model=model)

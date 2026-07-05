@@ -96,6 +96,33 @@ async def lock(object_id: str, mid: str, body: dict = Body(default={})):
     return {"locked": locked}
 
 
+@router.patch("/memory/{object_id}/{mid}", dependencies=[Depends(verify_token)])
+async def edit_memory(object_id: str, mid: str, body: dict = Body(default={})):
+    """编辑长期记忆条目(2026-07-06 手动修正)。body: {content?, category?, importance?}(至少其一)。
+    category 须为 fact/preference/relationship/event/personality。返回更新后的条目。"""
+    content = body.get("content")
+    category = body.get("category")
+    importance = body.get("importance")
+    if content is None and category is None and importance is None:
+        raise HTTPException(status_code=400, detail="至少传 content/category/importance 之一")
+    cat = None
+    if category is not None:
+        from memory.models import Category
+        try:
+            cat = Category(category)
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail=f"category 须为 {[c.value for c in Category]}")
+    redis = await get_redis()
+    ok = await store.update_long_term(
+        redis, object_id, mid, content=content, category=cat,
+        importance=float(importance) if importance is not None else None)
+    if not ok:
+        raise HTTPException(status_code=404, detail="memory not found")
+    updated = await store.get_long_term(redis, object_id, mid)
+    return updated.to_dict() if updated else {"updated": True}
+
+
 @router.post("/memory/{object_id}/forget", dependencies=[Depends(verify_token)])
 async def batch_forget(object_id: str, body: dict = Body(default={})):
     """批量遗忘:body {"category"?, "keyword"?}。返回遗忘条数"""

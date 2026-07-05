@@ -74,6 +74,8 @@ export const restoreMemory = (oid: string, mid: string) =>
   api.post(`/api/v1/memory/${oid}/${mid}/restore`).then((r) => r.data)
 export const lockMemory = (oid: string, mid: string, locked = true) =>
   api.post(`/api/v1/memory/${oid}/${mid}/lock`, { locked }).then((r) => r.data)
+export const updateMemory = (oid: string, mid: string, body: { content?: string; category?: string; importance?: number }) =>
+  api.patch(`/api/v1/memory/${oid}/${mid}`, body).then((r) => r.data)
 export const batchForgetMemory = (oid: string, body: any = {}) =>
   api.post(`/api/v1/memory/${oid}/forget`, body).then((r) => r.data)
 
