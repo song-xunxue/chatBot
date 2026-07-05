@@ -20,6 +20,8 @@ export const rollbackPersona = (id: string, version_no: number) =>
 // —— 聊天历史 chat(block 三层)——
 export const listSessions = (limit = 50) =>
   api.get('/api/v1/chat/sessions', { params: { limit } }).then((r) => r.data)
+export const listRecentBlocks = (limit = 80) =>
+  api.get('/api/v1/chat/recent_blocks', { params: { limit } }).then((r) => r.data)
 export const listBlocks = (oid: string, limit = 100) =>
   api.get(`/api/v1/chat/${oid}/blocks`, { params: { limit } }).then((r) => r.data)
 export const listMessages = (oid: string, params: { block_id?: string; limit?: number } = {}) =>
@@ -99,6 +101,8 @@ export const answerTakeoverBatch = (oid: string, items: { pid?: string; answer: 
   api.post(`/api/v1/takeover/${oid}/answer/batch`, { items }).then((r) => r.data)
 export const skipTakeover = (oid: string, pid?: string) =>
   api.post(`/api/v1/takeover/${oid}/skip`, { pid }).then((r) => r.data)
+export const sendTakeover = (oid: string, content: string) =>
+  api.post(`/api/v1/takeover/${oid}/send`, { content }).then((r) => r.data)
 
 // —— roleplay 训练样本(M8)——
 export const addRoleplay = (oid: string, body: { role: string; content: string }) =>

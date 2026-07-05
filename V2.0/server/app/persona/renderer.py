@@ -1,6 +1,6 @@
 """
 人设 system_prompt 渲染
-把 PersonaCard 各维度(creator_notes/description/personality/scenario
+把 PersonaCard 各维度(creator_notes/description/user_description/personality/scenario
 + profile/preferences/relationship/example_dialogue) + 动态状态
 拼装为 LLM system prompt。各段"非空才输出",段顺序固定。
 
@@ -10,6 +10,10 @@
 2026-06-27
 变更说明：
   1. M2 从 V1.0 移植 renderer 到 V2.0(零业务改动)
+
+2026-07-05
+变更说明：
+  1. 面板改造:新增【关于用户】段(渲染 card.user_description),插入【喜好与厌恶】后、【与用户的关系】前
 """
 from persona.models import PersonaCard, DynamicState
 
@@ -74,7 +78,7 @@ def render_system_prompt(card: PersonaCard | None,
                          state: DynamicState | None = None) -> str:
     """拼装人设 system prompt。
     card 为 None 或全空时回退默认 prompt;各段"非空才输出",段顺序固定:
-      核心人设指令→背景设定→人物画像→性格→喜好与厌恶→与用户的关系→开场白→场景示例→示例对话→当前状态。
+      核心人设指令→背景设定→人物画像→性格→喜好与厌恶→关于用户→与用户的关系→开场白→场景示例→示例对话→当前状态。
     """
     if card is None:
         return _DEFAULT_PROMPT
@@ -91,6 +95,9 @@ def render_system_prompt(card: PersonaCard | None,
     pref_txt = _render_preferences(card.preferences)
     if pref_txt:
         parts.append(f"【喜好与厌恶】\n{pref_txt}")
+    # 关于用户(对话另一方描述,让人设熟悉用户)
+    if card.user_description:
+        parts.append(f"【关于用户】\n{card.user_description}")
     # 与用户的关系(只渲染 relation;greeting 单独成段)
     if card.relationship and card.relationship.relation:
         parts.append(f"【与用户的关系】\n{card.relationship.relation}")

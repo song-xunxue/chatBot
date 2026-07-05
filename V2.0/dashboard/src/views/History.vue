@@ -1,20 +1,20 @@
 <script setup lang="ts">
 /**
- * 对话历史(V2.0 改造 2026-07-03):IM 风格 = 左侧会话列表(自动列最近活跃,无需手填 openid)+
- * 主区对话流(进页面自动加载 + 5s 轮询刷新)+ 每条 ai/proxy 消息内联改分 +
- * 评分总览(健康度/反推/正负样本,合并自原 Score.vue,Score tab 已删)。
- * 选中会话 → 同步 useObject.oid(Memory/Mood 等页跟随,顺带修同类 oid bug)。
+ * 对话历史(V2.0 改造 2026-07-05):左栏改为 block 级会话列表(每段对话一条,
+ * 5h 后再聊自动开新 block → 左栏出现新会话条目,符合"会话=一段对话"心智)。
+ * 主区显示选中 block 的消息流;每条消息支持「改分」(ai/proxy)/「编辑内容」(软改)/「软删」三种操作并存。
+ * 评分总览(健康度/反推/正负样本)针对选中 block 所属 object_id。
  * 作者: 李文煜
  */
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale } from 'chart.js'
 import {
-  NSpace, NButton, NInputNumber, NTag, NPopconfirm, NEmpty, NCard,
-  NCollapse, NCollapseItem, NModal, useMessage,
+  NSpace, NButton, NTag, NPopconfirm, NEmpty, NCard,
+  NCollapse, NCollapseItem, NModal, NInput, NInputNumber, useMessage,
 } from 'naive-ui'
 import {
-  listSessions, listBlocks, listMessages, deleteMessage, closeBlock,
+  listRecentBlocks, listMessages, updateMessage, deleteMessage, closeBlock,
   getHealth, getSamples, reverseInferDryRun, reverseInferApply, setScore,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
@@ -24,16 +24,18 @@ ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 const message = useMessage()
 const { oid, reloadTick } = useObject()
 
-// —— 会话列表(左栏)——
-const sessions = ref<any[]>([])
-const activeOid = ref('')                       // 当前选中会话(本地,同步到全局 oid)
-const loadingSessions = ref(false)
+// —— 左栏:block 级会话列表 ——
+const recentBlocks = ref<any[]>([])
+const activeBlockId = ref('')
+const activeOid = ref('')
+const loadingBlocks = ref(false)
 
-// —— 对话流(主区)——
-const blocks = ref<any[]>([])                   // 当前会话 blocks(每个含 _messages)
-const streamEl = ref<HTMLElement | null>(null)  // 对话流滚动容器(新消息自动滚底)
+// —— 对话流(当前选中 block)——
+const currentBlock = ref<any>(null)
+const messages = ref<any[]>([])
+const streamEl = ref<HTMLElement | null>(null)
 
-// —— 评分总览(合并自 Score.vue)——
+// —— 评分总览(针对 activeOid)——
 const health = ref<any>(null)
 const posSamples = ref<any[]>([])
 const negSamples = ref<any[]>([])
@@ -41,10 +43,15 @@ const inferDiff = ref<any>(null)
 const inferToken = ref('')
 const inferring = ref(false)
 
-// —— 内联改分(单例 NModal 服务所有消息)——
+// —— 内联改分弹窗 ——
 const scoreModalShow = ref(false)
 const scoreModalMid = ref('')
 const scoreModalBase = ref(80)
+
+// —— 编辑内容弹窗(软改)——
+const editModalShow = ref(false)
+const editModalMid = ref('')
+const editModalContent = ref('')
 
 const POLL_MS = 5000
 let pollTimer: number | null = null
@@ -59,7 +66,6 @@ const chartData = computed(() => ({
 }))
 const chartOptions = { responsive: true, plugins: { legend: { display: false } } }
 
-// —— 时间格式化 ——
 function fmtTs(ts: any): string {
   const n = Number(ts)
   if (!n) return '—'
@@ -67,7 +73,6 @@ function fmtTs(ts: any): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 function relTs(ts: any): string {
-  // 相对时间:刚刚 / Xm / Xh / Xd(左侧会话列表活跃度展示)
   const n = Number(ts)
   if (!n) return '—'
   const diff = Date.now() - n
@@ -76,46 +81,47 @@ function relTs(ts: any): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
   return `${Math.floor(diff / 86_400_000)}d`
 }
-function shortOid(s: string): string { return s ? s.slice(0, 8) : '—' }
+function shortOid(s: string): string { return s ? s.slice(0, 6) : '—' }
 
-// —— 会话列表 ——
-async function loadSessions() {
-  loadingSessions.value = true
+// —— 左栏 block 列表 ——
+async function loadRecentBlocks() {
+  loadingBlocks.value = true
   try {
-    sessions.value = await listSessions(50)
-    // 无选中 或 选中已不在列表 → 自动选最近活跃(第一个)
-    if (sessions.value.length && !sessions.value.some(s => s.object_id === activeOid.value)) {
-      await selectSession(sessions.value[0].object_id)
+    recentBlocks.value = await listRecentBlocks(80)
+    // 刷新当前 block 元信息(msg_count/status 可能变)
+    if (activeBlockId.value) {
+      const b = recentBlocks.value.find((x) => x.block_id === activeBlockId.value)
+      if (b) currentBlock.value = b
     }
-  } catch (e: any) { message.error('会话列表加载失败: ' + e) }
-  finally { loadingSessions.value = false }
+    // 无选中 或 选中已不在列表 → 自动选最近(第一个,通常 status=open 的最近一段)
+    if (recentBlocks.value.length && !recentBlocks.value.some((b) => b.block_id === activeBlockId.value)) {
+      await selectBlock(recentBlocks.value[0])
+    } else if (activeBlockId.value) {
+      await loadMessages()   // 刷新当前 block 新消息
+    }
+  } catch (e: any) { message.error('' + e) }
+  finally { loadingBlocks.value = false }
 }
 
-async function selectSession(objectId: string) {
-  if (activeOid.value !== objectId) {
-    activeOid.value = objectId
-    oid.value = objectId              // 同步全局(Memory/Mood 等页跟随)
-    blocks.value = []
-  }
-  await loadHistory()
+async function selectBlock(b: any) {
+  activeBlockId.value = b.block_id
+  activeOid.value = b.object_id
+  oid.value = b.object_id              // 同步全局(Memory/Mood 等页跟随)
+  currentBlock.value = b
+  messages.value = []
+  await loadMessages()
   await loadScore()
 }
 
-// —— 对话流(当前选中会话)——
-async function loadHistory() {
-  if (!activeOid.value) return
+async function loadMessages() {
+  if (!activeOid.value || !activeBlockId.value) return
   try {
-    const bs: any[] = await listBlocks(activeOid.value)
-    for (const b of bs) {
-      b._messages = await listMessages(activeOid.value, { block_id: b.block_id })
-    }
-    blocks.value = bs.slice().reverse()   // 正序(旧在前、新 block 在底部),新消息出现在底部可见(修历史不更新)
+    messages.value = await listMessages(activeOid.value, { block_id: activeBlockId.value })
     await nextTick()
     if (streamEl.value) streamEl.value.scrollTop = streamEl.value.scrollHeight  // 新消息滚底
   } catch (e: any) { message.error('' + e) }
 }
 
-// —— 评分总览 ——
 async function loadScore() {
   if (!activeOid.value) return
   try {
@@ -125,32 +131,30 @@ async function loadScore() {
   } catch (e: any) { /* 评分加载失败不阻塞对话流 */ }
 }
 
-// —— 轮询:刷新会话列表 + 当前会话历史(评分不每轮刷,selectSession/refreshAll/改分时刷)——
 async function poll() {
   if (typeof document !== 'undefined' && document.hidden) return
-  await loadSessions()
-  if (activeOid.value) await loadHistory()
+  await loadRecentBlocks()
 }
 function startPoll() { stopPoll(); pollTimer = window.setInterval(poll, POLL_MS) }
 function stopPoll() { if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null } }
 function onVis() { document.hidden ? stopPoll() : (poll(), startPoll()) }
 
 async function refreshAll() {
-  await loadSessions()
-  if (activeOid.value) { await loadHistory(); await loadScore() }
+  await loadRecentBlocks()
+  if (activeOid.value) await loadScore()
 }
 
 // —— 消息操作 ——
 async function del(mid: string) {
-  try { await deleteMessage(mid); message.success('已软删(若 ai/有分则联动负样本)'); await loadHistory(); await loadScore() }
+  try { await deleteMessage(mid); message.success('已软删(若 ai/有分则联动负样本)'); await loadMessages(); await loadScore() }
   catch (e: any) { message.error('' + e) }
 }
 async function closeBlk(bid: string) {
-  try { await closeBlock(bid); message.success('已关闭 block'); await loadHistory() }
+  try { await closeBlock(bid); message.success('已关闭 block'); await loadRecentBlocks() }
   catch (e: any) { message.error('' + e) }
 }
 
-// —— 内联改分(每条 ai/proxy 消息)——
+// —— 内联改分 ——
 function openScore(mid: string, scoreBase: any) {
   scoreModalMid.value = mid
   const b = Number(scoreBase)
@@ -162,15 +166,30 @@ async function applyScore() {
   try {
     const r = await setScore(scoreModalMid.value, scoreModalBase.value)
     message.success(`已改分:score = ${r.score}`)
-    scoreModalShow.value = false
-    scoreModalMid.value = ''
-    await loadHistory()
-    await loadScore()
+    scoreModalShow.value = false; scoreModalMid.value = ''
+    await loadMessages(); await loadScore()
   } catch (e: any) { message.error('' + e) }
 }
 
-// —— 反推人设(移自 Score.vue)——
+// —— 编辑内容(软改)——
+function openEdit(mid: string, content: string) {
+  editModalMid.value = mid
+  editModalContent.value = content || ''
+  editModalShow.value = true
+}
+async function applyEdit() {
+  if (!editModalMid.value) return
+  try {
+    await updateMessage(editModalMid.value, { content: editModalContent.value })
+    message.success('已修改内容')
+    editModalShow.value = false; editModalMid.value = ''
+    await loadMessages()
+  } catch (e: any) { message.error('' + e) }
+}
+
+// —— 反推人设 ——
 async function dryRun() {
+  if (!activeOid.value) return
   inferring.value = true
   try {
     const r = await reverseInferDryRun(activeOid.value, { mode: 'fill_empty' })
@@ -184,22 +203,15 @@ async function applyInfer() {
   try {
     await reverseInferApply(activeOid.value, inferToken.value)
     message.success('反推已落库')
-    inferDiff.value = null
-    inferToken.value = ''
+    inferDiff.value = null; inferToken.value = ''
   } catch (e: any) { message.error('' + e) }
 }
 
-// 头部 oid 回车(顶栏手输特殊 openid):切换或刷新
-watch(reloadTick, () => {
-  if (oid.value && oid.value !== 'default' && oid.value !== activeOid.value) selectSession(oid.value)
-  else refreshAll()
-})
+// 头部 oid 回车:刷新(选中由 block 列表驱动,头部仅触发刷新)
+watch(reloadTick, () => refreshAll())
 
 onMounted(async () => {
-  // 全局已有有效 oid(从其他页带来)→ 优先;否则 loadSessions 自动选最近活跃
-  if (oid.value && oid.value !== 'default') activeOid.value = oid.value
-  await loadSessions()
-  if (activeOid.value) { await loadHistory(); await loadScore() }
+  await loadRecentBlocks()
   startPoll()
   window.addEventListener('visibilitychange', onVis)
 })
@@ -208,27 +220,31 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
 
 <template>
   <div style="display:flex; height:calc(100vh - 92px)">
-    <!-- 左侧会话列表 -->
-    <div style="width:220px; border-right:1px solid #efeff5; overflow:auto; padding:8px; flex-shrink:0">
+    <!-- 左栏:block 级会话列表(每段对话一条) -->
+    <div style="width:230px; border-right:1px solid #efeff5; overflow:auto; padding:8px; flex-shrink:0">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
-        <span style="font-weight:600; font-size:13px">会话</span>
-        <n-button size="tiny" quaternary :loading="loadingSessions" @click="refreshAll">刷新</n-button>
+        <span style="font-weight:600; font-size:13px">会话(按段落)</span>
+        <n-button size="tiny" quaternary :loading="loadingBlocks" @click="refreshAll">刷新</n-button>
       </div>
-      <n-empty v-if="!sessions.length" size="small" description="暂无会话" />
-      <div v-for="s in sessions" :key="s.object_id"
-           @click="selectSession(s.object_id)"
+      <n-empty v-if="!recentBlocks.length" size="small" description="暂无会话" />
+      <div v-for="b in recentBlocks" :key="b.block_id"
+           @click="selectBlock(b)"
            :style="{ padding:'8px 10px', borderRadius:'8px', cursor:'pointer', marginBottom:'4px',
-             background: s.object_id === activeOid ? '#e8f1ff' : 'transparent' }">
-        <div style="font-weight:600; font-size:13px">{{ shortOid(s.object_id) }}</div>
-        <div style="font-size:11px; color:#999; display:flex; justify-content:space-between">
-          <span>{{ relTs(s.last_ts) }}</span><span>{{ s.block_count }} 块</span>
+             background: b.block_id === activeBlockId ? '#e8f1ff' : 'transparent' }">
+        <div style="display:flex; align-items:center; justify-content:space-between">
+          <span style="font-weight:600; font-size:13px">{{ fmtTs(b.start_ts) }}</span>
+          <n-tag size="tiny" :type="b.status === 'open' ? 'success' : 'default'">{{ b.status === 'open' ? '进行中' : '已结束' }}</n-tag>
+        </div>
+        <div style="font-size:11px; color:#999; display:flex; justify-content:space-between; margin-top:2px">
+          <span>{{ relTs(b.start_ts) }} · {{ b.msg_count }} 条</span>
+          <span title="用户标识(单用户下均相同)">用户{{ shortOid(b.object_id) }}</span>
         </div>
       </div>
     </div>
 
     <!-- 主区:评分总览 + 对话流 + 正负样本 -->
     <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; padding-left:16px; min-width:0">
-      <!-- 评分总览(合并自 Score.vue) -->
+      <!-- 评分总览(针对当前 object_id) -->
       <n-card v-if="activeOid" size="small" style="margin-bottom:12px; flex-shrink:0">
         <template #header>
           <n-space align="center">
@@ -260,44 +276,43 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
         </n-space>
       </n-card>
 
+      <!-- 当前 block 信息条 -->
+      <div v-if="currentBlock" style="font-size:12px; color:#888; margin-bottom:6px; flex-shrink:0">
+        当前段落:{{ fmtTs(currentBlock.start_ts) }} → {{ fmtTs(currentBlock.end_ts) }} · {{ currentBlock.msg_count }} 条 ·
+        <n-tag size="tiny" :type="currentBlock.status === 'open' ? 'success' : 'default'">{{ currentBlock.status }}</n-tag>
+        <n-button v-if="currentBlock.status === 'open'" size="tiny" text @click="closeBlk(currentBlock.block_id)">关 block(强制开新段落)</n-button>
+      </div>
+
       <!-- 对话流 -->
-      <div v-if="activeOid" ref="streamEl" style="flex:1; overflow:auto; padding-right:8px; min-height:0">
-        <n-empty v-if="!blocks.length" description="该会话暂无消息" />
-        <div v-for="b in blocks" :key="b.block_id">
-          <!-- block 时间分隔线 -->
-          <div style="text-align:center; margin:12px 0 6px; font-size:11px; color:#bbb">
-            — {{ fmtTs(b.start_ts) }} → {{ fmtTs(b.end_ts) }} · {{ b.msg_count }} 条 ·
-            <n-tag size="tiny" :type="b.status === 'open' ? 'success' : 'default'">{{ b.status }}</n-tag>
-            <n-button v-if="b.status === 'open'" size="tiny" text @click="closeBlk(b.block_id)">关 block</n-button>
-          </div>
-          <!-- 消息气泡 -->
-          <div v-for="m in (b._messages || [])" :key="m.mid"
-               :style="{ display:'flex', justifyContent: m.sender === 'user' ? 'flex-end' : 'flex-start', margin:'4px 0' }">
-            <div :style="{ maxWidth:'72%', padding:'6px 10px', borderRadius:'10px',
-              background: m.sender === 'user' ? '#DCF8C6' : (m.sender === 'system' ? '#f0f0f0' : '#E8F1FF'), color:'#222' }">
-              <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:6px">
-                <span>{{ m.sender }} · {{ fmtTs(m.ts) }}</span>
-                <n-tag v-if="m.score !== '' && m.score !== undefined && m.score !== null" size="tiny"
-                       :type="Number(m.score) >= 85 ? 'success' : (Number(m.score) < 60 ? 'error' : 'default')">
-                  分 {{ m.score }}
-                </n-tag>
-                <n-tag v-if="m.status && m.status !== 'active'" size="tiny">{{ m.status }}</n-tag>
-              </div>
-              <div style="word-break:break-all">{{ m.content }}</div>
-              <!-- 操作:ai/proxy 可改分(代答 proxy 同样支持);所有可软删 -->
-              <n-space v-if="m.status !== 'deleted'" style="margin-top:2px" align="center" :size="4">
-                <n-button v-if="m.sender === 'ai' || m.sender === 'proxy'" size="tiny" type="primary" ghost
-                          @click="openScore(m.mid, m.score_base)">改分</n-button>
-                <n-popconfirm @positive-click="del(m.mid)">
-                  <template #trigger><n-button size="tiny" type="error" ghost>软删</n-button></template>
-                  软删(→负样本)?
-                </n-popconfirm>
-              </n-space>
+      <div v-if="activeBlockId" ref="streamEl" style="flex:1; overflow:auto; padding-right:8px; min-height:0">
+        <n-empty v-if="!messages.length" description="该段落暂无消息" />
+        <div v-for="m in messages" :key="m.mid"
+             :style="{ display:'flex', justifyContent: m.sender === 'user' ? 'flex-end' : 'flex-start', margin:'4px 0' }">
+          <div :style="{ maxWidth:'72%', padding:'6px 10px', borderRadius:'10px',
+            background: m.sender === 'user' ? '#DCF8C6' : (m.sender === 'system' ? '#f0f0f0' : '#E8F1FF'), color:'#222' }">
+            <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:6px">
+              <span>{{ m.sender }} · {{ fmtTs(m.ts) }}</span>
+              <n-tag v-if="m.score !== '' && m.score !== undefined && m.score !== null" size="tiny"
+                     :type="Number(m.score) >= 85 ? 'success' : (Number(m.score) < 60 ? 'error' : 'default')">
+                分 {{ m.score }}
+              </n-tag>
+              <n-tag v-if="m.status && m.status !== 'active'" size="tiny">{{ m.status }}</n-tag>
             </div>
+            <div style="word-break:break-all; white-space:pre-wrap">{{ m.content }}</div>
+            <!-- 操作:改分(仅 ai/proxy)/ 编辑内容(软改,所有)/ 软删(所有) 三者并存 -->
+            <n-space v-if="m.status !== 'deleted'" style="margin-top:2px" align="center" :size="4">
+              <n-button v-if="m.sender === 'ai' || m.sender === 'proxy'" size="tiny" type="primary" ghost
+                        @click="openScore(m.mid, m.score_base)">改分</n-button>
+              <n-button size="tiny" type="info" ghost @click="openEdit(m.mid, m.content)">编辑内容</n-button>
+              <n-popconfirm @positive-click="del(m.mid)">
+                <template #trigger><n-button size="tiny" type="error" ghost>软删</n-button></template>
+                软删(→负样本)?
+              </n-popconfirm>
+            </n-space>
           </div>
         </div>
       </div>
-      <n-empty v-else description="左侧选择一个会话" style="margin:auto" />
+      <n-empty v-else description="左侧选择一个会话段落" style="margin:auto" />
 
       <!-- 正负样本(折叠) -->
       <n-collapse v-if="activeOid" style="margin-top:8px; flex-shrink:0" :default-expanded-names="[]">
@@ -322,7 +337,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       </n-collapse>
     </div>
 
-    <!-- 内联改分弹窗(单例,服务所有 ai/proxy 消息) -->
+    <!-- 内联改分弹窗 -->
     <n-modal v-model:show="scoreModalShow" preset="dialog" title="改分">
       <n-space vertical>
         <span style="font-size:12px; color:#999">覆盖 score_base,保留历史 mood_bias 重算 score</span>
@@ -332,6 +347,17 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
         <n-button @click="scoreModalShow = false">取消</n-button>
         <n-button type="primary" @click="applyScore">确定</n-button>
       </template>
+    </n-modal>
+
+    <!-- 编辑内容弹窗(软改) -->
+    <n-modal v-model:show="editModalShow" preset="card" title="编辑消息内容" style="width:640px;max-width:92vw">
+      <n-space vertical :size="12">
+        <n-input v-model:value="editModalContent" type="textarea" :rows="10" autofocus />
+        <n-space justify="end">
+          <n-button @click="editModalShow = false">取消</n-button>
+          <n-button type="primary" @click="applyEdit">确定</n-button>
+        </n-space>
+      </n-space>
     </n-modal>
   </div>
 </template>

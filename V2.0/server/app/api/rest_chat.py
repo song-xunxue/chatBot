@@ -30,6 +30,14 @@ async def list_sessions(limit: int = Query(default=50, ge=1, le=500)):
     return await chat_store.list_recent_sessions(redis, limit=limit)
 
 
+@router.get("/chat/recent_blocks", dependencies=[Depends(verify_token)])
+async def list_recent_blocks(limit: int = Query(default=50, ge=1, le=500)):
+    """列最近活跃 block(跨所有 object_id,按 start_ts 倒序),供面板历史页 block 级会话列表。
+    单用户场景:每个 block = 一段会话。返回 [{block_id, object_id, start_ts, end_ts, status, msg_count}]。"""
+    redis = await get_redis()
+    return await chat_store.list_recent_blocks(redis, limit=limit)
+
+
 @router.get("/chat/{object_id}/blocks", dependencies=[Depends(verify_token)])
 async def list_blocks(object_id: str, limit: int = Query(default=100, ge=1, le=1000)):
     """列出会话所有 block(按 start_ts 倒序,最近在前),含 status/时间/summary/msg_count"""

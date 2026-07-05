@@ -14,6 +14,11 @@
 变更说明：
   1. M8 新建 takeover service:resolve_and_deliver(单条全链路)/resolve_and_deliver_batch(批量)/
      _deliver(被动优先降级主动)/TakeoverNotFound
+
+2026-07-05
+变更说明：
+  1. 面板改造:新增 send_proactive(主动发送,不依赖 pending;落 proxy 消息 + 下发 QQ,
+     不走评分/记忆编码副作用链——无 user 回合,评分无意义)
 """
 import logging
 import time
@@ -150,3 +155,17 @@ async def resolve_and_deliver_batch(redis, oid: str, items: list, *, persona_car
             logger.exception("代答 batch 单条失败 oid=%s", oid)
             results.append({"ok": False, "error": str(e)})
     return {"results": results, "success": success, "truncated": truncated}
+
+
+async def send_proactive(redis, oid: str, content: str) -> dict:
+    """主动发送(管理员不依赖 pending 直接推消息给用户)。
+    与 resolve_and_deliver 区别:无需 pending 出队,管理员主动发起对话。
+    落 proxy 消息(进 live 历史,供后续 LLM 上下文引用)+ 下发 QQ(主动消息,耗月配额)。
+    不走评分/记忆编码副作用链(无 user 回合,评分无意义);proxy 消息本身进 chat history 已够记忆引用。
+    返回 {proxy_mid, delivered, mode}。"""
+    base_ts = int(time.time() * 1000)
+    proxy_mid = await chat_store.append_message(
+        redis, oid, sender="proxy", content=content, source="proxy", ts=base_ts)
+    msg_seq = await takeover_store.next_msg_seq(redis, oid)
+    deliver = await _deliver(redis, oid, content, msg_id="", msg_seq=msg_seq, pid="proactive")
+    return {"proxy_mid": proxy_mid, "delivered": deliver["delivered"], "mode": deliver["mode"]}

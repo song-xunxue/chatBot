@@ -114,3 +114,20 @@ async def test_roleplay_update_delete(fake_redis):
     # neg 队列有记录
     neg = await fake_redis.lrange(chat_store._roleplay_neg_key("u1"), 0, -1)
     assert len(neg) == 1
+
+
+async def test_list_recent_blocks(fake_redis):
+    """跨 object_id 列最近 block(按 start_ts 倒序),含元数据 + msg_count(面板 block 级会话列表,2026-07-05)"""
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="u1-a")
+    await chat_store.append_message(fake_redis, "u2", sender="user", content="u2-a")
+    # u1 关当前 block 后再 append → 开新 block(最后开,start_ts 最晚,倒序应在最前)
+    bid = await fake_redis.get(chat_store._active_key("u1"))
+    await chat_store.close_block(fake_redis, bid)
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="u1-b")
+    blocks = await chat_store.list_recent_blocks(fake_redis, limit=50)
+    assert len(blocks) == 3   # u1×2 + u2×1
+    # 最新开的 block 在前(u1 第二个 block)
+    assert blocks[0]["object_id"] == "u1"
+    assert blocks[0]["msg_count"] == 1
+    assert {"block_id", "object_id", "start_ts", "end_ts", "status", "msg_count"} <= set(blocks[0].keys())
+    assert {b["object_id"] for b in blocks} == {"u1", "u2"}

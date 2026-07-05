@@ -9,9 +9,15 @@
   POST /takeover/{oid}/answer          单条代答(pid 空取队首)
   POST /takeover/{oid}/answer/batch    批量代答(逐条下发 QQ)
   POST /takeover/{oid}/skip            跳过(队首或指定 pid)
+  POST /takeover/{oid}/send            主动发送(不依赖 pending,管理员直接推消息给用户)
 
 作者: 李文煜
 日期: 2026-06-30
+
+2026-07-05
+变更说明：
+  1. 面板改造:新增 POST /takeover/{oid}/send 主动发送端点(takeover 模式下面板主动触达用户,
+     无需用户先发),委托 takeover_svc.send_proactive(落 proxy 消息 + 下发 QQ)
 """
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -83,3 +89,15 @@ async def skip(oid: str, body: dict = Body(default={})):
     redis = await get_redis()
     hit = await takeover_store.skip(redis, oid, pid)
     return {"skipped": hit, "pid": pid}
+
+
+@router.post("/takeover/{oid}/send", dependencies=[Depends(verify_token)])
+async def send_proactive(oid: str, body: dict = Body(default={})):
+    """主动发送(不依赖 pending,管理员直接推消息给用户)。body: {content}。
+    落 proxy 消息(进 live 历史)+ 下发 QQ。takeover 模式下 LLM 已被 webhook 拦截,
+    此端点是面板主动触达用户的途径(用户无需先发消息)。"""
+    content = (body.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content required")
+    redis = await get_redis()
+    return await takeover_svc.send_proactive(redis, oid, content)

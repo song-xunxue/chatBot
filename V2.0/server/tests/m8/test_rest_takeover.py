@@ -107,3 +107,18 @@ async def test_skip(monkeypatch, fake_redis):
         r = await ac.post("/api/v1/takeover/u1/skip", json={}, headers=_H)
         assert r.json()["skipped"] is True
     assert await takeover_store.list_queue(fake_redis, "u1") == []
+
+
+async def test_send_endpoint(monkeypatch, fake_redis):
+    """POST /takeover/{oid}/send 主动发送(2026-07-05):不依赖 pending,落 proxy + 下发"""
+    app = _wire(monkeypatch, fake_redis)
+    monkeypatch.setattr("qq.api_client.send_c2c_message", _noop_send)
+    async with await _aclient(app) as ac:
+        r = await ac.post("/api/v1/takeover/u1/send", json={"content": "主动"}, headers=_H)
+        data = r.json()
+        assert data["delivered"] is True
+        assert data["mode"] == "active"
+        assert "proxy_mid" in data
+        # 空 content → 400
+        r2 = await ac.post("/api/v1/takeover/u1/send", json={"content": "  "}, headers=_H)
+        assert r2.status_code == 400

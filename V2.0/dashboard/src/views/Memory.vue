@@ -1,16 +1,16 @@
 <script setup lang="ts">
 /**
- * 记忆查看(V2.0 M7):统计(core/episodic/long_term_active/forgotten)+ 类别筛选 +
- * 彩色类别标签 + 手动遗忘/锁定。对齐 V2.0 rest_memory。
+ * 记忆查看(V2.0 改造 2026-07-05):去 object_id 输入框,启动自动加载全局 oid(单人设/单用户场景)。
+ * 统计(core/episodic/long_term_active/forgotten)+ 类别筛选 + 彩色类别标签 + 手动遗忘/锁定。对齐 V2.0 rest_memory。
  * 作者: 李文煜
  */
-import { ref, computed, watch } from 'vue'
-import { NCard, NSpace, NInput, NButton, NStatistic, NGrid, NGi, NTag, NEmpty, NSelect, NPopconfirm, useMessage } from 'naive-ui'
+import { ref, computed, watch, onMounted } from 'vue'
+import { NCard, NSpace, NButton, NStatistic, NGrid, NGi, NTag, NEmpty, NSelect, NPopconfirm, useMessage } from 'naive-ui'
 import { getMemory, getMemoryStats, forgetOneMemory, lockMemory } from '@/api'
 import { useObject } from '@/composables/useObject'
 
 const message = useMessage()
-const { oid, reloadTick } = useObject()   // 全局共享 object_id + 刷新信号
+const { oid, reloadTick, ensureOid } = useObject()   // 全局共享 object_id + 刷新信号 + 启动自动取 oid
 watch(reloadTick, () => load())   // 头部 OID 回车 → 重载本页
 const stats = ref<any>({})
 const data = ref<any>({})
@@ -27,7 +27,7 @@ const catOptions = [
 ]
 
 async function load() {
-  if (!oid.value) return
+  if (!oid.value || oid.value === 'default') return
   try {
     stats.value = await getMemoryStats(oid.value)
     data.value = await getMemory(oid.value, 'all')
@@ -55,13 +55,15 @@ const ltFiltered = computed(() => {
   if (!catFilter.value) return list
   return list.filter((m: any) => m.category === catFilter.value)
 })
+
+onMounted(async () => { await ensureOid(); await load() })
 </script>
 
 <template>
   <n-space vertical size="large">
-    <n-space align="center">
-      <n-input v-model:value="oid" placeholder="object_id" style="width: 240px" @keyup.enter="load" />
-      <n-button type="primary" @click="load">查看记忆</n-button>
+    <n-space align="center" justify="space-between">
+      <span style="font-weight:600">记忆查看</span>
+      <n-button size="small" @click="load">刷新</n-button>
     </n-space>
 
     <n-grid v-if="loaded" :cols="4" :x-gap="12">
@@ -104,7 +106,7 @@ const ltFiltered = computed(() => {
 
     <n-card title="核心记忆 Core" size="small">
       <n-space v-if="(data.core || []).length" vertical>
-        <n-card v-for="(c, i) in data.core" :key="i" size="small">{{ c.content || JSON.stringify(c) }}</n-card>
+        <n-card v-for="(c, i) in (data.core || [])" :key="i" size="small">{{ c.content || JSON.stringify(c) }}</n-card>
       </n-space>
       <n-empty v-else description="无" />
     </n-card>

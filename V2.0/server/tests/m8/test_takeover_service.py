@@ -133,3 +133,25 @@ async def test_batch_clears_queue(fake_redis, monkeypatch):
     assert r["success"] == 2
     assert len(r["results"]) == 2
     assert await takeover_store.list_queue(fake_redis, "u1") == []
+
+
+async def test_send_proactive(fake_redis, monkeypatch):
+    """主动发送(2026-07-05):不依赖 pending,落 proxy 消息 + 下发主动(msg_id 空)→ mode=active"""
+    monkeypatch.setattr(settings, "memory_enabled", False)
+    sent = []
+
+    async def fake_send(oid, content, *, msg_id="", msg_seq=1, human_authored=False):
+        sent.append((msg_id, human_authored))
+        return {"id": "MSG"}
+    monkeypatch.setattr("qq.api_client.send_c2c_message", fake_send)
+    r = await takeover_svc.send_proactive(fake_redis, "u1", "主动推话")
+    assert r["delivered"] is True
+    assert r["mode"] == "active"          # 主动(msg_id 空)
+    assert sent == [("", True)]           # 主动 msg_id="";human_authored=True(admin 手打跳过守卫)
+    # 落 proxy 消息进 live 历史
+    msgs = await chat_store.list_messages(fake_redis, "u1")
+    assert len(msgs) == 1
+    assert msgs[0]["sender"] == "proxy"
+    assert msgs[0]["content"] == "主动推话"
+    # 主动发无 user 回合(不落 user 消息)
+    assert all(m["sender"] != "user" for m in msgs)

@@ -11,6 +11,11 @@ Profile/Preferences/Relationship/DialogueExample),
 变更说明：
   1. M2 从 V1.0 移植 persona 数据结构到 V2.0(零业务改动;含 profile/preferences 等 V1.1 扩字段,
      反推快照 history/version 字段为 M3 评分反推预留)
+
+2026-07-05
+变更说明：
+  1. 面板改造:PersonaCard 新增 user_description 字段(描述对话另一方=用户,让人设熟悉用户),
+     配合 renderer 渲染【关于用户】段注入 system_prompt
 """
 import time
 from dataclasses import dataclass, field, asdict, fields
@@ -88,6 +93,7 @@ class PersonaCard:
     name: str = ""
     language: str = "zh-CN"
     description: str = ""                        # 背景设定
+    user_description: str = ""                   # 关于用户(对话另一方的描述,让人设熟悉用户)
     personality: str = ""                        # 性格
     scenario: str = ""                           # 场景示例
     creator_notes: str = ""                      # 核心人设指令

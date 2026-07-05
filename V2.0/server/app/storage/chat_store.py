@@ -347,6 +347,53 @@ async def list_recent_sessions(redis: Redis, *, limit: int = 50) -> list[dict]:
     return sessions[:limit]
 
 
+async def list_recent_blocks(redis: Redis, *, limit: int = 50) -> list[dict]:
+    """列最近活跃 block(跨所有 object_id,按 start_ts 倒序),供面板历史页 block 级会话列表(M7 改造)。
+    单用户场景下:每个 block = 一段会话,5h 后再聊自动开新 block → 左栏出现新会话条目(符合"会话=一段对话"心智)。
+    SCAN mychat:chat:*:blocks 收集所有 (block_id, start_ts, object_id),取最近 limit 个,补 block 元数据+msg_count。
+    会话/block 数少时 SCAN 安全;后续规模增长可改维护全局 blocks ZSet。无 block 返回空列表。"""
+    # 1. SCAN 所有会话的 blocks ZSet,收集 (start_ts, block_id, object_id)
+    entries: list[tuple[int, str, str]] = []
+    async for raw_key in redis.scan_iter(match="mychat:chat:*:blocks", count=100):
+        key = raw_key.decode() if isinstance(raw_key, bytes) else raw_key
+        prefix, suffix = "mychat:chat:", ":blocks"
+        if not (key.startswith(prefix) and key.endswith(suffix)):
+            continue
+        object_id = key[len(prefix):-len(suffix)]
+        if not object_id:
+            continue
+        members = await redis.zrange(key, 0, -1, withscores=True)   # 全部 block_id + 其 start_ts(score)
+        for bid, ts in members:
+            bid_s = bid.decode() if isinstance(bid, bytes) else bid
+            entries.append((int(ts), bid_s, object_id))
+    if not entries:
+        return []
+    # 2. 按 start_ts 倒序取最近 limit 个
+    entries.sort(key=lambda e: e[0], reverse=True)
+    entries = entries[:limit]
+    # 3. pipeline 补 block 元数据 + msg_count(hgetall/zcard 配对)
+    pipe = redis.pipeline()
+    for _ts, bid, _oid in entries:
+        pipe.hgetall(_block_key(bid))
+        pipe.zcard(_msgs_key(bid))
+    raws = await pipe.execute()
+    out = []
+    for i, (_ts, bid, oid) in enumerate(entries):
+        block = raws[i * 2]
+        if not block:
+            continue
+        count = raws[i * 2 + 1] if i * 2 + 1 < len(raws) else 0
+        out.append({
+            "block_id": bid,
+            "object_id": oid,
+            "start_ts": int(block.get("start_ts", 0) or 0),
+            "end_ts": int(block.get("end_ts", 0) or 0),
+            "status": block.get("status", ""),
+            "msg_count": count,
+        })
+    return out
+
+
 async def get_message(redis: Redis, mid: str) -> dict | None:
     """按 mid 取单条(全局 UUID,稳定外键)"""
     raw = await redis.hgetall(_msg_key(mid))
