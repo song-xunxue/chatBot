@@ -14,7 +14,7 @@ import {
   NCollapse, NCollapseItem, NModal, NInput, NInputNumber, useMessage,
 } from 'naive-ui'
 import {
-  listRecentBlocks, listMessages, updateMessage, deleteMessage, closeBlock,
+  listRecentBlocks, listMessages, updateMessage, deleteMessage, closeBlock, deleteBlock, clearHistory,
   getHealth, getSamples, reverseInferDryRun, reverseInferApply, setScore,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
@@ -154,6 +154,27 @@ async function closeBlk(bid: string) {
   catch (e: any) { message.error('' + e) }
 }
 
+async function delBlock(b: any) {
+  try {
+    await deleteBlock(b.block_id)
+    message.success(`已删除该段(${b.msg_count} 条)`)
+    if (activeBlockId.value === b.block_id) {
+      activeBlockId.value = ''; currentBlock.value = null; messages.value = []; activeOid.value = ''
+    }
+    await loadRecentBlocks()
+  } catch (e: any) { message.error('' + e) }
+}
+
+async function clearAll() {
+  if (!activeOid.value) { message.warning('请先选择一个会话段落'); return }
+  try {
+    const r = await clearHistory(activeOid.value)
+    message.success(`已清空全部历史(${r.deleted_blocks} 段, ${r.deleted_msgs} 条)`)
+    activeBlockId.value = ''; currentBlock.value = null; messages.value = []; activeOid.value = ''
+    await loadRecentBlocks()
+  } catch (e: any) { message.error('' + e) }
+}
+
 // —— 内联改分 ——
 function openScore(mid: string, scoreBase: any) {
   scoreModalMid.value = mid
@@ -224,7 +245,15 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
     <div style="width:230px; border-right:1px solid #efeff5; overflow:auto; padding:8px; flex-shrink:0">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
         <span style="font-weight:600; font-size:13px">会话(按段落)</span>
-        <n-button size="tiny" quaternary :loading="loadingBlocks" @click="refreshAll">刷新</n-button>
+        <n-space :size="4">
+          <n-popconfirm @positive-click="clearAll">
+            <template #trigger>
+              <n-button size="tiny" type="error" ghost :disabled="!activeOid">清空全部</n-button>
+            </template>
+            清空当前用户的全部会话历史?物理删不可恢复。
+          </n-popconfirm>
+          <n-button size="tiny" quaternary :loading="loadingBlocks" @click="refreshAll">刷新</n-button>
+        </n-space>
       </div>
       <n-empty v-if="!recentBlocks.length" size="small" description="暂无会话" />
       <div v-for="b in recentBlocks" :key="b.block_id"
@@ -235,9 +264,14 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
           <span style="font-weight:600; font-size:13px">{{ fmtTs(b.start_ts) }}</span>
           <n-tag size="tiny" :type="b.status === 'open' ? 'success' : 'default'">{{ b.status === 'open' ? '进行中' : '已结束' }}</n-tag>
         </div>
-        <div style="font-size:11px; color:#999; display:flex; justify-content:space-between; margin-top:2px">
+        <div style="font-size:11px; color:#999; display:flex; justify-content:space-between; align-items:center; margin-top:2px">
           <span>{{ relTs(b.start_ts) }} · {{ b.msg_count }} 条</span>
-          <span title="用户标识(单用户下均相同)">用户{{ shortOid(b.object_id) }}</span>
+          <n-popconfirm @positive-click="delBlock(b)">
+            <template #trigger>
+              <n-button size="tiny" text type="error" @click.stop>删除</n-button>
+            </template>
+            删除该段会话({{ b.msg_count }} 条)?物理删不可恢复。
+          </n-popconfirm>
         </div>
       </div>
     </div>

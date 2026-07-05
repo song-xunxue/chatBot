@@ -108,3 +108,20 @@ async def close_block(block_id: str, body: dict = Body(default={})):
     redis = await get_redis()
     await chat_store.close_block(redis, block_id, reason=body.get("reason", "manual"))
     return {"closed": True, "block_id": block_id}
+
+
+@router.delete("/chat/blocks/{block_id}", dependencies=[Depends(verify_token)])
+async def delete_block(block_id: str):
+    """物理删单个 block + 其全部消息(2026-07-05 会话整体删除)。
+    删前联动:ai/proxy 有 score 的消息写 score neg 队列保留反推样本。返回 {deleted_msgs, neg_linked}。"""
+    redis = await get_redis()
+    r = await chat_store.delete_block(redis, block_id)
+    return {"deleted": True, **r}
+
+
+@router.delete("/chat/{object_id}/history", dependencies=[Depends(verify_token)])
+async def delete_object_history(object_id: str):
+    """清空该 object_id 全部历史(所有 block + 消息,2026-07-05 清空全部)。
+    逐 block 联动 neg。返回 {deleted_blocks, deleted_msgs, neg_linked}。"""
+    redis = await get_redis()
+    return {"deleted": True, **await chat_store.delete_object_history(redis, object_id)}

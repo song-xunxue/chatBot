@@ -33,6 +33,10 @@ export const deleteMessage = (mid: string, reason = 'out_of_character') =>
   api.delete(`/api/v1/chat/messages/${mid}`, { data: { reason } }).then((r) => r.data)
 export const closeBlock = (bid: string, reason = 'manual') =>
   api.post(`/api/v1/chat/blocks/${bid}/close`, { reason }).then((r) => r.data)
+export const deleteBlock = (bid: string) =>
+  api.delete(`/api/v1/chat/blocks/${bid}`).then((r) => r.data)
+export const clearHistory = (oid: string) =>
+  api.delete(`/api/v1/chat/${oid}/history`).then((r) => r.data)
 
 // —— 评分 score(M3 + M7 samples)——
 export const getScore = (mid: string) => api.get(`/api/v1/chat/messages/${mid}/score`).then((r) => r.data)

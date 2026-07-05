@@ -131,3 +131,32 @@ async def test_list_recent_blocks(fake_redis):
     assert blocks[0]["msg_count"] == 1
     assert {"block_id", "object_id", "start_ts", "end_ts", "status", "msg_count"} <= set(blocks[0].keys())
     assert {b["object_id"] for b in blocks} == {"u1", "u2"}
+
+
+async def test_delete_block(fake_redis):
+    """物理删单个 block + 其消息(2026-07-05);ai 有 score 联动写 neg 队列"""
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="hi")
+    mid_a = await chat_store.append_message(fake_redis, "u1", sender="ai", content="reply")
+    await chat_store.set_score(fake_redis, mid_a, score_base=80, mood_value=0.5, mood_bias=0)
+    bid = await fake_redis.get(chat_store._active_key("u1"))
+    r = await chat_store.delete_block(fake_redis, bid)
+    assert r["deleted_msgs"] == 2
+    assert r["neg_linked"] == 1          # ai 有 score → 联动 neg
+    # block + 消息物理删
+    assert await fake_redis.exists(chat_store._block_key(bid)) == 0
+    assert await fake_redis.exists(chat_store._msgs_key(bid)) == 0
+    assert await chat_store.list_messages(fake_redis, "u1") == []
+    # 从 blocks ZSet 移除 + active 清理
+    assert await fake_redis.zcard(chat_store._blocks_key("u1")) == 0
+    assert await fake_redis.get(chat_store._active_key("u1")) is None
+
+
+async def test_delete_object_history(fake_redis):
+    """清空该用户全部历史(2026-07-05);其他用户不动"""
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="a")
+    await chat_store.append_message(fake_redis, "u2", sender="user", content="b")   # 其他用户不受影响
+    r = await chat_store.delete_object_history(fake_redis, "u1")
+    assert r["deleted_blocks"] == 1
+    assert r["deleted_msgs"] == 1
+    assert await chat_store.list_messages(fake_redis, "u1") == []
+    assert len(await chat_store.list_messages(fake_redis, "u2")) == 1   # u2 保留

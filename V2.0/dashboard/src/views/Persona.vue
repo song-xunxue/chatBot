@@ -105,7 +105,7 @@ onMounted(() => { load(); loadProviders() })
     <n-space vertical size="large">
       <n-space align="center">
         <span style="font-weight:600">编辑人设</span>
-        <span style="color:#999;font-size:12px">单人设模式(只编辑,不新建/删除)</span>
+        <span style="color:#999;font-size:12px">单人设模式</span>
         <n-button @click="load" :loading="loading">刷新</n-button>
       </n-space>
       <n-form v-if="persona" label-placement="top" style="max-width:680px">

@@ -436,6 +436,69 @@ async def delete_message(redis: Redis, mid: str, *, reason: str = "out_of_charac
     return True
 
 
+async def delete_block(redis: Redis, block_id: str) -> dict:
+    """物理删单个 block + 其全部消息(2026-07-05 会话整体删除)。
+    删前联动:sender∈(ai,proxy) 且有 score 的消息写 score neg 队列(保留反推训练价值,清理不浪费样本)。
+    物理删:block Hash + msgs ZSet + 各 msg Hash + 从会话 blocks ZSet 移除;若该 block 是 active 一并清。
+    返回 {deleted_msgs, neg_linked}。block 不存在返回 {deleted_msgs:0, neg_linked:0}。"""
+    block = await redis.hgetall(_block_key(block_id))
+    if not block:
+        return {"deleted_msgs": 0, "neg_linked": 0}
+    object_id = block.get("object_id", "")
+    mids = await redis.zrange(_msgs_key(block_id), 0, -1)
+    neg_linked = 0
+    # 删前联动 neg(软失败:记样本失败不阻塞删除)
+    for mid in mids:
+        msg = await redis.hgetall(_msg_key(mid))
+        if not msg:
+            continue
+        if msg.get("sender") in ("ai", "proxy"):
+            raw_score = msg.get("score", "")
+            if raw_score not in ("", None):
+                try:
+                    score_val = int(float(raw_score))
+                    from score import service as score_service
+                    await score_service.record_negative_sample(
+                        redis, object_id, mid, msg.get("content", ""), score_val)
+                    neg_linked += 1
+                except Exception:
+                    pass   # 联动 neg 软失败(类型/服务异常),不阻塞物理删
+    # 物理删(block + msgs 索引 + 各 msg + 从 blocks ZSet 移除)
+    pipe = redis.pipeline()
+    for mid in mids:
+        pipe.delete(_msg_key(mid))
+    pipe.delete(_msgs_key(block_id))
+    pipe.delete(_block_key(block_id))
+    if object_id:
+        pipe.zrem(_blocks_key(object_id), block_id)
+    await pipe.execute()
+    # 若该 block 正是 active 缓存,清掉(下次消息进来开新 block)
+    if object_id:
+        active = await redis.get(_active_key(object_id))
+        if active == block_id:
+            await redis.delete(_active_key(object_id))
+    return {"deleted_msgs": len(mids), "neg_linked": neg_linked}
+
+
+async def delete_object_history(redis: Redis, object_id: str) -> dict:
+    """物理删该 object_id 的全部历史(所有 block + 消息,2026-07-05 清空全部)。
+    逐 block 调 delete_block(各自联动 neg),最后兜底清 blocks ZSet + active 缓存。
+    返回 {deleted_blocks, deleted_msgs, neg_linked}。无历史返回全 0。"""
+    block_ids = await redis.zrange(_blocks_key(object_id), 0, -1)
+    deleted_msgs = 0
+    neg_linked = 0
+    for bid in block_ids:
+        r = await delete_block(redis, bid)
+        deleted_msgs += r["deleted_msgs"]
+        neg_linked += r["neg_linked"]
+    # 兜底:确保 blocks ZSet 与 active 完全清空(delete_block 已逐个 zrem,此处保险)
+    pipe = redis.pipeline()
+    pipe.delete(_blocks_key(object_id))
+    pipe.delete(_active_key(object_id))
+    await pipe.execute()
+    return {"deleted_blocks": len(block_ids), "deleted_msgs": deleted_msgs, "neg_linked": neg_linked}
+
+
 # ================ 评分(M3 调用,M2 预留)=================
 
 async def set_score(redis: Redis, mid: str, *,
