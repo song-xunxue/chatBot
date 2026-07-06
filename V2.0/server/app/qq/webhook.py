@@ -32,6 +32,11 @@ M2 链路(替换 M1a echo):
 变更说明：
   1. M8 代答联动:C2C_MESSAGE_CREATE 分支先查代答开关,开启则入 takeover pending 队列
      (逐条入队,不合并连发,管理员面板看到完整原话),不进 pipeline;关闭则原防抖 → pipeline
+
+2026-07-07
+变更说明：
+  1. continuous_send 支持:_flush 填 ctx.qq_msg_id(被动回复 msg_id 供插件分段用)
+     + 下发前检查 ctx.reply_sent(插件已分段发则跳过默认单条下发)
 """
 import asyncio
 import logging
@@ -201,12 +206,14 @@ async def _flush(openid: str) -> None:
     msg_id = state["msg_id"]
     ctx = MessageContext(object_id=openid, user_text=combined,
                          created_ts=int(time.time() * 1000))
+    ctx.qq_msg_id = msg_id   # 被动回复 msg_id(continuous_send 插件分段发送用,2026-07-07)
     try:
         # QQ 不逐 token 发,迭代生成器仅为驱动管道跑完 + 累积 reply_text
         async for _token in run_stream(ctx):
             pass
         reply = ctx.reply_text
-        if reply:
+        if reply and not getattr(ctx, "reply_sent", False):
+            # 默认单条下发;continuous_send 插件已分段发时 reply_sent=True 跳过(2026-07-07)
             # 出站守卫(#3)已下沉到 send_c2c_message(机器产出默认过守卫),此处直接发
             # 被动回复带 msg_id(60min 窗口/4 次);超时或超次 QQ 拒绝,M2 单测 mock 不触发,M9 真实场景注意
             await send_c2c_message(openid, reply, msg_id=msg_id)
