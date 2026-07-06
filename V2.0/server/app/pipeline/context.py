@@ -12,6 +12,10 @@
 2026-06-28
 变更说明：
   1. M3 新增 reply_mid 字段(stage_save 填 ai 消息 mid,stage_score 评分定位用)
+
+2026-07-07
+变更说明：
+  1. 记忆优化阶段2:新增 last_score 字段(stage_score 填,memory extract 联动 importance 高分强化/低分弱化)
 """
 from dataclasses import dataclass, field
 
@@ -42,6 +46,7 @@ class MessageContext:
     created_ts: int = 0                                 # 消息时间戳(webhook 注入)
     # mood(stage_mood_inject 填充)
     mood_value: float = 0.5                             # 当前 mood 值[0,1],0.5 中性
+    last_score: float = -1.0                            # 本轮回复评分(stage_score 填,memory extract 联动 importance;2026-07-07 优化3;-1=未评分)
     # 富内容/插件协调
     rich: dict = field(default_factory=dict)            # 富内容收集(M6 多模态插件写入)
     plugin_meta: dict = field(default_factory=dict)     # 插件/stage 间协调状态(mood label/kaomoji 等)

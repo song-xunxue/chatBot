@@ -18,6 +18,10 @@ M4 改造:检索器只负责 rank(返回 (score,item) 降序),top-K 截断交给
 变更说明：
   1. M4 重构:Retriever 抽象改为 rank() 打分 + retrieve() 默认实现(rank+确定性 topK);
      新增 BM25Retriever(BM25 评分替交集计数,零依赖);新增 sample_weighted(加权随机召回)
+
+2026-07-07
+变更说明：
+  1. 记忆优化阶段1:新增 cosine_similarity + rrf_fuse 工具(向量语义检索 BM25+向量 RRF 融合用)
 """
 import math
 import random
@@ -153,3 +157,35 @@ def sample_weighted(ranked: list[tuple[float, MemoryItem]], top_k: int,
         chosen.append(picked)
     chosen.sort()   # 按原 rank 顺序输出(稳定注入顺序)
     return [ranked[i][1] for i in chosen]
+
+
+# ===== 向量检索工具(2026-07-07 记忆优化:cosine 相似度 + RRF 融合)=====
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """零依赖 cosine 相似度:点积/(模×模);任一为零向量返回 0(供语义去重/向量 rank)"""
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+def rrf_fuse(ranked_a: list[tuple[float, MemoryItem]],
+             ranked_b: list[tuple[float, MemoryItem]],
+             k: int = 60) -> list[tuple[float, MemoryItem]]:
+    """Reciprocal Rank Fusion:两路 rank 结果按倒数排名融合(BM25 + 向量 各一路)。
+    score = 1/(k+rank_a) + 1/(k+rank_b);未在某路的按 rank=∞(贡献 0,即只单路命中也保留)。
+    返回融合后 (score, item) 降序。k=60 是 RRF 经验默认(控单路主导)。"""
+    rank_a = {m.id: i for i, (_, m) in enumerate(ranked_a)}
+    rank_b = {m.id: i for i, (_, m) in enumerate(ranked_b)}
+    items = {m.id: m for _, m in ranked_a + ranked_b}
+    fused: list[tuple[float, MemoryItem]] = []
+    for mid, m in items.items():
+        ra = rank_a.get(mid)
+        rb = rank_b.get(mid)
+        score = 0.0
+        if ra is not None:
+            score += 1.0 / (k + ra)
+        if rb is not None:
+            score += 1.0 / (k + rb)
+        fused.append((score, m))
+    fused.sort(key=lambda x: x[0], reverse=True)
+    return fused

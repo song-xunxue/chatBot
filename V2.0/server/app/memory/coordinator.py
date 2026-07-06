@@ -10,6 +10,11 @@ per-oid 锁(RMW 一致性)、上限淘汰+物理清理、单例双检锁+初始�
 2026-06-27
 变更说明：
   1. M2 从 V1.0 移植 coordinator 到 V2.0(零业务改动;on_turn_complete 经 store 适配 block chat_store)
+
+2026-07-07
+变更说明：
+  1. 记忆优化阶段1/2/3:retrieve 加向量重排(BM25+embedding RRF)+ _upsert_fact_dedup 语义去重
+     (cosine 替 Jaccard)+ extract 批量化(每 N 轮)+ 评分联动 importance + 激活 core 层(渲染+升级)
 """
 import asyncio
 import logging
@@ -78,6 +83,7 @@ class MemoryCoordinator:
             long_all = await store.get_all_long_term(self.redis, object_id)
             # M4:rank 打分后按 config 决定 加权随机召回(避确定性偏见)/ 确定性 top-K
             ranked = self.retriever.rank(long_all, query)
+            ranked = await self._embedding_rerank(object_id, query, long_all, ranked)
             if settings.memory_weighted_sample and ranked:
                 long_hits = sample_weighted(ranked, top_k)
             else:
@@ -92,9 +98,87 @@ class MemoryCoordinator:
             logger.warning("memory retrieve 失败,返回空结果(降级不阻塞): %s", e)
             return RecallResult(working=working)
 
+    async def _embedding_rerank(self, oid: str, query: str, long_all: list,
+                                ranked_bm25: list) -> list:
+        """向量语义重排(2026-07-07 优化1):BM25 + embedding RRF 融合。
+        provider 未配置/失败/无候选 → 返回原 BM25(降级,不影响现有)。
+        懒 embed:候选无 vec 的现场 embed + 存(首次检索补全,后续命中)。"""
+        from core.config import settings
+        from llm.embedding import get_embedding_provider
+        from memory.retriever import cosine_similarity, rrf_fuse
+        if not long_all:
+            return ranked_bm25
+        provider = get_embedding_provider()
+        if provider is None:
+            return ranked_bm25   # 未配置 embedding,纯 BM25
+        try:
+            query_vec = (await provider.embed([query], settings.memory_embedding_model))[0]
+            if not query_vec:
+                return ranked_bm25
+            mids = [m.id for m in long_all]
+            vec_map = await store.get_vecs_bulk(self.redis, oid, mids)
+            # 懒 embed:无 vec 的候选现场补(写存,后续命中)
+            missing = [m for m in long_all if m.id not in vec_map]
+            if missing:
+                new_vecs = await provider.embed([m.content for m in missing],
+                                                settings.memory_embedding_model)
+                for m, v in zip(missing, new_vecs):
+                    if v:
+                        await store.set_vec(self.redis, oid, m.id, v)
+                        vec_map[m.id] = v
+            # cosine rank(仅对有 vec 的候选;sim>0 才计入)
+            ranked_emb = []
+            for m in long_all:
+                v = vec_map.get(m.id)
+                if v:
+                    sim = cosine_similarity(query_vec, v)
+                    if sim > 0:
+                        ranked_emb.append((sim, m))
+            if not ranked_emb:
+                return ranked_bm25
+            ranked_emb.sort(key=lambda x: x[0], reverse=True)
+            return rrf_fuse(ranked_bm25, ranked_emb)
+        except Exception as e:
+            logger.warning("embedding 重排失败,降级 BM25: %s", e)
+            return ranked_bm25
+
+    async def _embed_fact(self, content: str) -> list[float] | None:
+        """单条文本 embed(供语义去重用);provider 未配置/失败返 None(调用方降级 Jaccard)"""
+        from core.config import settings
+        from llm.embedding import get_embedding_provider
+        provider = get_embedding_provider()
+        if provider is None or not content:
+            return None
+        try:
+            vecs = await provider.embed([content], settings.memory_embedding_model)
+            return vecs[0] if vecs else None
+        except Exception as e:
+            logger.warning("embed_fact 失败,降级: %s", e)
+            return None
+
+    async def _upsert_core_fact(self, oid: str, fact: dict) -> None:
+        """高重要度事实升级到 core 层(常驻注入,2026-07-07 优化4)。
+        按 content 归一化 + Jaccard 去重(避免核心记忆重复堆积)。
+        core 层在 retrieve 取全量 + render 常驻注入,不靠检索运气。"""
+        core_list = await store.get_core(self.redis, oid)
+        content = fact.get("content", "")
+        for cf in core_list:
+            if _normalize(cf.content) == _normalize(content) or _similar(cf.content, content):
+                return   # 已存在(去重)
+        from memory.models import CoreFact
+        core_list.append(CoreFact(
+            key=f"{fact.get('category', 'fact')}:{_normalize(content)[:32]}",
+            content=content,
+        ))
+        await store.set_core(self.redis, oid, core_list)
+
     def render(self, result: RecallResult) -> str:
-        """组装 memory_block:长期记忆 + 情景摘要(Core 已并入 persona system_prompt)"""
+        """组装 memory_block:核心记忆(常驻) + 长期记忆(召回) + 情景摘要。
+        2026-07-07 优化4:激活 core 层渲染(原 retrieve 取了 core 但 render 不用,是死代码)。"""
         blocks = []
+        if result.core:
+            core_facts = "\n".join(f"- {f.content}" for f in result.core)
+            blocks.append(f"【核心记忆】\n{core_facts}")
         if result.long_term:
             facts = "\n".join(f"- {m.content}" for m in result.long_term)
             blocks.append(f"【相关长期记忆】\n{facts}")
@@ -137,12 +221,27 @@ class MemoryCoordinator:
                     reflection = await encoder.reflect([e.summary for e in epis], self.llm, model)
                     if reflection:
                         await store.append_reflection(self.redis, oid, reflection)
-            if settings.memory_longterm_enable and ctx.user_text:
-                facts = await encoder.extract_facts(ctx.user_text, ctx.reply_text, self.llm, model)
-                existing = await store.get_all_long_term(self.redis, oid)  # 本轮只拉一次
-                async with self._lock(oid):
-                    for f in facts:
-                        await self._upsert_fact_dedup(oid, f, existing)
+            # 2026-07-07 优化3:长期事实批量提取(每 N 轮一次,替每轮单条,降 LLM 成本)
+            extract_n = settings.memory_longterm_extract_threshold
+            if (settings.memory_longterm_enable and extract_n > 0
+                    and turn_count > 0 and turn_count % extract_n == 0):
+                recent = await store.get_working_span(self.redis, oid, extract_n)
+                facts = await encoder.extract_facts_batch(recent, self.llm, model)
+                if facts:
+                    # 2026-07-07 优化3:评分联动 importance(本轮高分 +0.1 强化/低分 -0.1 弱化新 facts)
+                    score_final = getattr(ctx, "last_score", -1.0)
+                    if score_final >= 0:
+                        delta = 0.1 if score_final >= 85 else (-0.1 if score_final < 60 else 0.0)
+                        if delta:
+                            for f in facts:
+                                f["importance"] = max(0.0, min(1.0, float(f.get("importance", 0.5)) + delta))
+                    existing = await store.get_all_long_term(self.redis, oid)  # 本批只拉一次
+                    async with self._lock(oid):
+                        for f in facts:
+                            await self._upsert_fact_dedup(oid, f, existing)
+                            # 2026-07-07 优化4:高重要度/关系事实升级 core 层(常驻注入)
+                            if float(f.get("importance", 0)) >= 0.8 or f.get("category") == "relationship":
+                                await self._upsert_core_fact(oid, f)
         except Exception as e:
             logger.exception("memory on_turn_complete failed: %s", e)
 
@@ -160,20 +259,47 @@ class MemoryCoordinator:
 
     async def _upsert_fact_dedup(self, oid: str, fact: dict,
                                  existing: list | None = None) -> None:
-        """事实去重合并(精确归一化 + Jaccard);existing 复用避免重复 HGETALL;
-        新增后调 _enforce_max_facts 上限淘汰。
+        """事实去重合并 + 写向量(2026-07-07 优化2:语义去重 cosine 优先,降级 Jaccard);
+        existing 复用避免重复 HGETALL;新增后调 _enforce_max_facts 上限淘汰。
         内部原语:调用方须持 _lock(oid)(on_turn_complete 批量 / consolidate_sleep 巩固);
         外部单条写入走公开 upsert_fact(自管锁,架构 #6)。"""
+        from core.config import settings
+        from memory.retriever import cosine_similarity
         if existing is None:
             existing = await store.get_all_long_term(self.redis, oid)
-        for m in existing:
-            if _similar(m.content, fact["content"]):
-                m.access_count += 1
-                m.importance = max(m.importance, fact["importance"])
-                if fact.get("emotion"):
-                    m.emotion = max(m.emotion, fact["emotion"])
-                await store.upsert_long_term(self.redis, oid, m)
-                return
+        # 先 embed 新 fact(供语义去重 + 新建时存)
+        new_vec = await self._embed_fact(fact["content"])
+        dup_found = False
+        if new_vec:
+            # cosine 语义去重:对比已有记忆向量(懒 embed 补老数据缺失的 vec)
+            existing_vecs = await store.get_vecs_bulk(self.redis, oid, [m.id for m in existing])
+            for m in existing:
+                v = existing_vecs.get(m.id)
+                if v is None:
+                    v = await self._embed_fact(m.content)   # 老数据懒补
+                    if v:
+                        await store.set_vec(self.redis, oid, m.id, v)
+                if v and cosine_similarity(new_vec, v) >= settings.memory_embedding_sim_threshold:
+                    m.access_count += 1
+                    m.importance = max(m.importance, fact["importance"])
+                    if fact.get("emotion"):
+                        m.emotion = max(m.emotion, fact["emotion"])
+                    await store.upsert_long_term(self.redis, oid, m)
+                    dup_found = True
+                    break
+        else:
+            # 降级 Jaccard(无 embedding provider)
+            for m in existing:
+                if _similar(m.content, fact["content"]):
+                    m.access_count += 1
+                    m.importance = max(m.importance, fact["importance"])
+                    if fact.get("emotion"):
+                        m.emotion = max(m.emotion, fact["emotion"])
+                    await store.upsert_long_term(self.redis, oid, m)
+                    dup_found = True
+                    break
+        if dup_found:
+            return
         new = MemoryItem(
             id=f"mem_{uuid.uuid4().hex[:12]}",
             content=fact["content"],
@@ -183,6 +309,8 @@ class MemoryCoordinator:
             source="dialog",
         )
         await store.upsert_long_term(self.redis, oid, new)
+        if new_vec:
+            await store.set_vec(self.redis, oid, new.id, new_vec)   # 新建记忆同步存 vec
         existing.append(new)
         await self._enforce_max_facts(oid, existing)
 

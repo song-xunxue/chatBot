@@ -20,6 +20,10 @@ M2 实现:load_history / persona_inject / memory_retrieve / mood_inject / build_
 2026-07-06
 变更说明：
   1. B-2 stage_build_messages 末尾追加 OUTPUT_CONTRACT(压制 mood hint/记忆召回中的舞台指示诱导)
+
+2026-07-07
+变更说明：
+  1. 记忆优化阶段2:run_post_reply_chain 把 score 回流到 ctx.last_score(供 memory 联动 importance)
 """
 from typing import AsyncIterator
 import asyncio
@@ -241,5 +245,8 @@ async def run_post_reply_chain(ctx: MessageContext, redis: Redis, *,
     await stage_save(ctx, redis, reply_sender=reply_sender, reply_source=reply_source,
                      user_ts=user_ts, reply_ts=reply_ts)
     score = await stage_score(ctx, redis, mood_value=score_mood_value, provider_name=score_provider)
+    if score and isinstance(score, dict):
+        # 2026-07-07 优化3:评分回流,供 memory extract 联动 importance(高分强化/低分弱化)
+        ctx.last_score = float(score.get("score", score.get("score_base", -1)))
     await stage_memory_write(ctx, redis, await_memory=await_memory)
     return score

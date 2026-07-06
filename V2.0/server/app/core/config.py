@@ -86,6 +86,7 @@ class Settings(BaseSettings):
     memory_episodic_reflect_interval: int = 5  # 每 N 次摘要触发一次反思
     memory_longterm_enable: bool = True
     memory_longterm_max_facts: int = 200  # 长期记忆条目上限,超出触发遗忘淘汰
+    memory_longterm_extract_threshold: int = 6  # 每 N 轮批量提取长期事实(2026-07-07 优化3,替每轮单条降成本;0=禁用)
     memory_retrieve_topk: int = 5  # 检索召回 top-K
     memory_summary_provider: str = ""  # 编码用 LLM provider,空则用对话同款
     memory_summary_model: str = ""  # 编码用模型,空则用 provider 默认
@@ -102,6 +103,10 @@ class Settings(BaseSettings):
     memory_consolidate_enable: bool = True  # 睡眠巩固:episodic 摘要→long-term fact + 冗余清理
     memory_consolidate_importance: float = 0.6  # 巩固提炼 fact 的最低 importance(低于则丢弃)
     memory_episodic_keep: int = 20  # episodic 保留条数(超则清理最旧,睡眠巩固触发)
+    # 向量语义检索(2026-07-07 记忆优化阶段1:激活向量检索,BM25+向量 RRF 融合)
+    memory_embedding_provider: str = "glm"  # embedding provider(glm/空=禁用,降级纯 BM25)
+    memory_embedding_model: str = "embedding-3"  # GLM embedding-3(2048 维)
+    memory_embedding_sim_threshold: float = 0.85  # 语义去重 cosine 阈值(>= 视为重复,替 Jaccard)
 
     # 7.插件系统(M2 copy V1.0 plugins 基础设施用;M2 不加载业务插件,只保证 EventBus/钩子链路通)
     plugin_enabled: bool = True  # 插件系统总开关,False 时降级(不初始化、不触发任何钩子)

@@ -49,3 +49,18 @@ async def test_summarize_prompt_has_antihallucination_rule():
     p = llm.captured
     assert "user" in p
     assert "未确认" in p or "虚构" in p or "幻觉" in p
+
+
+async def test_extract_facts_batch_prompt_multiturn_antihallucination():
+    """优化3:extract_facts_batch 多轮批量提取 prompt 含防幻觉铁律 + 多轮格式化"""
+    llm = _CaptureLLM()
+    msgs = [Message(role="user", content="我爱打篮球"),
+            Message(role="assistant", content="下周一起去打球")]
+    await encoder.extract_facts_batch(msgs, llm)
+    p = llm.captured
+    assert "防幻觉" in p
+    # 多轮对话均喂入,且按 用户/角色(我) 标注
+    assert "我爱打篮球" in p
+    assert "打球" in p
+    assert "用户:" in p and "角色(我):" in p
+

@@ -13,6 +13,11 @@ V2.0 适配(M2):Working 层委托 V2.0 chat_store(block 三层)。
 2026-06-27
 变更说明：
   1. M2 从 V1.0 移植四级记忆存储到 V2.0;get_turn_count/get_working_span 适配 block 三层 chat_store
+
+2026-07-07
+变更说明：
+  1. 记忆优化阶段1:新增记忆向量读写(set_vec/get_vec/get_vecs_bulk,独立 key 不污染 long Hash)
+     + delete_long_term 一并清向量防脏
 """
 import json
 import time
@@ -28,6 +33,7 @@ _K_CORE = "mychat:mem:{oid}:core"
 _K_EPISODIC = "mychat:mem:{oid}:episodic"
 _K_REFLECT = "mychat:mem:{oid}:reflect"
 _K_LONG = "mychat:mem:{oid}:long"
+_K_VEC = "mychat:mem:{oid}:vec:{mid}"   # 记忆向量(独立存,不污染 long Hash;2026-07-07 向量检索)
 _K_STATE = "mychat:state:{oid}"
 
 
@@ -131,8 +137,12 @@ async def restore_long_term(redis: Redis, oid: str, mids: Iterable[str]) -> None
 
 
 async def delete_long_term(redis: Redis, oid: str, mids: Iterable[str]) -> None:
-    """物理删除长期记忆条目(HDEL)"""
-    await redis.hdel(_K_LONG.format(oid=oid), *list(mids))
+    """物理删除长期记忆条目(HDEL)+ 关联向量(2026-07-07:向量独立 key,一并清防脏)"""
+    pipe = redis.pipeline()
+    pipe.hdel(_K_LONG.format(oid=oid), *list(mids))
+    for mid in list(mids):
+        pipe.delete(_K_VEC.format(oid=oid, mid=mid))
+    await pipe.execute()
 
 
 async def set_locked(redis: Redis, oid: str, mid: str, locked: bool) -> bool:
@@ -161,6 +171,29 @@ async def update_long_term(redis: Redis, oid: str, mid: str, *,
         m.importance = max(0.0, min(1.0, float(importance)))
     await upsert_long_term(redis, oid, m)
     return True
+
+
+# ===== 记忆向量(2026-07-07 向量检索,独立 key 不污染 long Hash)=====
+async def set_vec(redis: Redis, oid: str, mid: str, vec: list[float]) -> None:
+    """存记忆向量(JSON list[float]);写入时由 coordinator 调 embedding provider 生成"""
+    await redis.set(_K_VEC.format(oid=oid, mid=mid), json.dumps(vec))
+
+
+async def get_vec(redis: Redis, oid: str, mid: str) -> list[float] | None:
+    """取单条记忆向量;无返回 None"""
+    raw = await redis.get(_K_VEC.format(oid=oid, mid=mid))
+    return json.loads(raw) if raw else None
+
+
+async def get_vecs_bulk(redis: Redis, oid: str, mids: list[str]) -> dict[str, list[float]]:
+    """批量取向量(管道 MGET);返回 {mid: vec},无向量的 mid 不在结果里(供检索 cosine rank)"""
+    if not mids:
+        return {}
+    pipe = redis.pipeline()
+    for mid in mids:
+        pipe.get(_K_VEC.format(oid=oid, mid=mid))
+    raws = await pipe.execute()
+    return {mid: json.loads(r) for mid, r in zip(mids, raws) if r}
 
 
 # ===== State 动态状态(Hash)=====
