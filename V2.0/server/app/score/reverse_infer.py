@@ -18,6 +18,11 @@ docs/01 §4(评分驱动反推)/ docs/02 §5.1(score<60 负样本 / score>85 正
 变更说明:
   1. M3 新建 reverse_infer:从 V1.0 移植 infer_and_merge 两步契约骨架(白名单/drift/snapshot/
      字段读写),数据源改为 score 正/负样本(score.service.list_samples),prompt 适配单条回复文本
+
+2026-07-06
+变更说明:
+  1. B-4 _llm_extract prompt 加风格提炼约束(speech_style/personality 禁总结成"括号动作描写",
+     防反推把舞台指示风格学进人设字段)
 """
 import difflib
 import json
@@ -161,7 +166,12 @@ async def _llm_extract(positives: list[str], negatives: list[str], llm) -> dict:
         "只输出一个 JSON 对象,键为人设字段名,值为提炼结果。\n"
         "可选字段:personality, speech_style, catchphrase, age, gender, occupation, appearance, race, "
         "likes(字符串数组), dislikes(字符串数组), relationship, greeting, scenario, description。\n"
-        "只输出有把握的字段,没有依据就不要输出该字段。严格只输出 JSON,不要解释。\n\n"
+        "只输出有把握的字段,没有依据就不要输出该字段。严格只输出 JSON,不要解释。\n"
+        "【风格提炼约束——必须遵守】\n"
+        "speech_style / personality 只描述说话的语气、用词习惯、口头禅"
+        "(如'说话简短直接''爱用语气词''偶尔俏皮'),目标是像真人微信聊天一样自然。\n"
+        "绝对不要总结成'使用括号动作描写''加舞台指示/旁白''用（轻声笑了）这类格式'——"
+        "任何鼓励括号动作/旁白/颜文字堆砌的描述都禁止输出。\n\n"
         f"【高分优秀回复(正样本,应贴合的风格)】\n{pos_txt}\n\n"
         f"【低分偏离回复(负样本,应避免的风格)】\n{neg_txt}\n"
     )

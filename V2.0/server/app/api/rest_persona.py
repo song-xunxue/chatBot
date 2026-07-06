@@ -13,6 +13,11 @@
 
 作者: 李文煜
 日期: 2026-06-30
+
+2026-07-06
+变更说明：
+  1. B-5a update_persona 嵌套对象字段级合并(profile/preferences/relationship/model/dynamic_state),
+     面板暴露 speech_style/catchphrase 等嵌套字段编辑时不整体替换丢字段
 """
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -41,13 +46,20 @@ async def get_persona(pid: str):
 
 @router.put("/persona/{pid}", dependencies=[Depends(verify_token)])
 async def update_persona(pid: str, body: dict):
-    """更新:现有字段 + body 覆盖(保留 id)"""
+    """更新:现有字段 + body 覆盖(保留 id)。
+    嵌套对象(profile/preferences/relationship/model/dynamic_state)字段级合并,避免整体替换
+    丢字段(2026-07-06 B-5a:面板暴露 speech_style/catchphrase 等嵌套字段,需字段级更新)。"""
     redis = await get_redis()
     existing = await persona_store.get_persona(redis, pid)
     if existing is None:
         raise HTTPException(status_code=404, detail="persona not found")
     merged = existing.to_dict()
-    merged.update(body)
+    _NESTED = ("profile", "preferences", "relationship", "dynamic_state", "model")
+    for k, v in body.items():
+        if k in _NESTED and isinstance(v, dict) and isinstance(merged.get(k), dict):
+            merged[k] = {**merged[k], **v}   # 字段级合并(保留未传字段)
+        else:
+            merged[k] = v                    # 顶层字段直接覆盖
     merged["id"] = pid
     card = PersonaCard.from_dict(merged)
     await persona_store.set_persona(redis, card)

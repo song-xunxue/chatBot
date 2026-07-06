@@ -40,6 +40,9 @@ async def test_reset_clears_runtime_keeps_persona(monkeypatch, fake_redis):
     await fake_redis.set("mychat:qq:access_token", "TOK")
     await fake_redis.set("mychat:mood:kinds", "[]")
     await fake_redis.set("mychat:mood:params", "{}")
+    # 档位 Hash(2026-07-06 B-1:白名单须保留 mychat:mood:kind:* 前缀,防 reset 误删致 mood 瘫痪)
+    await fake_redis.hset("mychat:mood:kind:happy", mapping={"key": "happy", "label": "开心"})
+    await fake_redis.hset("mychat:mood:kind:calm", mapping={"key": "calm", "label": "平静"})
     await fake_redis.set("mychat:plugin:hello:enabled", "1")
     # 造数据:运行时(清)
     await fake_redis.set("mychat:mood:u1", "0.5")
@@ -62,11 +65,12 @@ async def test_reset_clears_runtime_keeps_persona(monkeypatch, fake_redis):
         r = await ac.post("/api/v1/system/reset", json={"confirm": "清空"}, headers=_H)
         data = r.json()
         assert data["deleted"] >= 7   # mood:u1/history/chat/msg/mem/score/takeover/plugin_cfg 至少
-        assert data["kept"] >= 9      # 9 个白名单键
+        assert data["kept"] >= 11     # 9 白名单键 + 2 档位 Hash(B-1 保留 mood:kind:*)
     # 白名单全保留
     for k in ["mychat:persona:p1", "mychat:persona:_default_id", "mychat:persona_version:p1",
               "mychat:obj:u1:persona", "mychat:config:qq_app_id", "mychat:qq:access_token",
-              "mychat:mood:kinds", "mychat:mood:params", "mychat:plugin:hello:enabled"]:
+              "mychat:mood:kinds", "mychat:mood:params", "mychat:plugin:hello:enabled",
+              "mychat:mood:kind:happy", "mychat:mood:kind:calm"]:   # B-1:档位 Hash 须保留
         assert await fake_redis.exists(k), f"白名单键应保留: {k}"
     # 运行时全清
     for k in ["mychat:mood:u1", "mychat:mood:u1:history", "mychat:chat:u1:blocks", "mychat:msg:m1",

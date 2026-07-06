@@ -12,7 +12,7 @@ import storage.redis_client as redis_client
 from api.rest_persona import router as persona_router
 from core.config import settings
 from persona import store as persona_store
-from persona.models import PersonaCard
+from persona.models import PersonaCard, Profile
 
 _H = {"X-Access-Token": "t-token"}
 
@@ -86,3 +86,32 @@ async def test_snapshot_404(monkeypatch, fake_redis):
     app = _wire(monkeypatch, fake_redis)
     async with await _ac(app) as ac:
         assert (await ac.post("/api/v1/persona/nope/snapshot", headers=_H)).status_code == 404
+
+
+async def test_update_nested_profile_field_level_merge(monkeypatch, fake_redis):
+    """B-5a:update_persona 对 profile 嵌套字段级合并,只传 speech_style 不丢 age/gender 等其他字段。
+    背景:面板暴露 speech_style/catchphrase 编辑,旧逻辑 merged.update 整体替换 profile 会丢字段。"""
+    app = _wire(monkeypatch, fake_redis)
+    await persona_store.set_persona(fake_redis, PersonaCard(
+        id="p1", name="A", profile=Profile(age="20岁", gender="女", speech_style="温柔"),
+    ))
+    async with await _ac(app) as ac:
+        r = await ac.put("/api/v1/persona/p1",
+                         json={"profile": {"speech_style": "简短直接"}}, headers=_H)
+        assert r.status_code == 200
+    card = await persona_store.get_persona(fake_redis, "p1")
+    assert card.profile.speech_style == "简短直接"   # 新值
+    assert card.profile.age == "20岁"               # 未传字段保留(字段级合并)
+    assert card.profile.gender == "女"              # 未传字段保留
+
+
+async def test_update_top_level_personality_scenario(monkeypatch, fake_redis):
+    """B-5a:顶层字段 personality/scenario 直接覆盖(面板暴露这些字段编辑)"""
+    app = _wire(monkeypatch, fake_redis)
+    await persona_store.set_persona(fake_redis, PersonaCard(id="p1", personality="原性格"))
+    async with await _ac(app) as ac:
+        await ac.put("/api/v1/persona/p1",
+                     json={"personality": "新性格", "scenario": "教室"}, headers=_H)
+    card = await persona_store.get_persona(fake_redis, "p1")
+    assert card.personality == "新性格"
+    assert card.scenario == "教室"

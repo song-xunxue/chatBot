@@ -14,12 +14,27 @@
 2026-07-05
 变更说明：
   1. 面板改造:新增【关于用户】段(渲染 card.user_description),插入【喜好与厌恶】后、【与用户的关系】前
+
+2026-07-06
+变更说明：
+  1. B-2 新增 OUTPUT_CONTRACT 常量 + render_system_prompt 末尾追加(根治"（轻声笑了）"类舞台指示)
 """
 from persona.models import PersonaCard, DynamicState
 
 
 # 人设全空时的兜底 prompt
 _DEFAULT_PROMPT = "你是一个友善的聊天助手，请自然、简洁地与用户对话。"
+
+# 输出契约(2026-07-06 B-2):强制自然对话,根治"（轻声笑了）"类舞台指示/旁白。
+# render_system_prompt 末尾追加(基础覆盖所有调 render 的路径);pipeline.stage_build_messages
+# 末尾再追加一次,成为 system prompt 最后一句,压制 mood prompt_hint / 记忆召回中的风格诱导。
+OUTPUT_CONTRACT = (
+    "\n\n【输出契约】\n"
+    "你在用手机和对方发消息聊天。只输出你要发给对方的那句话本身,像微信打字一样自然。\n"
+    "禁止用括号(全角（）或半角())、方括号、星号包裹动作、神态、心理或语气说明"
+    "(不要出现如（轻声笑了）（微笑）（摸头）*叹气*这类描写)。\n"
+    "不要旁白,不要解释自己正用什么语气说话,不要分点、列清单或加标题。"
+)
 
 # 示例对话渲染上限,防 prompt 膨胀与策略泄露
 MAX_DIALOGUE_RENDER = 5
@@ -81,7 +96,7 @@ def render_system_prompt(card: PersonaCard | None,
       核心人设指令→背景设定→人物画像→性格→喜好与厌恶→关于用户→与用户的关系→开场白→场景示例→示例对话→当前状态。
     """
     if card is None:
-        return _DEFAULT_PROMPT
+        return _DEFAULT_PROMPT + OUTPUT_CONTRACT
     parts = []
     if card.creator_notes:
         parts.append(f"【核心人设指令】\n{card.creator_notes}")
@@ -113,4 +128,5 @@ def render_system_prompt(card: PersonaCard | None,
     st = state or card.dynamic_state
     if st and (st.mood or st.status):
         parts.append(f"【当前状态】心情:{st.mood} 状态:{st.status} 精力:{st.energy:.1f}")
-    return "\n\n".join(parts) if parts else _DEFAULT_PROMPT
+    body = "\n\n".join(parts) if parts else _DEFAULT_PROMPT
+    return body + OUTPUT_CONTRACT

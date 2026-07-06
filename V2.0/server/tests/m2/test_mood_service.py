@@ -65,6 +65,37 @@ async def test_seed_idempotent(fake_redis):
     assert len(await service.list_kinds(fake_redis)) == 5
 
 
+async def test_seed_heals_missing_kind_hash(fake_redis):
+    """B-1 自愈:索引 ZSET 残留但档位 Hash 被误删(reset bug 场景)→ seed 补回缺失档位。
+    场景:reset 只删 mood:kind:* Hash 但留 mood:kinds 索引 → 旧 seed 看索引非空跳过 → 永不恢复。
+    新 seed 逐档检查 Hash 存在性,缺失则补写。"""
+    # 模拟 reset bug 残缺态:索引有 happy/calm,但仅 happy 的 Hash 存在(calm 的 Hash 被删)
+    await fake_redis.zadd(service._K_KINDS, {"happy": 1, "calm": 3})
+    await fake_redis.hset(service._K_KIND.format(key="happy"),
+                          mapping={"key": "happy", "label": "开心"})
+    # calm 的 Hash 故意缺失
+    await service.seed_default_kinds(fake_redis)
+    # 5 个默认档 Hash 全部到位(calm 自愈补回,happy 保留未覆盖,其余 3 档新建)
+    for k in ("happy", "pleased", "calm", "down", "sad"):
+        assert await fake_redis.exists(service._K_KIND.format(key=k)), f"档位 {k} Hash 应被补回"
+    kinds = await service.list_kinds(fake_redis)
+    assert [k["key"] for k in kinds] == ["happy", "pleased", "calm", "down", "sad"]
+
+
+async def test_seed_preserves_user_custom_kind(fake_redis):
+    """B-1 不覆盖:用户自定义档(非默认档)在 seed 后保留(seed 只补默认档,不清自定义)。"""
+    await service.seed_default_kinds(fake_redis)
+    # 用户加自定义档"excited"(面板 CRUD 添加)
+    await fake_redis.hset(service._K_KIND.format(key="excited"),
+                          mapping={"key": "excited", "label": "兴奋", "prompt_hint": "超嗨"})
+    await fake_redis.zadd(service._K_KINDS, {"excited": 6})
+    await service.seed_default_kinds(fake_redis)   # 模拟重启
+    assert await fake_redis.exists(service._K_KIND.format(key="excited")), "自定义档应保留"
+    kinds = await service.list_kinds(fake_redis)
+    assert "excited" in [k["key"] for k in kinds]
+    assert len(kinds) == 6   # 5 默认 + 1 自定义
+
+
 def test_lookup_kind_boundaries():
     """档位边界查询(左闭右开,最高档含端点)"""
     kinds = service._DEFAULT_KINDS

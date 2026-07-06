@@ -21,6 +21,11 @@ Redis 键:
 变更说明：
   1. M7 新增全局参数 get_params/set_params(Redis Hash,apply_emotion/decay 改读 Redis 回退 settings)+
      mood 历史曲线(set_mood 写 + get_history_curve,面板实时监控页)
+
+2026-07-06
+变更说明：
+  1. B-1 修 seed_default_kinds:从"索引 ZSET 非空就跳过"改为"逐个默认档 Hash 存在性检查",缺失则补写;
+     自愈 reset 误删档位 Hash 的残缺态,且不覆盖用户自定义档/用户改过的默认档
 """
 import json
 import random
@@ -226,15 +231,21 @@ async def delete_kind(redis: Redis, key: str) -> None:
 
 
 async def seed_default_kinds(redis: Redis) -> None:
-    """启动时若种表为空,写入默认 5 档(docs/03 §3.2)"""
-    if await redis.zcard(_K_KINDS) > 0:
-        return
+    """启动时确保默认 5 档完整(docs/03 §3.2)。自愈 + 幂等 + 不覆盖用户自定义:
+    逐个检查默认档 Hash 是否存在,缺失则补写 Hash + 索引(2026-07-06 B-1 修:原只看索引 ZSET 非空
+    就跳过,若 reset 误删档位 Hash 但留索引,seed 永不自愈 → mood 瘫痪、inject_hint 拿残破档位)。
+    用户自定义档(非默认档)不动;用户修改过的默认档(Hash 存在)不覆盖。"""
     _validate_coverage(_DEFAULT_KINDS)   # 默认档已覆盖 [0,1],校验兜底
     pipe = redis.pipeline()
+    wrote = False
     for k in _DEFAULT_KINDS:
-        pipe.hset(_K_KIND.format(key=k["key"]), mapping=_kind_to_hash(k))
-        pipe.zadd(_K_KINDS, {k["key"]: int(k["sort"])})
-    await pipe.execute()
+        key = _K_KIND.format(key=k["key"])
+        if not await redis.exists(key):   # 档位 Hash 缺失(未 seed / 被 reset 误删)→ 补写
+            pipe.hset(key, mapping=_kind_to_hash(k))
+            pipe.zadd(_K_KINDS, {k["key"]: int(k["sort"])})
+            wrote = True
+    if wrote:
+        await pipe.execute()
 
 
 # ================ 档位查询 + 评分补偿(docs/03 §5,M3 调)================

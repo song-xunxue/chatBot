@@ -15,6 +15,10 @@
 2026-07-05
 变更说明：
   1. 面板改造:新增 POST /system/reset(全局清空运行时数据,白名单保留人设+配置),需 confirm='清空' 防误触
+
+2026-07-06
+变更说明：
+  1. B-1 修 reset 白名单:KEEP_PREFIXES 加 mychat:mood:kind:(原漏此前缀,reset 误删档位 Hash 但留索引致 mood 瘫痪)
 """
 import logging
 
@@ -131,8 +135,11 @@ async def reset_all_data(body: dict = Body(default={})):
     from storage.redis_client import get_redis
     redis = await get_redis()
     KEEP_EXACT = {"mychat:mood:kinds", "mychat:mood:params"}
+    # mychat:mood:kind: 前缀保留档位 Hash(2026-07-06 B-1 修:原白名单漏此前缀,reset 误删档位 Hash
+    # 但留索引 ZSET mood:kinds,致 mood 系统瘫痪、面板档位栏位全空)。此前缀不误匹配 mood:kinds
+    # (第 17 字符 ':' != 's',字符串前缀比较安全)
     KEEP_PREFIXES = ("mychat:persona:", "mychat:persona_version:", "mychat:obj:",
-                     "mychat:config:", "mychat:qq:", "mychat:plugin:")
+                     "mychat:config:", "mychat:qq:", "mychat:plugin:", "mychat:mood:kind:")
     deleted = 0
     kept = 0
     async for key in redis.scan_iter(match="mychat:*", count=200):

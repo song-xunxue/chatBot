@@ -9,6 +9,11 @@ summarize(对话摘要) + reflect(反思归纳) + extract_facts(事实抽取带 
 2026-06-27
 变更说明：
   1. M2 从 V1.0 移植编码管线到 V2.0(零业务改动;summarize/reflect/extract_facts + JSON 解析降级)
+
+2026-07-06
+变更说明：
+  1. B-3 记忆幻觉防护:extract_facts + summarize prompt 加防幻觉铁律
+     (只信用户陈述,角色回复里未确认的承诺/虚构不抽,防"椰子鸡变记忆"类幻觉固化)
 """
 import logging
 import re
@@ -25,8 +30,9 @@ async def summarize(messages: list, llm: LLMProvider | None, model: str = "") ->
     if not llm:
         return _heuristic_summary(messages)
     dialog = "\n".join(f"{m.role}: {m.content}" for m in messages[-6:])  # 最近几轮,控 token
-    prompt = ("请用一两句中文概括以下对话的关键信息(事实/偏好/事件),"
-              "只输出概括,不要寒暄:\n" + dialog)
+    prompt = ("请用一两句中文概括以下对话的关键信息(事实/偏好/事件),只输出概括,不要寒暄。\n"
+              "注意:只概括 user 一方明确陈述的事实;assistant 一方的承诺/虚构/假设若 user 未确认,"
+              "不要当成事实写进概括(防幻觉固化进情景记忆):\n" + dialog)
     try:
         resp = await llm.chat([Message(role="user", content=prompt)], model=model)
         return resp.text.strip()
@@ -60,7 +66,12 @@ async def extract_facts(user_text: str, reply_text: str, llm: LLMProvider | None
         "你在为【角色本人】整理长期记忆。请以角色第一人称('我'指角色自己)视角,"
         "从以下对话中抽取角色值得长期记住的认知——关于【用户】(对方)的特点/偏好/事件、"
         "角色与用户的关系、以及角色自身的事(如角色的名字/身份/喜好)。\n"
-        "关键:严格区分'我'(角色)与'用户'(对方),切勿把角色自己的名字或特征记成用户的。"
+        "【防幻觉铁律——必须遵守】\n"
+        "1. 只把'用户说的话'(user 那行)当作事实来源。角色(我)的回复(reply 那行)里提到的事"
+        "——尤其承诺、计划、假设、虚构(例如角色说'下周带你去吃椰子鸡'但用户从没提过椰子鸡)——"
+        "若用户没有明确确认,绝对不要抽成记忆:那很可能只是角色随口编的,不是真的事实。\n"
+        "2. 区分谁说的:用户亲口陈述的偏好/事件才记;角色回复里的话只在用户本轮或之前确认过时才记。\n"
+        "3. 严格区分'我'(角色)与'用户'(对方),切勿把角色名字/特征记成用户的。\n"
         "content 用角色口吻,例如'我叫清浔''用户希望被称为煜''用户喜欢动漫''我和用户是同学'。\n"
         f"用户: {user_text}\n角色(我): {reply_text}\n"
         "严格只输出一个 JSON 数组,每个元素形如 "

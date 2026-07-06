@@ -16,6 +16,10 @@ M2 实现:load_history / persona_inject / memory_retrieve / mood_inject / build_
 变更说明：
   1. M3 stage_save 把 ai 消息 mid 存入 ctx.reply_mid;新增 stage_score(save 后对 ai 回复
      自动 LLM 评分 + 心情补偿 + 写 score 四元组 + 正负样本归类)
+
+2026-07-06
+变更说明：
+  1. B-2 stage_build_messages 末尾追加 OUTPUT_CONTRACT(压制 mood hint/记忆召回中的舞台指示诱导)
 """
 from typing import AsyncIterator
 import asyncio
@@ -94,13 +98,17 @@ async def stage_mood_inject(ctx: MessageContext, redis) -> None:
 
 
 async def stage_build_messages(ctx: MessageContext) -> list[Message]:
-    """阶段③:拼装发送给 LLM 的消息列表(system[+memory_block] + 历史 + 本次用户消息)。
-    memory_block 拼到 system_prompt 尾部(规避部分 provider 双 system 兼容问题)。"""
+    """阶段③:拼装发送给 LLM 的消息列表(system[+memory_block] + 输出契约 + 历史 + 本次用户消息)。
+    memory_block 拼到 system_prompt 尾部(规避部分 provider 双 system 兼容问题);
+    输出契约(2026-07-06 B-2)拼在最末,成为 system 最后一句,压制 mood prompt_hint / 记忆召回
+    中诱导舞台指示的内容(render_system_prompt 已加一次,此处再加固确保位置最后、权重最高)。"""
+    from persona.renderer import OUTPUT_CONTRACT
     messages: list[Message] = []
     if ctx.system_prompt:
         content = ctx.system_prompt
         if ctx.memory_block:
             content = f"{ctx.system_prompt}\n\n{ctx.memory_block}"
+        content = content + OUTPUT_CONTRACT   # B-2 输出契约置末,压制 mood/记忆风格诱导
         messages.append(Message(role="system", content=content))
     messages.extend(ctx.history)
     messages.append(Message(role="user", content=ctx.user_text))
