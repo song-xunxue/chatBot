@@ -10,6 +10,7 @@ on_message_out:按换行拆 reply_text 成多段,逐段 send_c2c_message 下发(
 2026-07-07
 变更说明：
   1. 新建 continuous_send:被动回复分段发送(按换行拆,逐段带随机间隔,多气泡)
+  2. 修分段:msg_seq 递增(QQ 同 msg_id 必须不同 msg_seq,否则第2段起返400)+ 加 on_before_llm 思考延迟(可配 reply_delay_min/max_ms)
 """
 import asyncio
 import logging
@@ -39,8 +40,18 @@ def split_reply(text: str, max_segments: int = 3, min_segments: int = 2) -> list
 
 
 class ContinuousSendPlugin(Plugin):
-    """消息分段发送:on_message_out 拆回复 → 逐段下发 → 多气泡。
-    仅处理 QQ 被动回复(ctx.qq_msg_id 非空);代答主动发送无 msg_id 不处理。"""
+    """回复节奏控制:on_before_llm 思考延迟(收到后随机等待再回,缓解回复过快)
+    + on_message_out 分段多气泡发送。仅分段受 qq_msg_id 门控(被动回复)。"""
+
+    async def on_before_llm(self, ctx):
+        """回复前思考延迟:LLM 前随机等待(模拟看完消息再打字,缓解回复过快)。
+        delay_max<=0 禁用;范围 [min,max] ms 随机,面板可配。"""
+        params = await self.get_params(ctx.object_id)
+        dmin = float(params.get("reply_delay_min_ms", 3000)) / 1000.0
+        dmax = float(params.get("reply_delay_max_ms", 5000)) / 1000.0
+        if dmax > 0:
+            await asyncio.sleep(random.uniform(dmin, max(dmax, dmin)))
+        return HookResult.CONTINUE
 
     async def on_message_out(self, ctx):
         params = await self.get_params(ctx.object_id)
@@ -59,7 +70,9 @@ class ContinuousSendPlugin(Plugin):
             if i > 0:
                 await asyncio.sleep(random.uniform(interval_min, interval_max))   # 段间随机间隔(模拟打字)
             try:
-                await send_c2c_message(ctx.object_id, seg, msg_id=msg_id)
+                # msg_seq 递增(1,2,3...):QQ 被动回复同 msg_id 必须用不同 msg_seq,
+                # 否则第 2 段起 QQ 返 400(同 msg_id+msg_seq 重复)。这是分段发送的关键。
+                await send_c2c_message(ctx.object_id, seg, msg_id=msg_id, msg_seq=i + 1)
             except Exception:
                 # 兜底:某段失败 → 剩余段(含当前)写回 reply_text,清 reply_sent,让 webhook 单条兜底发
                 logger.exception("continuous_send 第 %d 段下发失败,剩余交 webhook 兜底 oid=%s",

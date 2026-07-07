@@ -35,5 +35,6 @@ def test_output_contract_always_appended():
     prompt = render_system_prompt(card)
     assert "【输出契约】" in prompt
     assert prompt.rfind("【输出契约】") > prompt.rfind("【关于用户】")   # 契约在关于用户段之后
-    # 契约含禁止项(括号动作/旁白)
+    # 契约含禁止项(括号动作/旁白) + 诚实约束(不编造)
     assert "禁止" in prompt and "旁白" in prompt
+    assert "诚实" in prompt
