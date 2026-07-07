@@ -47,6 +47,7 @@ const inferring = ref(false)
 const scoreModalShow = ref(false)
 const scoreModalMid = ref('')
 const scoreModalBase = ref(80)
+const scoreModalNote = ref('')
 
 // —— 编辑内容弹窗(软改)——
 const editModalShow = ref(false)
@@ -116,9 +117,13 @@ async function selectBlock(b: any) {
 async function loadMessages() {
   if (!activeOid.value || !activeBlockId.value) return
   try {
+    // 记录刷新前是否在底部附近(用户没主动向上滚查看历史)。距底部 < 80px 视为在底部
+    const el = streamEl.value
+    const wasAtBottom = !el || (el.scrollHeight - el.scrollTop - el.clientHeight) < 80
     messages.value = await listMessages(activeOid.value, { block_id: activeBlockId.value })
     await nextTick()
-    if (streamEl.value) streamEl.value.scrollTop = streamEl.value.scrollHeight  // 新消息滚底
+    // 只在用户原本在底部时跟随滚底(向上滚查看/改上面的内容时,轮询刷新不打断)
+    if (wasAtBottom && streamEl.value) streamEl.value.scrollTop = streamEl.value.scrollHeight
   } catch (e: any) { message.error('' + e) }
 }
 
@@ -176,16 +181,17 @@ async function clearAll() {
 }
 
 // —— 内联改分 ——
-function openScore(mid: string, scoreBase: any) {
+function openScore(mid: string, scoreBase: any, scoreNote: any) {
   scoreModalMid.value = mid
   const b = Number(scoreBase)
   scoreModalBase.value = (!isNaN(b) && scoreBase !== '' && scoreBase !== undefined && scoreBase !== null) ? b : 80
+  scoreModalNote.value = scoreNote || ''
   scoreModalShow.value = true
 }
 async function applyScore() {
   if (!scoreModalMid.value) return
   try {
-    const r = await setScore(scoreModalMid.value, scoreModalBase.value)
+    const r = await setScore(scoreModalMid.value, scoreModalBase.value, scoreModalNote.value)
     message.success(`已改分:score = ${r.score}`)
     scoreModalShow.value = false; scoreModalMid.value = ''
     await loadMessages(); await loadScore()
@@ -333,10 +339,11 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
               <n-tag v-if="m.status && m.status !== 'active'" size="tiny">{{ m.status }}</n-tag>
             </div>
             <div style="word-break:break-all; white-space:pre-wrap">{{ m.content }}</div>
+            <div v-if="m.score_note" style="font-size:11px; color:#888; margin-top:2px; font-style:italic">批注:{{ m.score_note }}</div>
             <!-- 操作:改分(仅 ai/proxy)/ 编辑内容(软改,所有)/ 软删(所有) 三者并存 -->
             <n-space v-if="m.status !== 'deleted'" style="margin-top:2px" align="center" :size="4">
               <n-button v-if="m.sender === 'ai' || m.sender === 'proxy'" size="tiny" type="primary" ghost
-                        @click="openScore(m.mid, m.score_base)">改分</n-button>
+                        @click="openScore(m.mid, m.score_base, m.score_note)">改分</n-button>
               <n-button size="tiny" type="info" ghost @click="openEdit(m.mid, m.content)">编辑内容</n-button>
               <n-popconfirm @positive-click="del(m.mid)">
                 <template #trigger><n-button size="tiny" type="error" ghost>软删</n-button></template>
@@ -376,6 +383,8 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <n-space vertical>
         <span style="font-size:12px; color:#999">覆盖 score_base,保留历史 mood_bias 重算 score</span>
         <n-input-number v-model:value="scoreModalBase" :min="0" :max="100" />
+        <span style="font-size:12px; color:#999">批注(说明为什么这个分,可选)</span>
+        <n-input v-model:value="scoreModalNote" type="textarea" :rows="2" placeholder="例:语气自然但稍微跑题" />
       </n-space>
       <template #action>
         <n-button @click="scoreModalShow = false">取消</n-button>

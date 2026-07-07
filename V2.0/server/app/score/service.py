@@ -157,10 +157,11 @@ async def _collect_sample(redis: Redis, object_id: str, kind: str,
 
 # ================ 手动改分 / 取分(Web 面板 M7 调,M3 先建接口)================
 
-async def manual_set_score(redis: Redis, mid: str, score_base: int) -> dict | None:
+async def manual_set_score(redis: Redis, mid: str, score_base: int,
+                           score_note: str | None = None) -> dict | None:
     """手动改分:覆盖 score_base;mood_bias 保留原值(原为空则按原 mood_at_score 重算);
-    重算 score=clamp(base+mood_bias)。返回新四元组;消息不存在返回 None。
-    设计:手动改分尊重评分时刻的历史心情(保留 mood_bias),只改基础分。"""
+    重算 score=clamp(base+mood_bias)。score_note(2026-07-07):评分批注,说明为什么这个分。
+    返回新四元组;消息不存在返回 None。设计:手动改分尊重评分时刻的历史心情,只改基础分。"""
     from storage import chat_store
     from mood import service as mood_service
 
@@ -186,7 +187,8 @@ async def manual_set_score(redis: Redis, mid: str, score_base: int) -> dict | No
         if oid:
             mood_bias = await mood_service.bias_for(redis, mood_value)   # 收口(架构 #5)
     quad = await chat_store.set_score(redis, mid,
-                                      score_base=score_base, mood_value=mood_value, mood_bias=mood_bias)
+                                      score_base=score_base, mood_value=mood_value, mood_bias=mood_bias,
+                                      score_note=score_note)
     await redis.hset(f"mychat:msg:{mid}", "score_manual", "1")   # 标记手动覆盖(面板区分)
     quad["score_manual"] = "1"
     return quad
@@ -217,6 +219,7 @@ async def get_score(redis: Redis, mid: str) -> dict | None:
         "score": _num(int, msg.get("score", "")),
         "score_reason": msg.get("score_reason", ""),
         "score_manual": msg.get("score_manual", ""),
+        "score_note": msg.get("score_note", ""),   # 评分批注(2026-07-07)
     }
 
 

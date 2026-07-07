@@ -43,7 +43,8 @@ async def get_score(mid: str):
 
 @router.patch("/chat/messages/{mid}/score", dependencies=[Depends(verify_token)])
 async def manual_set_score(mid: str, body: dict):
-    """手动改分:覆盖 score_base,重算 score(保留历史 mood_bias)。body: {"score_base": int}"""
+    """手动改分:覆盖 score_base,重算 score(保留历史 mood_bias)。
+    body: {"score_base": int, "score_note"?: str}(score_note=评分批注,2026-07-07)"""
     from score import service as score_service
     if "score_base" not in body:
         raise HTTPException(status_code=400, detail="score_base required")
@@ -51,8 +52,9 @@ async def manual_set_score(mid: str, body: dict):
         score_base = int(body["score_base"])
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="score_base must be int")
+    score_note = body.get("score_note")   # 可选批注(说明为什么这个分)
     redis = await get_redis()
-    data = await score_service.manual_set_score(redis, mid, score_base)
+    data = await score_service.manual_set_score(redis, mid, score_base, score_note=score_note)
     if data is None:
         raise HTTPException(status_code=404, detail="message not found")
     return data

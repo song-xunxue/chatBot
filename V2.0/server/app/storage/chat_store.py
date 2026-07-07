@@ -212,6 +212,7 @@ async def append_message(redis: Redis, object_id: str, *,
         "mood_at_score": "",
         "mood_bias": "",
         "score": "",
+        "score_note": "",   # 评分批注(2026-07-07,说明为什么这个分;手动改分填)
     }
     pipe = redis.pipeline()
     pipe.hset(_msg_key(mid), mapping=msg)            # 消息详情
@@ -502,14 +503,18 @@ async def delete_object_history(redis: Redis, object_id: str) -> dict:
 # ================ 评分(M3 调用,M2 预留)=================
 
 async def set_score(redis: Redis, mid: str, *,
-                    score_base: int, mood_value: float, mood_bias: float) -> dict:
+                    score_base: int, mood_value: float, mood_bias: float,
+                    score_note: str | None = None) -> dict:
     """写入 score 四元组(score 由 score.quad.compute_quad 计算,公式收口于彼,架构 #2)。
-    返回完整四元组,供反推判断(M3)。仅 ai/proxy 消息应调用。消息不存在返 {}。"""
+    score_note(可选,2026-07-07):评分批注,非 None 时一并写入。返回完整四元组。消息不存在返 {}。"""
     if not await redis.exists(_msg_key(mid)):
         return {}
     from score.quad import compute_quad   # 公式唯一来源;lazy import 避免 storage↔score 导入环
     quad = compute_quad(score_base, mood_value, mood_bias)
-    await redis.hset(_msg_key(mid), mapping=quad)
+    mapping = dict(quad)
+    if score_note is not None:
+        mapping["score_note"] = score_note
+    await redis.hset(_msg_key(mid), mapping=mapping)
     return quad
 
 

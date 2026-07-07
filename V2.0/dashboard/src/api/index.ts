@@ -40,8 +40,8 @@ export const clearHistory = (oid: string) =>
 
 // —— 评分 score(M3 + M7 samples)——
 export const getScore = (mid: string) => api.get(`/api/v1/chat/messages/${mid}/score`).then((r) => r.data)
-export const setScore = (mid: string, score_base: number) =>
-  api.patch(`/api/v1/chat/messages/${mid}/score`, { score_base }).then((r) => r.data)
+export const setScore = (mid: string, score_base: number, score_note?: string) =>
+  api.patch(`/api/v1/chat/messages/${mid}/score`, { score_base, score_note }).then((r) => r.data)
 export const getHealth = (oid: string, window = 0) =>
   api.get(`/api/v1/chat/${oid}/health`, { params: { window } }).then((r) => r.data)
 export const getSamples = (oid: string, kind = 'negative') =>

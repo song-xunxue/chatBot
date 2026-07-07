@@ -130,3 +130,34 @@ async def test_on_before_llm_sleeps_random_delay(monkeypatch):
     await p.on_before_llm(ctx)
     assert len(slept) == 1                # 思考延迟 sleep 一次
     assert 3.0 <= slept[0] <= 5.0         # 默认 reply_delay 3000-5000ms
+
+
+async def test_on_message_out_segment_failure_falls_back(monkeypatch):
+    """集成层:第 2 段 QQ 拒(模拟 400 HTTPStatusError,即真实 msg_seq 重复场景)
+    → 兜底:剩余段写回 reply_text + reply_sent=False,让 webhook 单条发(内容不丢)。
+    这是修复 msg_seq 问题时补的回归测试(模拟真实 QQ 拒重复)。"""
+    import httpx
+    import qq.api_client as qq_api
+    sent = []
+    calls = [0]
+
+    async def _fake_send(openid, content, msg_id="", msg_seq=1, human_authored=False):
+        calls[0] += 1
+        if calls[0] >= 2:
+            # 模拟 QQ 拒同 msg_id+msg_seq 重复(真实场景即此 400)
+            raise httpx.HTTPStatusError(
+                "400 Bad Request",
+                request=httpx.Request("POST", "https://api.sgroup.qq.com/v2/users/u1/messages"),
+                response=httpx.Response(400))
+        sent.append({"content": content, "msg_seq": msg_seq})
+
+    monkeypatch.setattr(qq_api, "send_c2c_message", _fake_send)
+    p = _make_plugin()
+    ctx = MessageContext(object_id="u1", reply_text="甲\n乙\n丙")
+    ctx.qq_msg_id = "msgX"
+    await p.on_message_out(ctx)
+    assert calls[0] == 2                  # 第 2 段失败中止
+    assert len(sent) == 1 and sent[0]["msg_seq"] == 1   # 仅第 1 段成功
+    assert ctx.reply_sent is False        # 兜底:webhook 接管单条发
+    assert "乙" in ctx.reply_text and "丙" in ctx.reply_text   # 剩余写回(内容不丢)
+
