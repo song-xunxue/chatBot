@@ -79,15 +79,16 @@ def _render_preferences(prefs) -> str:
     return "\n".join(parts)
 
 
-def _render_dialogue(examples: list) -> str:
-    """示例对话段:渲染前 MAX_DIALOGUE_RENDER 条,每条 user/character 截断"""
+def _render_dialogue(examples: list, user_label: str = "用户") -> str:
+    """示例对话段:渲染前 MAX_DIALOGUE_RENDER 条,每条 user/character 截断。
+    user_label(2026-07-07):用角色对用户的称呼(如"煜君")代"用户",拟人化。"""
     lines = []
     for ex in examples[:MAX_DIALOGUE_RENDER]:
         u = getattr(ex, "user", "") or ""
         c = getattr(ex, "character", "") or ""
         if not u and not c:
             continue
-        lines.append(f"用户:{_truncate(u)}\n角色:{_truncate(c)}")
+        lines.append(f"{user_label}:{_truncate(u)}\n角色:{_truncate(c)}")
     return "\n\n".join(lines)
 
 
@@ -100,6 +101,8 @@ def render_system_prompt(card: PersonaCard | None,
     if card is None:
         return _DEFAULT_PROMPT + OUTPUT_CONTRACT
     parts = []
+    # 2026-07-07 拟人化:用角色对用户的具体称呼(card.user_alias)代"用户",空则回退"用户"
+    user_label = (card.user_alias or "").strip() or "用户"
     if card.creator_notes:
         parts.append(f"【核心人设指令】\n{card.creator_notes}")
     if card.description:
@@ -114,17 +117,17 @@ def render_system_prompt(card: PersonaCard | None,
         parts.append(f"【喜好与厌恶】\n{pref_txt}")
     # 关于用户(对话另一方描述,让人设熟悉用户)
     if card.user_description:
-        parts.append(f"【关于用户】\n{card.user_description}")
+        parts.append(f"【关于{user_label}】\n{card.user_description}")
     # 与用户的关系(只渲染 relation;greeting 单独成段)
     if card.relationship and card.relationship.relation:
-        parts.append(f"【与用户的关系】\n{card.relationship.relation}")
+        parts.append(f"【与{user_label}的关系】\n{card.relationship.relation}")
     # 开场白(单独成段,只渲染一次)
     if card.relationship and card.relationship.greeting:
         parts.append(f"【开场白】\n{card.relationship.greeting}")
     if card.scenario:
         parts.append(f"【场景示例】\n{card.scenario}")
     if card.example_dialogue:
-        dlg_txt = _render_dialogue(card.example_dialogue)
+        dlg_txt = _render_dialogue(card.example_dialogue, user_label)
         if dlg_txt:
             parts.append(f"【示例对话】\n{dlg_txt}")
     st = state or card.dynamic_state

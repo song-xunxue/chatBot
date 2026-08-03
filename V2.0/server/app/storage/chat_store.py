@@ -35,6 +35,11 @@ M2 实现:
 变更说明：
   1. 新增 list_recent_sessions(跨 object_id 列最近活跃会话,SCAN blocks 键聚合 last_ts/block_count),
      供面板历史页自动展示会话列表(解决"看不到 openid"导致查不到历史)
+
+2026-07-07
+变更说明：
+  1. list_recent_blocks 改混合:同时返回 chat 真实 block + roleplay 训练 block,加 source 字段
+     (real/training)区分,供面板历史页混合展示(训练样本并入对话历史,拟人化一体体验)
 """
 import json
 import time
@@ -349,12 +354,13 @@ async def list_recent_sessions(redis: Redis, *, limit: int = 50) -> list[dict]:
 
 
 async def list_recent_blocks(redis: Redis, *, limit: int = 50) -> list[dict]:
-    """列最近活跃 block(跨所有 object_id,按 start_ts 倒序),供面板历史页 block 级会话列表(M7 改造)。
-    单用户场景下:每个 block = 一段会话,5h 后再聊自动开新 block → 左栏出现新会话条目(符合"会话=一段对话"心智)。
-    SCAN mychat:chat:*:blocks 收集所有 (block_id, start_ts, object_id),取最近 limit 个,补 block 元数据+msg_count。
-    会话/block 数少时 SCAN 安全;后续规模增长可改维护全局 blocks ZSet。无 block 返回空列表。"""
-    # 1. SCAN 所有会话的 blocks ZSet,收集 (start_ts, block_id, object_id)
-    entries: list[tuple[int, str, str]] = []
+    """列最近活跃 block(chat 真实 + roleplay 训练混合,按 start_ts 倒序),供面板历史页混合展示(2026-07-07 拟人化)。
+    每条带 source 字段(real=真实对话/training=训练样本)区分来源;单用户场景:block=一段会话或一段训练样本。
+    SCAN chat:*:blocks + block_roleplay:*:blocks 收集 (start_ts, block_id, object_id, source),
+    合并取最近 limit,pipeline 按 source 用对应键补元数据+msg_count。无 block 返回空列表。"""
+    # 1. SCAN chat + roleplay 的 blocks ZSet,收集 (start_ts, block_id, object_id, source)
+    entries: list[tuple[int, str, str, str]] = []
+    # chat 真实对话
     async for raw_key in redis.scan_iter(match="mychat:chat:*:blocks", count=100):
         key = raw_key.decode() if isinstance(raw_key, bytes) else raw_key
         prefix, suffix = "mychat:chat:", ":blocks"
@@ -363,23 +369,38 @@ async def list_recent_blocks(redis: Redis, *, limit: int = 50) -> list[dict]:
         object_id = key[len(prefix):-len(suffix)]
         if not object_id:
             continue
-        members = await redis.zrange(key, 0, -1, withscores=True)   # 全部 block_id + 其 start_ts(score)
-        for bid, ts in members:
+        for bid, ts in await redis.zrange(key, 0, -1, withscores=True):
             bid_s = bid.decode() if isinstance(bid, bytes) else bid
-            entries.append((int(ts), bid_s, object_id))
+            entries.append((int(ts), bid_s, object_id, "real"))
+    # roleplay 训练样本(物理隔离键,前缀独立)
+    async for raw_key in redis.scan_iter(match="mychat:block_roleplay:*:blocks", count=100):
+        key = raw_key.decode() if isinstance(raw_key, bytes) else raw_key
+        prefix, suffix = "mychat:block_roleplay:", ":blocks"
+        if not (key.startswith(prefix) and key.endswith(suffix)):
+            continue
+        object_id = key[len(prefix):-len(suffix)]
+        if not object_id:
+            continue
+        for bid, ts in await redis.zrange(key, 0, -1, withscores=True):
+            bid_s = bid.decode() if isinstance(bid, bytes) else bid
+            entries.append((int(ts), bid_s, object_id, "training"))
     if not entries:
         return []
-    # 2. 按 start_ts 倒序取最近 limit 个
+    # 2. 按 start_ts 倒序取最近 limit 个(混合排序)
     entries.sort(key=lambda e: e[0], reverse=True)
     entries = entries[:limit]
-    # 3. pipeline 补 block 元数据 + msg_count(hgetall/zcard 配对)
+    # 3. pipeline 补 block 元数据 + msg_count(按 source 用不同键:chat _block_key/_msgs_key,roleplay _rp_*)
     pipe = redis.pipeline()
-    for _ts, bid, _oid in entries:
-        pipe.hgetall(_block_key(bid))
-        pipe.zcard(_msgs_key(bid))
+    for _ts, bid, _oid, src in entries:
+        if src == "training":
+            pipe.hgetall(_rp_block_key(bid))
+            pipe.zcard(_rp_msgs_key(bid))
+        else:
+            pipe.hgetall(_block_key(bid))
+            pipe.zcard(_msgs_key(bid))
     raws = await pipe.execute()
     out = []
-    for i, (_ts, bid, oid) in enumerate(entries):
+    for i, (_ts, bid, oid, src) in enumerate(entries):
         block = raws[i * 2]
         if not block:
             continue
@@ -391,6 +412,7 @@ async def list_recent_blocks(redis: Redis, *, limit: int = 50) -> list[dict]:
             "end_ts": int(block.get("end_ts", 0) or 0),
             "status": block.get("status", ""),
             "msg_count": count,
+            "source": src,
         })
     return out
 

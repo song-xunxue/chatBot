@@ -144,11 +144,15 @@ async def score_reply(redis: Redis, object_id: str, reply_text: str,
 
 
 async def _collect_sample(redis: Redis, object_id: str, kind: str,
-                          mid: str, text: str, score: int) -> None:
-    """把评分样本收集到 pos/neg List(供 reverse_infer),LPUSH+LTRIM 保留最近 N 条。"""
+                          mid: str, text: str, score: int,
+                          source: str = "dialog") -> None:
+    """把评分样本收集到 pos/neg List(供 reverse_infer),LPUSH+LTRIM 保留最近 N 条。
+    source(2026-07-07):样本来源标记 dialog(真实对话)/roleplay(训练剧本),写入 payload,
+    供 reverse_infer 按 source 区分对待(真实对话权威,剧本参考)——修 score 队列
+    roleplay/live 共池无 source 区分的已存在污染。"""
     key = (_K_POS if kind == "positive" else _K_NEG).format(oid=object_id)
     payload = json.dumps({"mid": mid, "text": text, "score": score,
-                          "ts": _now_ms()}, ensure_ascii=False)
+                          "ts": _now_ms(), "source": source}, ensure_ascii=False)
     pipe = redis.pipeline()
     pipe.lpush(key, payload)                                   # 新样本在前
     pipe.ltrim(key, 0, settings.score_sample_keep - 1)         # 裁剪保留最近 N 条
@@ -281,12 +285,16 @@ async def record_negative_sample(redis: Redis, object_id: str,
 
 
 async def record_score_sample(redis: Redis, object_id: str,
-                              mid: str, text: str, score: int) -> None:
+                              mid: str, text: str, score: int,
+                              source: str = "roleplay") -> None:
     """按 score 阈值归类记录到 pos/neg 样本队列(2026-07-05 roleplay 评分联动反推用)。
-    neutral 不记。复用 _collect_sample。改分/删前应先 remove_sample_by_mid 清旧,避免脏数据。"""
+    neutral 不记。复用 _collect_sample。改分/删前应先 remove_sample_by_mid 清旧,避免脏数据。
+    source(2026-07-07,默认 roleplay):本函数供 roleplay 评分联动(chat_store.append_roleplay_message
+    /set_roleplay_score),故默认打 source='roleplay';reverse_infer 据此区分真实对话/训练剧本样本
+    (真实权威,剧本参考),修 score 队列 roleplay/live 共池无区分的已存在污染。"""
     kind = classify(score)
     if kind in ("positive", "negative"):
-        await _collect_sample(redis, object_id, kind, mid, text, score)
+        await _collect_sample(redis, object_id, kind, mid, text, score, source=source)
 
 
 async def remove_sample_by_mid(redis: Redis, object_id: str, mid: str) -> None:

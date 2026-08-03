@@ -22,7 +22,7 @@ const loading = ref(false)
 const saving = ref(false)
 const persona = ref<any>(null)   // 当前唯一人设(单人设)
 const form = ref({
-  name: '', description: '', creator_notes: '', user_description: '',
+  name: '', description: '', creator_notes: '', user_description: '', user_alias: '',
   personality: '', scenario: '', speech_style: '', catchphrase: '',
   provider: 'deepseek', model: '',
 })
@@ -36,6 +36,7 @@ const LONG_FIELDS: { field: string; label: string; hint: string }[] = [
   { field: 'description', label: '描述(背景设定)', hint: '背景故事 / 世界观设定' },
   { field: 'scenario', label: '场景示例', hint: '场景设定(反推可改 → 渲染【场景示例】段)' },
   { field: 'user_description', label: '关于用户(你)', hint: '对话另一方(你)的特征,让人设更熟悉你' },
+  { field: 'user_alias', label: '对用户的称呼', hint: '角色怎么称呼对方(如"煜君");自动从对话学,这里可手动改,renderer/记忆用它代"用户"更拟人' },
   { field: 'catchphrase', label: '口头禅', hint: '标志性短语(渲染【人物画像】段)' },
 ]
 
@@ -89,6 +90,7 @@ async function load() {
       description: p.description || '',
       creator_notes: p.creator_notes || '',
       user_description: p.user_description || '',
+      user_alias: p.user_alias || '',
       personality: p.personality || '',                 // B-5a 顶层字段
       scenario: p.scenario || '',                       // B-5a 顶层字段
       speech_style: p.profile?.speech_style || '',      // B-5a profile 嵌套
@@ -108,6 +110,7 @@ async function save() {
     await updatePersona(persona.value.id, {
       name: form.value.name, description: form.value.description,
       creator_notes: form.value.creator_notes, user_description: form.value.user_description,
+      user_alias: form.value.user_alias,
       personality: form.value.personality, scenario: form.value.scenario,
       profile: { speech_style: form.value.speech_style, catchphrase: form.value.catchphrase },
     })

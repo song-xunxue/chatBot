@@ -12,7 +12,7 @@ import {
 } from 'naive-ui'
 import {
   listRoleplaySessions, newRoleplaySession, addRoleplay, listRoleplay,
-  updateRoleplay, setRoleplayScore, deleteRoleplay, deleteRoleplaySession,
+  updateRoleplay, setRoleplayScore, deleteRoleplay, deleteRoleplaySession, extractRoleplay,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
 
@@ -172,6 +172,19 @@ async function delSession(s: any) {
   } catch (e: any) { message.error('' + e) }
 }
 
+// —— 抽取为记忆(2026-07-07):roleplay 训练样本 → long_term,绕过 QQ 对话直接造记忆 ——
+const extracting = ref(false)
+async function extract(blockId?: string) {
+  const bid = blockId || activeBlockId.value
+  if (!bid) { message.warning('请先选择会话'); return }
+  extracting.value = true
+  try {
+    const r = await extractRoleplay(oid.value, bid)
+    message.success(`已抽取 ${r.extracted} 条 / 写入 ${r.written} 条 / 去重 ${r.skipped_dup} 条`)
+  } catch (e: any) { message.error('' + e) }
+  finally { extracting.value = false }
+}
+
 async function poll() {
   if (typeof document !== 'undefined' && document.hidden) return
   await loadSessions()
@@ -220,6 +233,11 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
 
     <!-- 主区:对话流 + 录入 -->
     <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; padding-left:16px; min-width:0">
+      <!-- 抽取为记忆工具栏(2026-07-07):roleplay → long_term,绕过 QQ 对话直接造记忆 -->
+      <div style="flex-shrink:0; padding:6px 8px; border-bottom:1px solid #efeff5; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+        <n-button size="small" type="warning" ghost :loading="extracting" :disabled="!activeBlockId" @click="extract()">抽取当前会话为记忆</n-button>
+        <span style="font-size:11px; color:#999">把本会话训练样本抽成长期记忆(过滤 system 旁白 + 防幻觉铁律),不经过 QQ 对话直接造记忆。重复点靠语义去重兜底。</span>
+      </div>
       <!-- 对话流 -->
       <div ref="streamEl" style="flex:1; overflow:auto; padding:8px; min-height:0">
         <n-empty v-if="!messages.length" description="该会话暂无样本,从下方录入第一条开始" style="margin:40px auto" />

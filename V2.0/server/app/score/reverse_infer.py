@@ -156,10 +156,19 @@ def _make_token() -> str:
 
 # —— LLM 提炼(评分样本 → 人设字段 JSON)——
 
-async def _llm_extract(positives: list[str], negatives: list[str], llm) -> dict:
-    """调 LLM 从评分样本提炼人设字段 JSON。positives/negatives 为回复文本列表。失败返回 {}。"""
-    pos_txt = "\n".join(f"- {p}" for p in positives[:20]) if positives else "(无)"
-    neg_txt = "\n".join(f"- {n}" for n in negatives[:10]) if negatives else "(无)"
+async def _llm_extract(samples_pos: list[dict], samples_neg: list[dict], llm) -> dict:
+    """调 LLM 从评分样本提炼人设字段 JSON。samples_* 为 list_samples 返回的 dict 列表
+    (含 text/source/mid/score)。prompt 按来源标注(2026-07-07):真实对话(dialog)权威,
+    训练剧本(roleplay)参考——修 score 队列 roleplay/live 共池无 source 区分的已存在污染。
+    失败返回 {}。"""
+    def _label(s: dict) -> str:
+        # 标注样本来源:[真实对话] 权威 / [训练剧本] 参考
+        return "[训练剧本]" if s.get("source") == "roleplay" else "[真实对话]"
+
+    pos_txt = "\n".join(f"{_label(s)} {s.get('text', '')}"
+                        for s in samples_pos[:20] if s.get("text")) or "(无)"
+    neg_txt = "\n".join(f"{_label(s)} {s.get('text', '')}"
+                        for s in samples_neg[:10] if s.get("text")) or "(无)"
     prompt = (
         "你是人设分析师。以下是某角色在与用户对话中获得高分的优秀回复(正样本,契合人设应保持的风格),"
         "以及获得低分的偏离回复(负样本,应避免的风格)。请据此提炼该角色的人设字段。\n"
@@ -172,6 +181,10 @@ async def _llm_extract(positives: list[str], negatives: list[str], llm) -> dict:
         "(如'说话简短直接''爱用语气词''偶尔俏皮'),目标是像真人微信聊天一样自然。\n"
         "绝对不要总结成'使用括号动作描写''加舞台指示/旁白''用（轻声笑了）这类格式'——"
         "任何鼓励括号动作/旁白/颜文字堆砌的描述都禁止输出。\n\n"
+        "【样本来源说明——重要】\n"
+        "每条样本前标注了来源:[真实对话]=与真用户的实际对话(权威依据,优先采信);"
+        "[训练剧本]=人工录入的训练样本(参考补充,可能含设定性/非自然对话内容)。\n"
+        "提炼人设风格时主要依据 [真实对话] 样本,[训练剧本] 仅作补充参考,勿被其设定性措辞带偏。\n\n"
         f"【高分优秀回复(正样本,应贴合的风格)】\n{pos_txt}\n\n"
         f"【低分偏离回复(负样本,应避免的风格)】\n{neg_txt}\n"
     )
@@ -201,14 +214,15 @@ async def infer_and_merge(redis, object_id: str, *,
             return {"aborted_reason": "persona_not_found"}
         positives = await score_service.list_samples(redis, object_id, "positive")
         negatives = await score_service.list_samples(redis, object_id, "negative")
-        pos_texts = [s.get("text", "") for s in positives if s.get("text")]
-        neg_texts = [s.get("text", "") for s in negatives if s.get("text")]
-        if not pos_texts and not neg_texts:
+        # 过滤无文本样本;_llm_extract 接收 dict 列表(含 source),按来源标注(2026-07-07)
+        positives = [s for s in positives if s.get("text")]
+        negatives = [s for s in negatives if s.get("text")]
+        if not positives and not negatives:
             return {"aborted_reason": "no_samples", "diff": {}}
         llm = resolve_provider("reverse_infer", provider_name)
         if llm is None:
             return {"aborted_reason": "no_llm_provider", "diff": {}}
-        extracted = await _llm_extract(pos_texts, neg_texts, llm)
+        extracted = await _llm_extract(positives, negatives, llm)
         if not extracted:
             return {"aborted_reason": "llm_empty_or_failed", "diff": {}}
         diff = _build_diff(card, extracted, mode)
@@ -217,7 +231,7 @@ async def infer_and_merge(redis, object_id: str, *,
                         json.dumps({"pid": pid, "object_id": object_id, "diff": diff},
                                    ensure_ascii=False), ex=600)
         return {"diff": diff, "confirm_token": token,
-                "positive_count": len(pos_texts), "negative_count": len(neg_texts)}
+                "positive_count": len(positives), "negative_count": len(negatives)}
 
     # apply:凭 token 落库
     if not confirm_token:

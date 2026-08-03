@@ -12,6 +12,7 @@ roleplay 训练样本 REST 接口(M8 + 2026-07-05 多会话+评分):会话 CRUD 
   PUT    /roleplay/{oid}/messages/{mid}      改单条 {content}
   PATCH  /roleplay/{oid}/messages/{mid}/score 改 roleplay 评分 {score_base}(联动反推样本队列)
   DELETE /roleplay/{oid}/messages/{mid}      删单条(→neg 队列 + 清 score 样本)
+  POST   /roleplay/{oid}/extract             把训练样本抽成 long_term 记忆(手动触发,复用 encoder)
 
 作者: 李文煜
 日期: 2026-06-30
@@ -22,6 +23,13 @@ roleplay 训练样本 REST 接口(M8 + 2026-07-05 多会话+评分):会话 CRUD 
   2. 评分联动反推:append 加 score_base 参数 + PATCH messages/{mid}/score;assistant 评分按阈值
      写 pos/neg 样本队列(复用 score.service),reverse_infer 零改动即读 roleplay 样本
   3. list messages 加 block_id 过滤(只列选中会话)
+
+2026-07-07
+变更说明：
+  1. 新增 POST /roleplay/{oid}/extract:roleplay 训练样本 → long_term 记忆抽取(手动触发),
+     复用 encoder.extract_facts_batch(过滤 system 旁白 + 每 12 条分批 + 防幻觉铁律),
+     走 coordinator.upsert_facts_batch 写入(source='roleplay',不升级 core,天然防污染)。
+     用于不经过 QQ 对话直接在后端创造记忆,服务于人设反推/记忆召回
 """
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
@@ -144,3 +152,31 @@ async def delete_session(block_id: str):
     redis = await get_redis()
     r = await chat_store.delete_roleplay_block(redis, block_id)
     return {"deleted": True, **r}
+
+
+@router.post("/roleplay/{oid}/extract", dependencies=[Depends(verify_token)])
+async def extract_to_memory(oid: str, body: dict = Body(default={})):
+    """把 roleplay 训练样本抽成 long_term 记忆(手动触发,2026-07-07)。
+    body: {block_id?}。取该会话(缺省全部)的 roleplay 消息,复用 encoder.extract_facts_batch
+    抽事实(过滤 system 旁白 + 每 12 条分批 + 防幻觉铁律),批量写入 long_term
+    (source='roleplay',走 upsert_facts_batch 不升级 core,天然防 core 污染)。
+    返回 {extracted, written, skipped_dup, written_mids}。
+    幂等:重复触发靠语义去重兜底(全部命中 skipped_dup,不产生新事实,access_count 微涨)。"""
+    from core.config import settings
+    from memory.roleplay_extract import extract_roleplay_facts
+    from memory.coordinator import get_memory_coordinator
+
+    redis = await get_redis()
+    block_id = body.get("block_id") or None
+    coord = await get_memory_coordinator()
+    # 2026-07-07 拟人化:取角色对用户称呼,encoder 用具体称呼抽记忆(如"煜君喜欢动漫")
+    from persona.store import get_object_persona_id, get_persona
+    _pid = await get_object_persona_id(redis, oid)
+    _card = await get_persona(redis, _pid)
+    user_alias = _card.user_alias if _card else ""
+    facts = await extract_roleplay_facts(
+        redis, oid, block_id=block_id,
+        llm=coord.llm, model=settings.memory_summary_model or "",
+        user_alias=user_alias)
+    result = await coord.upsert_facts_batch(oid, facts)
+    return {"extracted": len(facts), **result}

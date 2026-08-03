@@ -131,3 +131,5 @@ export const setRoleplayScore = (oid: string, mid: string, score_base: number) =
   api.patch(`/api/v1/roleplay/${oid}/messages/${mid}/score`, { score_base }).then((r) => r.data)
 export const deleteRoleplay = (oid: string, mid: string) =>
   api.delete(`/api/v1/roleplay/${oid}/messages/${mid}`).then((r) => r.data)
+export const extractRoleplay = (oid: string, blockId?: string) =>
+  api.post(`/api/v1/roleplay/${oid}/extract`, blockId ? { block_id: blockId } : {}).then((r) => r.data)

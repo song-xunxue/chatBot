@@ -22,7 +22,6 @@ const menuOptions: MenuOption[] = [
   { label: '插件管理', key: 'plugin' },
   { label: '系统配置', key: 'system' },
   { label: '代人代答', key: 'takeover' },
-  { label: '训练样本', key: 'roleplay' },
 ]
 
 const activeKey = computed(() => (route.name as string) || 'history')

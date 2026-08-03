@@ -41,7 +41,7 @@ import {
   getSystemConfig, reloadSystem,
   toggleTakeover, getTakeoverStatus, listTakeoverQueue, answerTakeover, answerTakeoverBatch, skipTakeover,
   addRoleplay, addRoleplayBatch, listRoleplay, updateRoleplay, deleteRoleplay,
-  listRoleplaySessions, newRoleplaySession,
+  listRoleplaySessions, newRoleplaySession, extractRoleplay,
 } from '@/api'
 
 function mockResolve(method: 'get' | 'post' | 'put' | 'delete', responseData: any) {
@@ -157,6 +157,10 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/m1', { content: 'new' })
     mockResolve('delete', {}); await deleteRoleplay('o', 'm1')
     expect(apiMethods.delete).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/m1')
+    mockResolve('post', {}); await extractRoleplay('o')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/extract', {})
+    mockResolve('post', {}); await extractRoleplay('o', 'b1')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/extract', { block_id: 'b1' })
   })
 })
 

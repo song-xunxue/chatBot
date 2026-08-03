@@ -1,6 +1,6 @@
 /**
  * 路由 + access_token 鉴权守卫(V2.0 M7)
- * 菜单:人设/历史/记忆/心情/插件/系统/代人代答/训练样本(评分已并入对话历史,2026-07-03)。
+ * 菜单:人设/历史/记忆/心情/插件/系统/代人代答(训练样本已并入对话历史,2026-07-07)。
  * 作者: 李文煜
  */
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
@@ -19,7 +19,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'plugin', name: 'plugin', component: () => import('@/views/Plugin.vue'), meta: { title: '插件管理' } },
       { path: 'system', name: 'system', component: () => import('@/views/System.vue'), meta: { title: '系统配置' } },
       { path: 'takeover', name: 'takeover', component: () => import('@/views/Takeover.vue'), meta: { title: '代人代答' } },
-      { path: 'roleplay', name: 'roleplay', component: () => import('@/views/Roleplay.vue'), meta: { title: '训练样本' } },
     ],
   },
 ]

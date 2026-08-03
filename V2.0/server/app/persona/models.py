@@ -16,6 +16,12 @@ Profile/Preferences/Relationship/DialogueExample),
 变更说明：
   1. 面板改造:PersonaCard 新增 user_description 字段(描述对话另一方=用户,让人设熟悉用户),
      配合 renderer 渲染【关于用户】段注入 system_prompt
+
+2026-07-07
+变更说明：
+  1. 拟人化:PersonaCard 新增 user_alias 字段(角色对用户的称呼,如"煜君")。自动从对话学
+     (memory/user_alias.py 正则 + coordinator.on_turn_complete 钩子)/面板可改;renderer/encoder
+     用它代替"用户"全链路(【关于X】/示例对话"X:"/记忆抽取 prompt),让记忆与对话用具体称呼更拟人
 """
 import time
 from dataclasses import dataclass, field, asdict, fields
@@ -94,6 +100,7 @@ class PersonaCard:
     language: str = "zh-CN"
     description: str = ""                        # 背景设定
     user_description: str = ""                   # 关于用户(对话另一方的描述,让人设熟悉用户)
+    user_alias: str = ""                         # 角色对用户的称呼(如"煜君";自动从对话学/面板可改;renderer/encoder 用它代"用户",拟人化)
     personality: str = ""                        # 性格
     scenario: str = ""                           # 场景示例
     creator_notes: str = ""                      # 核心人设指令

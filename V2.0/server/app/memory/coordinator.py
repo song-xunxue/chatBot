@@ -200,12 +200,15 @@ class MemoryCoordinator:
                 return
             oid = ctx.object_id
             model = self._summary_model()
+            # 2026-07-07 拟人化:取角色对用户的称呼,传给 encoder 让记忆用具体称呼(如"煜君喜欢动漫")
+            _pc = getattr(ctx, "persona_card", None)
+            user_alias = (_pc.user_alias if _pc else "") or ""
             threshold = settings.memory_episodic_summarize_threshold
             turn_count = await store.get_turn_count(self.redis, oid)
             if (settings.memory_episodic_enable and threshold > 0 and turn_count > 0
                     and turn_count % threshold == 0):
                 recent = await store.get_working_span(self.redis, oid, threshold)
-                summary = await encoder.summarize(recent, self.llm, model)
+                summary = await encoder.summarize(recent, self.llm, model, user_alias=user_alias)
                 if summary:
                     await store.append_episodic(self.redis, oid, EpisodicEntry(
                         id=f"epi_{turn_count}",
@@ -226,7 +229,7 @@ class MemoryCoordinator:
             if (settings.memory_longterm_enable and extract_n > 0
                     and turn_count > 0 and turn_count % extract_n == 0):
                 recent = await store.get_working_span(self.redis, oid, extract_n)
-                facts = await encoder.extract_facts_batch(recent, self.llm, model)
+                facts = await encoder.extract_facts_batch(recent, self.llm, model, user_alias=user_alias)
                 if facts:
                     # 2026-07-07 优化3:评分联动 importance(本轮高分 +0.1 强化/低分 -0.1 弱化新 facts)
                     score_final = getattr(ctx, "last_score", -1.0)
@@ -242,13 +245,36 @@ class MemoryCoordinator:
                             # 2026-07-07 优化4:高重要度/关系事实升级 core 层(常驻注入)
                             if float(f.get("importance", 0)) >= 0.8 or f.get("category") == "relationship":
                                 await self._upsert_core_fact(oid, f)
+            # 2026-07-07 拟人化:自动学用户称呼(每轮扫 working span,用户自报"叫我X"则更新 persona.user_alias)
+            try:
+                await self._learn_user_alias(oid)
+            except Exception as e:
+                logger.warning("learn_user_alias failed: %s", e)
         except Exception as e:
             logger.exception("memory on_turn_complete failed: %s", e)
+
+    async def _learn_user_alias(self, oid: str) -> None:
+        """2026-07-07 拟人化:扫描最近 working 消息,若用户自报称呼则更新 persona.user_alias(最新覆盖)。
+        正则免 LLM(memory/user_alias.py);无命中不更新。误匹配由面板手动编辑兜底。"""
+        from memory.user_alias import learn_user_alias_from_messages
+        from persona import store as persona_store
+        recent = await store.get_working_span(self.redis, oid, 6)   # 最近 6 条够(轻量)
+        alias = learn_user_alias_from_messages(recent)
+        if not alias:
+            return
+        pid = await persona_store.get_object_persona_id(self.redis, oid)
+        card = await persona_store.get_persona(self.redis, pid)
+        if not card or card.user_alias == alias:
+            return   # 无卡或无变化
+        card.user_alias = alias
+        await persona_store.set_persona(self.redis, card)
+        logger.info("学到用户称呼 oid=%s alias=%s", oid, alias)
 
     async def upsert_fact(self, oid: str, fact: dict) -> bool:
         """公开:写入一条长期事实(去重合并 + 上限淘汰)。供外部单条写入(如 write_memory 工具)——
         不再让外部深入私有 _upsert_fact_dedup/_lock(架构 #6 收口)。
         内部持 _lock(oid) 串行化 + 拉 existing,委托 _upsert_fact_dedup(批量内部用,调用方持锁)。
+        fact 可含 source(默认 dialog);_upsert_fact_dedup 新建时从 fact 读 source。
         redis 不可用返 False。"""
         if self.redis is None:
             return False
@@ -257,12 +283,40 @@ class MemoryCoordinator:
             await self._upsert_fact_dedup(oid, fact, existing)
         return True
 
+    async def upsert_facts_batch(self, oid: str, facts: list[dict]) -> dict:
+        """公开:批量写入长期事实(2026-07-07 roleplay→long_term 用)。
+        持 _lock(oid) 一次 + 拉 existing 一次 + 循环 _upsert_fact_dedup,对齐 on_turn_complete
+        批量模式,让同批 facts 互相去重(避免逐条 upsert_fact 的 N 次锁竞争 + 同批不去重堆积)。
+        每条 fact 可含 source(默认 dialog);走公开入口不调 _upsert_core_fact → roleplay fact
+        不升级 core(天然防 core 污染)。返回 {written, skipped_dup, written_mids}。
+        facts 为空 / redis 不可用返全 0。"""
+        if self.redis is None or not facts:
+            return {"written": 0, "skipped_dup": 0, "written_mids": []}
+        written = 0
+        skipped_dup = 0
+        written_mids: list[str] = []
+        async with self._lock(oid):
+            existing = await store.get_all_long_term(self.redis, oid)
+            for f in facts:
+                # _upsert_fact_dedup 返回 True=新写入 / False=命中去重合并
+                created = await self._upsert_fact_dedup(oid, f, existing)
+                if created:
+                    written += 1
+                    # existing 尾部即新建条目(_upsert_fact_dedup 内 append)
+                    if existing:
+                        written_mids.append(existing[-1].id)
+                else:
+                    skipped_dup += 1
+        return {"written": written, "skipped_dup": skipped_dup, "written_mids": written_mids}
+
     async def _upsert_fact_dedup(self, oid: str, fact: dict,
-                                 existing: list | None = None) -> None:
+                                 existing: list | None = None) -> bool:
         """事实去重合并 + 写向量(2026-07-07 优化2:语义去重 cosine 优先,降级 Jaccard);
         existing 复用避免重复 HGETALL;新增后调 _enforce_max_facts 上限淘汰。
-        内部原语:调用方须持 _lock(oid)(on_turn_complete 批量 / consolidate_sleep 巩固);
-        外部单条写入走公开 upsert_fact(自管锁,架构 #6)。"""
+        内部原语:调用方须持 _lock(oid)(on_turn_complete 批量 / consolidate_sleep 巩固 /
+        upsert_facts_batch 批量);外部单条写入走公开 upsert_fact(自管锁,架构 #6)。
+        source 从 fact.get('source','dialog') 读(2026-07-07,roleplay 抽取打 source='roleplay')。
+        返回 True=新写入 / False=命中已有去重合并(供 upsert_facts_batch 统计)。"""
         from core.config import settings
         from memory.retriever import cosine_similarity
         if existing is None:
@@ -299,20 +353,21 @@ class MemoryCoordinator:
                     dup_found = True
                     break
         if dup_found:
-            return
+            return False
         new = MemoryItem(
             id=f"mem_{uuid.uuid4().hex[:12]}",
             content=fact["content"],
             category=Category(fact.get("category", "fact")),
             importance=fact["importance"],
             emotion=fact["emotion"],
-            source="dialog",
+            source=fact.get("source", "dialog"),
         )
         await store.upsert_long_term(self.redis, oid, new)
         if new_vec:
             await store.set_vec(self.redis, oid, new.id, new_vec)   # 新建记忆同步存 vec
         existing.append(new)
         await self._enforce_max_facts(oid, existing)
+        return True
 
     async def _enforce_max_facts(self, oid: str, items: list) -> None:
         """长期记忆超上限淘汰:按 importance 升序软遗忘最低分条目(locked 豁免)"""
