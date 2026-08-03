@@ -50,9 +50,39 @@ async def _resolve_persona(redis, oid: str):
     return card
 
 
+async def _read_tts_voice_params(oid: str):
+    """从 tts_reply 插件 config 读 voice/speed/gain/emotion_enable(共享 bot 音色)。
+    插件未加载/异常用默认(claire/1.0/0.0/True)。代答 TTS 复用插件音色设置,避免重复配置。"""
+    try:
+        from plugins import get_plugin_manager
+        mgr = get_plugin_manager()
+        if mgr and "tts_reply" in mgr.list_loaded():
+            p = await mgr.get_params("tts_reply", oid)
+            return (p.get("voice") or "claire",
+                    float(p.get("speed", 1.0)),
+                    float(p.get("gain", 0.0)),
+                    bool(p.get("emotion_enable", True)))
+    except Exception:
+        logger.exception("读 tts_reply 插件 voice 参数失败 oid=%s,用默认", oid)
+    return "claire", 1.0, 0.0, True
+
+
 async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, pid: str) -> dict:
-    """下发 QQ:被动回复优先(带 msg_id,60min 窗口省月配额),QQ 拒绝(超时/超次)降级主动(msg_id="")。
-    都失败返回 {delivered:False}(消息已落库不回滚)。返回 {delivered, mode}。"""
+    """下发 QQ:代答 TTS 开启则语音优先(可选先文本);否则被动回复优先(带 msg_id)降级主动(msg_id="")。
+    都失败返回 {delivered:False}(消息已落库不回滚)。返回 {delivered, mode}(mode 含 voice/text+voice/passive/active)。"""
+    # 代答 TTS 开关(M-tts):启用则合成语音发(复用 tts_reply 插件音色);失败/空产出降级文本
+    tts_cfg = await takeover_store.get_tts_config(redis, oid)
+    if tts_cfg.get("enable"):
+        voice, speed, gain, emo = await _read_tts_voice_params(oid)
+        from modality.tts import send_voice_reply
+        vr = await send_voice_reply(oid, content, msg_id=msg_id, msg_seq=msg_seq,
+                                    voice=voice, speed=speed, gain=gain,
+                                    emotion_enable=emo,
+                                    send_text_also=bool(tts_cfg.get("send_text_also", False)),
+                                    human_authored=True)  # admin 代答文本不过守卫
+        if vr and vr.get("delivered"):
+            return {"delivered": True, "mode": vr["mode"]}
+        # TTS 失败/空 → 降级文本下发(下方)
     delivered = False
     mode = ""
     from qq.api_client import send_c2c_message

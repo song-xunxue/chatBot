@@ -101,3 +101,27 @@ async def send_proactive(oid: str, body: dict = Body(default={})):
         raise HTTPException(status_code=400, detail="content required")
     redis = await get_redis()
     return await takeover_svc.send_proactive(redis, oid, content)
+
+
+# —— 代答 TTS 开关(M-tts,2026-08-04):两开关逻辑同 tts_reply 插件;voice/speed/gain/emotion 复用插件 config ——
+
+
+@router.get("/takeover/{oid}/tts_config", dependencies=[Depends(verify_token)])
+async def get_tts_config(oid: str):
+    """代答 TTS 配置 {enable, send_text_also};未设置返全 False(纯文本代答)"""
+    redis = await get_redis()
+    cfg = await takeover_store.get_tts_config(redis, oid)
+    return {"object_id": oid,
+            "enable": bool(cfg.get("enable")),
+            "send_text_also": bool(cfg.get("send_text_also"))}
+
+
+@router.put("/takeover/{oid}/tts_config", dependencies=[Depends(verify_token)])
+async def set_tts_config(oid: str, body: dict = Body(default={})):
+    """写代答 TTS 配置。body: {enable: bool, send_text_also: bool}。
+    enable=代答是否启用语音;send_text_also=启用时是否同发文本(默认 False 只语音,替换文本)。"""
+    enable = bool(body.get("enable"))
+    send_text_also = bool(body.get("send_text_also"))
+    redis = await get_redis()
+    await takeover_store.set_tts_config(redis, oid, enable, send_text_also)
+    return {"object_id": oid, "enable": enable, "send_text_also": send_text_also}

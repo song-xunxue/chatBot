@@ -25,6 +25,7 @@ V1.0 用单 active(SET 覆盖),管理员连发代答只留最后一条;V2.0 改 
   1. M8 新建 takeover_store:per-object FIFO 队列(替 V1.0 单 active 覆盖丢消息)
      + 孤儿 pid 惰性清理(pending TTL 过期)+ msgseq per-oid 防 QQ 去重
 """
+import json
 import time
 
 from redis.asyncio import Redis
@@ -188,3 +189,29 @@ async def mark_delivered(redis: Redis, oid: str, pid: str, deliver: dict) -> Non
 async def next_msg_seq(redis: Redis, oid: str) -> int:
     """取下一个 per-oid 发送序(INCR,防 QQ 同 msg_id+msg_seq 重复被拒)。批量连发逐条递增。"""
     return await redis.incr(_K_MSGSEQ.format(oid=oid))
+
+
+# ================ 代答 TTS 开关(M-tts,2026-08-04)================
+# 两开关(逻辑同 tts_reply 插件):enable=代答是否启用语音;send_text_also=启用时是否同发文本(默认 False 只语音)
+# voice/speed/gain/emotion 复用 tts_reply 插件 config(同一 bot 音色),本处仅存代答专属两开关
+_K_TTS = "mychat:takeover:tts:{oid}"
+
+
+async def get_tts_config(redis: Redis, oid: str) -> dict:
+    """代答 TTS 配置 {enable, send_text_also};未设置返空 dict(等价 enable=False,纯文本代答)"""
+    raw = await redis.get(_K_TTS.format(oid=oid))
+    if not raw:
+        return {}
+    try:
+        d = json.loads(raw)
+        return d if isinstance(d, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+async def set_tts_config(redis: Redis, oid: str, enable: bool, send_text_also: bool) -> None:
+    """写代答 TTS 配置(整 JSON 替换)"""
+    await redis.set(
+        _K_TTS.format(oid=oid),
+        json.dumps({"enable": bool(enable), "send_text_also": bool(send_text_also)}, ensure_ascii=False),
+    )

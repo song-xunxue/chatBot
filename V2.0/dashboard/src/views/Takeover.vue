@@ -13,6 +13,7 @@ import {
 import {
   getTakeoverStatus, toggleTakeover, listTakeoverQueue,
   answerTakeover, answerTakeoverBatch, skipTakeover, sendTakeover,
+  getTakeoverTTSConfig, setTakeoverTTSConfig,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
 
@@ -27,6 +28,9 @@ const queue = ref<any[]>([])
 const answers = reactive<Record<string, string>>({})
 // 主动发送内容
 const proactiveText = ref('')
+// 代答 TTS 两开关(M-tts:启用语音 / 启用时是否同发文本)
+const ttsEnable = ref(false)
+const ttsSendTextAlso = ref(false)
 
 const POLL_MS = 5000
 let pollTimer: number | null = null
@@ -46,6 +50,9 @@ async function load() {
     queueLength.value = s.queue_length
     const q = await listTakeoverQueue(oid.value)
     queue.value = q.queue || []
+    const tc = await getTakeoverTTSConfig(oid.value)
+    ttsEnable.value = tc.enable
+    ttsSendTextAlso.value = tc.send_text_also
   } catch (e: any) { message.error('' + e) }
 }
 
@@ -100,6 +107,20 @@ async function sendProactive() {
   } catch (e: any) { message.error('' + e) }
 }
 
+async function onTtsEnable(v: boolean) {
+  try {
+    await setTakeoverTTSConfig(oid.value, v, ttsSendTextAlso.value)
+    ttsEnable.value = v
+    message.success(v ? '代答语音已开启(代答回复转语音)' : '代答语音已关闭(恢复文本代答)')
+  } catch (e: any) { message.error('' + e); ttsEnable.value = !v }
+}
+async function onTtsSendText(v: boolean) {
+  try {
+    await setTakeoverTTSConfig(oid.value, ttsEnable.value, v)
+    ttsSendTextAlso.value = v
+  } catch (e: any) { message.error('' + e); ttsSendTextAlso.value = !v }
+}
+
 async function poll() {
   if (typeof document !== 'undefined' && document.hidden) return
   await load()
@@ -129,6 +150,21 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
         <n-switch :value="enabled" @update:value="onToggle" />
         <n-tag :type="enabled ? 'warning' : 'default'">{{ enabled ? '代答中(LLM 不回复,用户消息入队)' : '自动回复(LLM 正常)' }}</n-tag>
         <n-tag size="small">队列 {{ queueLength }} 条</n-tag>
+      </n-space>
+    </n-card>
+
+    <!-- 代答 TTS 两开关(M-tts):逻辑同「插件 → 语音回复」,voice 参数复用之 -->
+    <n-card title="代答语音(TTS)">
+      <n-space vertical>
+        <n-space align="center">
+          <n-switch :value="ttsEnable" @update:value="onTtsEnable" />
+          <span style="font-size:13px">{{ ttsEnable ? '代答回复转语音发送' : '代答回复纯文本' }}</span>
+        </n-space>
+        <n-space align="center">
+          <n-switch :value="ttsSendTextAlso" :disabled="!ttsEnable" @update:value="onTtsSendText" />
+          <span style="font-size:13px;color:#666">同时发文本(关=只发语音,替换文本;开=先文本后语音)</span>
+        </n-space>
+        <div style="font-size:12px;color:#999">音色/语速/gain/情感取自「插件 → 语音回复」配置(同一 bot 音色)。语音发送失败自动降级文本。</div>
       </n-space>
     </n-card>
 

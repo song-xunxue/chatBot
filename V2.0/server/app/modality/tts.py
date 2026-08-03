@@ -122,3 +122,44 @@ async def infer_tts_emotion(text: str) -> str:
     if len(desc) > 20:
         desc = desc[:20]  # 限长,防 LLM 啰嗦污染指令
     return desc
+
+
+async def send_voice_reply(oid: str, text: str, *, msg_id: str, msg_seq: int,
+                           voice: str, speed: float, gain: float,
+                           emotion_enable: bool, send_text_also: bool,
+                           human_authored: bool = False) -> dict | None:
+    """共享:TTS 合成 + 转 silk + 上传 + 发语音(可选先文本)。插件 on_message_out 与 takeover _deliver 复用。
+
+    成功返 {delivered:True, mode},失败/空产出返 None(调用方降级文本下发,不阻塞主流程)。
+    msg_seq:起始序号——send_text_also 时 text 用 msg_seq、voice 用 msg_seq+1;否则 voice 用 msg_seq。
+    human_authored:可选同发文本是否过出站守卫(代答 admin 文本 True 跳守卫;机器回复 False 过守卫)。
+        语音本身是音频,无错误文本泄漏风险,send_c2c_voice 不过守卫。
+    """
+    import base64
+    from modality.silk import to_tencent_silk
+    from qq.api_client import (FILE_TYPE_VOICE, send_c2c_message,
+                               send_c2c_voice, upload_c2c_file)
+    try:
+        emotion = await infer_tts_emotion(text) if emotion_enable else ""
+        mp3 = await get_tts().synthesize(text, voice, speed, gain, emotion)
+        if not mp3:
+            logger.info("TTS 空产出(stub/无 key),跳过语音 oid=%s", oid)
+            return None
+        silk = await to_tencent_silk(mp3)
+        up = await upload_c2c_file(oid, FILE_TYPE_VOICE, base64.b64encode(silk).decode())
+        file_info = up.get("file_info")
+        if not file_info:
+            raise RuntimeError(f"上传未返 file_info: {up}")
+        seq = msg_seq
+        mode = "voice"
+        if send_text_also:
+            await send_c2c_message(oid, text, msg_id=msg_id, msg_seq=seq, human_authored=human_authored)
+            seq += 1
+            mode = "text+voice"
+        await send_c2c_voice(oid, file_info, msg_id=msg_id, msg_seq=seq)
+        logger.info("TTS 语音已发送 oid=%s voice=%s emotion=%s mode=%s",
+                    oid, voice, emotion or "无", mode)
+        return {"delivered": True, "mode": mode}
+    except Exception:
+        logger.exception("send_voice_reply 失败 oid=%s", oid)
+        return None

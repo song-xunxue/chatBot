@@ -120,6 +120,11 @@ export const skipTakeover = (oid: string, pid?: string) =>
   api.post(`/api/v1/takeover/${oid}/skip`, { pid }).then((r) => r.data)
 export const sendTakeover = (oid: string, content: string) =>
   api.post(`/api/v1/takeover/${oid}/send`, { content }).then((r) => r.data)
+// 代答 TTS 开关(M-tts 2026-08-04:两开关 enable/send_text_also;voice 参数复用 tts_reply 插件 config)
+export const getTakeoverTTSConfig = (oid: string) =>
+  api.get(`/api/v1/takeover/${oid}/tts_config`).then((r) => r.data)
+export const setTakeoverTTSConfig = (oid: string, enable: boolean, send_text_also: boolean) =>
+  api.put(`/api/v1/takeover/${oid}/tts_config`, { enable, send_text_also }).then((r) => r.data)
 
 // —— roleplay 训练样本(M8 + 2026-07-05 多会话+评分)——
 export const listRoleplaySessions = (oid: string) =>
