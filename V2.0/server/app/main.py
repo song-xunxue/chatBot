@@ -31,6 +31,11 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
 2026-06-30
 变更说明：
   1. M8 挂载代答/roleplay REST 路由(takeover_router / roleplay_router,/api/v1/takeover|roleplay/...)
+
+2026-08-04
+变更说明：
+  1. 修应用 logging 盲区:import 后调 setup_logging(settings.log_level)(core/logging_config dictConfig)
+     原未配置致业务 INFO 被 Python 默认 lastResort 丢弃,docker logs 只有 uvicorn access log
 """
 import asyncio
 import logging
@@ -39,6 +44,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from core.config import settings
+from core.logging_config import setup_logging
 from qq import api_client as qq_api
 from qq import auth as qq_auth
 from qq.webhook import router as qq_router
@@ -52,6 +58,10 @@ from api.rest_system import router as system_router
 from api.rest_takeover import router as takeover_router
 from api.rest_roleplay import router as roleplay_router
 from api.rest_multimodal import router as multimodal_router
+
+# 配置应用 logging(修盲区:原未配置致业务 INFO 被默认 lastResort 丢弃,仅 WARNING+ 出)
+# 必须在 create_app 前调用;dictConfig 整合 uvicorn 走同一 handler/格式(详见 core/logging_config.py)
+setup_logging(settings.log_level)
 
 logger = logging.getLogger(__name__)
 

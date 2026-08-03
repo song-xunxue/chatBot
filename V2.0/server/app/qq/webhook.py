@@ -37,6 +37,10 @@ M2 链路(替换 M1a echo):
 变更说明：
   1. continuous_send 支持:_flush 填 ctx.qq_msg_id(被动回复 msg_id 供插件分段用)
      + 下发前检查 ctx.reply_sent(插件已分段发则跳过默认单条下发)
+
+2026-08-04
+变更说明：
+  1. 补关键链路 info 日志(logging 盲区修复配套):收到 C2C 消息 / pipeline 处理开始 / 回复已发送 / 插件分段 / 未生成回复
 """
 import asyncio
 import logging
@@ -207,16 +211,23 @@ async def _flush(openid: str) -> None:
     ctx = MessageContext(object_id=openid, user_text=combined,
                          created_ts=int(time.time() * 1000))
     ctx.qq_msg_id = msg_id   # 被动回复 msg_id(continuous_send 插件分段发送用,2026-07-07)
+    logger.info("pipeline 处理开始 oid=%s 消息数=%d 输入长度=%d", openid, len(state["msgs"]), len(combined))
     try:
         # QQ 不逐 token 发,迭代生成器仅为驱动管道跑完 + 累积 reply_text
         async for _token in run_stream(ctx):
             pass
         reply = ctx.reply_text
-        if reply and not getattr(ctx, "reply_sent", False):
-            # 默认单条下发;continuous_send 插件已分段发时 reply_sent=True 跳过(2026-07-07)
-            # 出站守卫(#3)已下沉到 send_c2c_message(机器产出默认过守卫),此处直接发
+        if not reply:
+            # pipeline 未生成回复(如 tool-loop 决定不答 / LLM 返空),记录便于排障
+            logger.info("pipeline 未生成回复 oid=%s", openid)
+        elif getattr(ctx, "reply_sent", False):
+            # continuous_send 插件已分段发(reply_sent=True),跳过默认单条下发(2026-07-07)
+            logger.info("回复已由插件分段发送 oid=%s", openid)
+        else:
+            # 默认单条下发;出站守卫(#3)已下沉到 send_c2c_message(机器产出默认过守卫),此处直接发
             # 被动回复带 msg_id(60min 窗口/4 次);超时或超次 QQ 拒绝,M2 单测 mock 不触发,M9 真实场景注意
             await send_c2c_message(openid, reply, msg_id=msg_id)
+            logger.info("被动回复已发送 oid=%s 回复长度=%d", openid, len(reply))
     except Exception:
         logger.exception("pipeline 处理失败 openid=%s", openid)
 
@@ -272,6 +283,7 @@ async def qq_webhook(
     # op=0 Dispatch:C2C 私聊消息 → 代答拦截 / 防抖合并 → pipeline(旁路,立即 ACK)
     if op == 0 and t == "C2C_MESSAGE_CREATE":
         msg = parse_c2c_message(d)
+        logger.info("收到 C2C 消息 oid=%s", msg.openid)
         # M8 代答联动:代答模式开启则入 pending 队列等管理员代答,不进 pipeline
         from storage import takeover_store
         from storage.redis_client import get_redis

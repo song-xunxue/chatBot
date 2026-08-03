@@ -11,6 +11,10 @@
 # 2026-07-01
 # 变更说明：
 #   1. M9 部署:基于 V1.0 Dockerfile 模板适配 V2.0(去 shared/,dashboard/dist 落 /app/dashboard/dist)
+#
+# 2026-08-04
+# 变更说明：
+#   1. 加 ENV PYTHONUNBUFFERED=1:Python 不缓冲 stdout,业务日志(logging 走 stdout)实时进 docker logs
 FROM python:3.11-slim
 
 # 1.工作目录
@@ -39,5 +43,7 @@ RUN mkdir -p /app/server/data/persona /app/server/data/star_plugins
 
 # 7.切换到应用目录(同级导入生效),暴露端口,启动 uvicorn
 WORKDIR /app/server/app
+# Python 不缓冲 stdout/stderr:业务日志(logging 走 stdout)实时进 docker logs,不延迟
+ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

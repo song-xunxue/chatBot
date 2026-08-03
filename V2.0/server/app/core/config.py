@@ -30,6 +30,11 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
 变更说明：
   1. M8 新增 takeover_pending_ttl_sec(代答 pending 保留秒,默认 86400)、
      takeover_batch_max(批量代答/录入上限)、takeover_queue_orphan_scan_limit(孤儿 pid 扫描上限)
+
+2026-08-04
+变更说明：
+  1. 新增 log_level(根 logger 级别,默认 INFO;.env 设 LOG_LEVEL=DEBUG 排障免改代码)
+     配合 core/logging_config.setup_logging 修应用 logging 盲区(业务 INFO 原被默认配置丢弃)
 """
 from pathlib import Path
 
@@ -160,6 +165,9 @@ class Settings(BaseSettings):
     multimodal_vision_provider: str = "glm"  # 图像理解 provider(glm 用 glm-4v;stub 占位;无 key 自动降级 stub)
     glm_vision_model: str = "glm-4v-flash"   # GLM 视觉模型(free 轻量;可改 glm-4v / glm-4v-plus)
     multimodal_vision_prompt: str = "请用中文简洁描述这张图片的内容(用于对话上下文)。"  # 视觉解析提示词
+
+    # 16.日志(2026-08-04):应用 logging 级别,配合 core/logging_config.setup_logging 修盲区
+    log_level: str = "INFO"  # 根 logger 级别(INFO/DEBUG/WARNING;.env LOG_LEVEL 覆盖;排障用 DEBUG)
 
 
 # 全局配置单例
