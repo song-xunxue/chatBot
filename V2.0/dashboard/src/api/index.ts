@@ -92,6 +92,10 @@ export const getPluginParams = (name: string, oid: string) =>
 export const setPluginParams = (name: string, oid: string, params: Record<string, any>) =>
   api.put(`/api/v1/plugin/${name}/params`, params, { params: { object_id: oid } }).then((r) => r.data)
 
+// —— TTS 音色预览(M-tts 2026-08-04:面板试听,返 mp3 blob → Audio.play)——
+export const previewTTS = (voice: string, text?: string) =>
+  api.post('/api/v1/tts/preview', { voice, text }, { responseType: 'blob' }).then((r) => r.data)
+
 // —— 系统 system ——
 export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) => r.data)
 export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => r.data)

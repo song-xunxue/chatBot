@@ -12,7 +12,7 @@ import {
 } from 'naive-ui'
 import {
   listPlugins, enablePlugin, disablePlugin, reloadPlugin, reloadStar,
-  getPluginParams, setPluginParams,
+  getPluginParams, setPluginParams, previewTTS,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
 
@@ -63,6 +63,28 @@ async function saveParams(p: any) {
   }
 }
 
+// 音色试听(M-tts 2026-08-04):点试听 → 调 /tts/preview 拿 mp3 blob → Audio.play 播放
+const previewing = ref(false)
+let audioEl: HTMLAudioElement | null = null
+function stopPreview() {
+  if (audioEl) { audioEl.pause(); audioEl = null }
+}
+async function previewVoice(p: any) {
+  const voice = paramsMap.value[p.name]?.voice
+  if (!voice) return
+  try {
+    previewing.value = true
+    const blob = await previewTTS(voice)
+    stopPreview()
+    audioEl = new Audio(URL.createObjectURL(blob))
+    await audioEl.play()
+  } catch (e: any) {
+    message.error('试听失败: ' + (e?.response?.status || e?.message || e))
+  } finally {
+    previewing.value = false
+  }
+}
+
 async function toggle(p: any) {
   try {
     if (p.enabled) await disablePlugin(p.name)
@@ -105,7 +127,11 @@ onMounted(load)
           <n-form label-placement="left" :show-feedback="false" style="padding:4px 0">
             <n-form-item v-for="(spec, key) in p.config_schema" :key="String(key)"
                          :label="labelOf(String(key))" style="margin-bottom:10px">
-              <n-switch v-if="spec.type === 'bool'"
+              <n-space v-if="String(key) === 'voice' && spec.options" align="center" :wrap="false">
+                <n-select v-model:value="paramsMap[p.name].voice" :options="spec.options" style="width:200px" />
+                <n-button size="small" :loading="previewing" @click="previewVoice(p)">试听</n-button>
+              </n-space>
+              <n-switch v-else-if="spec.type === 'bool'"
                         v-model:value="paramsMap[p.name][String(key)]" />
               <n-input-number v-else-if="spec.type === 'number'"
                         v-model:value="paramsMap[p.name][String(key)]"
