@@ -13,3 +13,4 @@ httpx>=0.27              # 异步 HTTP,调 QQ REST(发消息)+ 换 access_token
 pynacl>=1.5              # Ed25519 签名/验签(QQ Webhook 回调签名校验的核心)
 pyyaml>=6.0              # 插件 manifest 解析(plugins/manifest.py;M2 manager import 链需要,M6 加载 .star)
 mcp>=1.28                # MCP client(M5,连外部 MCP server,tool-loop 接外部工具:搜索/浏览/fetch)
+silk-python>=0.2.6       # Tencent SILK 编码(M-tts:TTS mp3/wav → silk QQ 语音条;pysilk 模块,tencent=True 出 0x02 前缀)

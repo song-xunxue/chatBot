@@ -15,6 +15,10 @@
 # 2026-08-04
 # 变更说明：
 #   1. 加 ENV PYTHONUNBUFFERED=1:Python 不缓冲 stdout,业务日志(logging 走 stdout)实时进 docker logs
+#
+# 2026-08-04 #2
+# 变更说明：
+#   1. M-tts:apt 装 ffmpeg(TTS mp3/wav→24k mono PCM wav 归一化);requirements 加 silk-python(pysilk 编码 SILK)
 FROM python:3.11-slim
 
 # 1.工作目录
@@ -24,7 +28,7 @@ WORKDIR /app
 #   trixie 用 deb822 格式的 debian.sources,直接 sed 换源(沿用 V1.0 验证过的做法)
 RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g; s|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends gcc \
+    && apt-get install -y --no-install-recommends gcc ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # 3.先装 Python 依赖(层缓存:依赖不变则跳过),清华 pypi 镜像
