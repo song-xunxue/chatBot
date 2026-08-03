@@ -86,6 +86,11 @@ export const enablePlugin = (name: string) => api.post(`/api/v1/plugin/${name}/e
 export const disablePlugin = (name: string) => api.post(`/api/v1/plugin/${name}/disable`).then((r) => r.data)
 export const reloadPlugin = (name: string) => api.post(`/api/v1/plugin/${name}/reload`).then((r) => r.data)
 export const reloadStar = (name: string) => api.post(`/api/v1/plugin/star/${name}/reload`).then((r) => r.data)
+// 插件参数(M-tts 2026-08-04:面板 config_schema 表单读写;单人设 object_id=全局 oid)
+export const getPluginParams = (name: string, oid: string) =>
+  api.get(`/api/v1/plugin/${name}/params`, { params: { object_id: oid } }).then((r) => r.data)
+export const setPluginParams = (name: string, oid: string, params: Record<string, any>) =>
+  api.put(`/api/v1/plugin/${name}/params`, params, { params: { object_id: oid } }).then((r) => r.data)
 
 // —— 系统 system ——
 export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) => r.data)

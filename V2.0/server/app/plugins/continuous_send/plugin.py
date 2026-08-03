@@ -54,6 +54,8 @@ class ContinuousSendPlugin(Plugin):
         return HookResult.CONTINUE
 
     async def on_message_out(self, ctx):
+        if getattr(ctx, "reply_sent", False):
+            return HookResult.CONTINUE  # 已由其他插件处理(如 tts_reply 发语音),跳过分段
         params = await self.get_params(ctx.object_id)
         max_seg = int(params.get("max_segments", 3))
         min_seg = int(params.get("min_segments", 2))

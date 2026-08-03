@@ -35,6 +35,10 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
 变更说明：
   1. 新增 log_level(根 logger 级别,默认 INFO;.env 设 LOG_LEVEL=DEBUG 排障免改代码)
      配合 core/logging_config.setup_logging 修应用 logging 盲区(业务 INFO 原被默认配置丢弃)
+
+2026-08-04 #2
+变更说明：
+  1. M-tts 新增 TTS 语音合成配置(tts_enable/voice/speed/gain/emotion/send_text_also/provider/model)
 """
 from pathlib import Path
 
@@ -168,6 +172,12 @@ class Settings(BaseSettings):
 
     # 16.日志(2026-08-04):应用 logging 级别,配合 core/logging_config.setup_logging 修盲区
     log_level: str = "INFO"  # 根 logger 级别(INFO/DEBUG/WARNING;.env LOG_LEVEL 覆盖;排障用 DEBUG)
+
+    # 17.TTS 语音合成(M-tts,2026-08-04):CosyVoice2-0.5B via 硅基流动 → 转 silk → QQ 语音条
+    #    provider/model 级配置(用户面板开关/音色/语速/gain 在 plugins/tts_reply/plugin.yaml config_schema)
+    tts_provider: str = "siliconflow"  # TTS provider(仅 siliconflow 实现 CosyVoice2;无 key 降级 stub)
+    tts_model: str = "FunAudioLLM/CosyVoice2-0.5B"  # TTS 模型(硅基流动 CosyVoice2)
+    tts_emotion_provider: str = ""  # 情感推导 LLM provider(空=用 chat_provider)
 
 
 # 全局配置单例

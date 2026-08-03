@@ -16,7 +16,7 @@ is_enabled_for 等方法保留(gate 仍调,单人设下默认 True 等价全局�
 作者: 李文煜
 日期: 2026-06-30
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api._auth import verify_token
 from plugins import get_plugin_manager
@@ -112,3 +112,30 @@ async def reload_star(name: str):
     if not await star.reload_file(name):
         raise HTTPException(status_code=404, detail="star plugin not found or reload failed")
     return {"name": name, "type": "star", "reloaded": True}
+
+
+# —— 插件参数配置(M-tts 2026-08-04 加:面板 config_schema 表单读写;泛化,所有插件通用)——
+# 单人设下 object_id 取 useObject 全局 oid(= 真实用户 openid),per-object 即等价全局。
+
+
+@router.get("/plugin/{name}/params", dependencies=[Depends(verify_token)])
+async def get_plugin_params(name: str, object_id: str):
+    """取插件在某对象的参数(config_schema 默认值 ← 按对象 params 覆盖合并)。供面板表单回显。"""
+    mgr = get_plugin_manager()
+    if mgr is None or name not in mgr.list_loaded():
+        raise HTTPException(status_code=404, detail="native plugin not found")
+    return await mgr.get_params(name, object_id)
+
+
+@router.put("/plugin/{name}/params", dependencies=[Depends(verify_token)])
+async def set_plugin_params(name: str, object_id: str, params: dict = Body(...)):
+    """写插件在某对象的参数(整 params 替换;enabled 位不变)。
+    params 必须为 dict(违例 400)。供面板表单保存。"""
+    mgr = get_plugin_manager()
+    if mgr is None or name not in mgr.list_loaded():
+        raise HTTPException(status_code=404, detail="native plugin not found")
+    try:
+        await mgr.set_object_config(name, object_id, enabled=None, params=params)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="params 必须是字典")
+    return {"name": name, "object_id": object_id, "params": params}

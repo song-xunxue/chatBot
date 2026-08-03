@@ -16,6 +16,10 @@ M2 起真实回复由 pipeline 产出;主动消息(无 msg_id,耗月配额)留 M
 2026-06-25
 变更说明：
   1. M1 创建 api_client:send_c2c_message(被动回复,带 msg_id/msg_seq)+ httpx 单例
+
+2026-08-04
+变更说明：
+  1. M-tts 新增 upload_c2c_file + send_c2c_voice:上传 silk 语音(file_type=3 base64)→ 发 msg_type=7 富媒体语音消息
 """
 import logging
 
@@ -86,3 +90,64 @@ async def send_download(url: str) -> bytes:
     resp = await _client.get(url, headers=headers, follow_redirects=True)
     resp.raise_for_status()
     return resp.content
+
+
+# 媒体文件类型(QQ /v2/users/{openid}/files 的 file_type 取值;对照 AstrBot VOICE_FILE_TYPE=3)
+FILE_TYPE_IMAGE = 1
+FILE_TYPE_VIDEO = 2
+FILE_TYPE_VOICE = 3   # 语音(silk 格式)
+FILE_TYPE_FILE = 4
+
+
+async def upload_c2c_file(openid: str, file_type: int, file_data_b64: str,
+                          *, srv_send_msg: bool = False) -> dict:
+    """上传 C2C 私聊媒体文件,拿 file_info(发富媒体消息用)。M-tts 2026-08-04。
+
+    POST /v2/users/{openid}/files,file_data = 整个文件的 base64 字符串(非 URL,非 multipart)。
+    srv_send_msg=False(默认)=仅上传不发送(本项目走被动回复路径,单独调 send_c2c_voice,不占主动配额)。
+    timeout 调大 30s(base64 长语音 body 膨胀;虽 silk 通常几十 KB,留余量)。
+
+    返回:{file_uuid, file_info(opaque,发消息原样回传), ttl}(ttl 过期需重传,故上传后立即发)。
+    """
+    assert _client is not None, "httpx client 未初始化,请在 lifespan 调 init_client"
+    token = await get_access_token()
+    headers = {"Authorization": f"QQBot {token}", "Content-Type": "application/json"}
+    payload = {"file_type": file_type, "file_data": file_data_b64, "srv_send_msg": srv_send_msg}
+    resp = await _client.post(f"{settings.qq_api_base}/v2/users/{openid}/files",
+                              headers=headers, json=payload, timeout=30.0)
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def send_c2c_voice(openid: str, file_info: str, *, msg_id: str = "",
+                         msg_seq: int = 1, content: str = "") -> dict:
+    """发 C2C 语音消息(msg_type=7 富媒体 + media.file_info)。M-tts 2026-08-04。
+
+    复用 send_c2c_message 的 msg_id/msg_seq 被动回复机制(语音占每消息 4 次回复预算之一)。
+    file_info 来自 upload_c2c_file 返回(有 ttl,上传后立即发)。
+    不过 sanitize_reply(语音是音频非文本,无错误文本泄漏风险)。
+
+    参数:
+        file_info: upload_c2c_file 返回的 file_info
+        msg_id: 被动回复必填(留空=主动消息,耗月配额)
+        msg_seq: 防同 msg_id 重复(递增,与文本分段复用同一 msg_seq 序列)
+        content: 可选附文(通常留空,纯语音)
+    返回:QQ 响应 {id, timestamp}。
+    """
+    assert _client is not None, "httpx client 未初始化,请在 lifespan 调 init_client"
+    token = await get_access_token()
+    headers = {"Authorization": f"QQBot {token}", "Content-Type": "application/json"}
+    payload: dict = {
+        "msg_type": 7,                        # 7=富媒体(图片/语音/视频/文件统一)
+        "media": {"file_info": file_info},
+        "msg_seq": msg_seq,
+    }
+    if msg_id:
+        payload["msg_id"] = msg_id            # 被动回复(60min 窗口)
+    if content:
+        payload["content"] = content          # 附文(默认空=纯语音)
+    resp = await _client.post(f"{settings.qq_api_base}/v2/users/{openid}/messages",
+                              headers=headers, json=payload)
+    resp.raise_for_status()
+    return resp.json()
+

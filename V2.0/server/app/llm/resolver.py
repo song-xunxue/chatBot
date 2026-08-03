@@ -21,6 +21,7 @@ def _task_setting(task: str) -> str:
         "score": settings.score_provider,
         "reverse_infer": settings.reverse_infer_provider,
         "memory": settings.memory_summary_provider,
+        "tts_emotion": settings.tts_emotion_provider,  # M-tts 情感推导(空=回退 chat_provider)
     }.get(task, "")
 
 

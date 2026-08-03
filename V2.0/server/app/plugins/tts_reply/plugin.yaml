@@ -1,0 +1,23 @@
+name: tts_reply
+version: 1.0.0
+author: 李文煜
+description: 回复转语音发送——CosyVoice2 TTS 合成 mp3 转 silk 发 QQ 语音条;情感由 LLM 通读文本推导;音色/语速/gain/情感开关/文本同发 面板可配
+entry: plugin.py
+display_name: 语音回复
+category: 回复增强
+default_enabled: false
+hooks:
+  - { name: on_message_out, priority: 300 }
+config_schema:
+  voice:
+    type: string
+    default: claire
+    options:
+      - { value: anna, label: "anna 沉稳" }
+      - { value: bella, label: "bella 激情" }
+      - { value: claire, label: "claire 温柔" }
+      - { value: diana, label: "diana 欢快" }
+  speed: { type: number, default: 1.0, min: 0.25, max: 4.0, step: 0.05 }
+  gain: { type: number, default: 0.0, min: -10, max: 10, step: 0.5 }
+  emotion_enable: { type: bool, default: true }
+  send_text_also: { type: bool, default: false }
