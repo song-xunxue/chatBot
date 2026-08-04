@@ -33,11 +33,13 @@ class TTSReplyPlugin(Plugin):
         text = ctx.reply_text or ""
         if not text or not msg_id:
             return HookResult.CONTINUE  # 无回复内容 或 非被动回复(无 msg_id),不处理
-        from modality.tts import send_voice_reply
+        from modality.tts import resolve_voice, send_voice_reply
+        # 当前音色:优先克隆 uri(面板「设为当前」),回退 config 预设
+        voice = await resolve_voice(self.pctx.redis, ctx.object_id, params.get("voice") or "claire")
         # 机器回复过守卫(human_authored=False);msg_seq 从 1 起(voice-only 用 1,text+voice 用 1/2)
         r = await send_voice_reply(
             ctx.object_id, text, msg_id=msg_id, msg_seq=1,
-            voice=params.get("voice") or "claire",
+            voice=voice,
             speed=float(params.get("speed", 1.0)),
             gain=float(params.get("gain", 0.0)),
             emotion_enable=bool(params.get("emotion_enable", True)),

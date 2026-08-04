@@ -74,7 +74,8 @@ async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, 
     tts_cfg = await takeover_store.get_tts_config(redis, oid)
     if tts_cfg.get("enable"):
         voice, speed, gain, emo = await _read_tts_voice_params(oid)
-        from modality.tts import send_voice_reply
+        from modality.tts import resolve_voice, send_voice_reply
+        voice = await resolve_voice(redis, oid, voice)   # 优先克隆 uri(面板「设为当前」),回退预设
         vr = await send_voice_reply(oid, content, msg_id=msg_id, msg_seq=msg_seq,
                                     voice=voice, speed=speed, gain=gain,
                                     emotion_enable=emo,

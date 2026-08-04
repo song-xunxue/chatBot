@@ -124,6 +124,20 @@ async def infer_tts_emotion(text: str) -> str:
     return desc
 
 
+async def resolve_voice(redis, oid: str, fallback: str) -> str:
+    """当前音色解析:优先用 Redis 存的克隆 uri(mychat:tts:custom_voice:{oid},面板「设为当前」),
+    未设置则回退 fallback(预设名 claire/anna/...)。克隆 uri 含冒号会被 _full_voice 原样透传。
+    redis 可为 None(测试/降级),异常不阻塞→回退。"""
+    if redis is not None:
+        try:
+            uri = await redis.get(f"mychat:tts:custom_voice:{oid}")
+            if uri:
+                return uri
+        except Exception:
+            logger.warning("resolve_voice 读克隆 uri 失败 oid=%s,回退预设", oid)
+    return fallback
+
+
 async def send_voice_reply(oid: str, text: str, *, msg_id: str, msg_seq: int,
                            voice: str, speed: float, gain: float,
                            emotion_enable: bool, send_text_also: bool,

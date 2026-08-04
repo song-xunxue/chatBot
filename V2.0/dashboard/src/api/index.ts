@@ -96,6 +96,23 @@ export const setPluginParams = (name: string, oid: string, params: Record<string
 export const previewTTS = (voice: string, text?: string) =>
   api.post('/api/v1/tts/preview', { voice, text }, { responseType: 'blob' }).then((r) => r.data)
 
+// —— TTS 自定义音色(声音克隆,M-tts:上传音/视频→硅基流动 zero-shot 克隆→uri)——
+export const uploadVoice = (file: File, customName: string, text: string, startSec = 0, durSec = 0) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('customName', customName)
+  form.append('text', text)
+  form.append('start_sec', String(startSec))
+  form.append('dur_sec', String(durSec))
+  return api.post('/api/v1/tts/voice/upload', form).then((r) => r.data)
+}
+export const listVoices = () => api.get('/api/v1/tts/voice/list').then((r) => r.data)
+export const deleteVoice = (uri: string) => api.post('/api/v1/tts/voice/delete', { uri }).then((r) => r.data)
+export const getActiveVoice = (oid: string) =>
+  api.get('/api/v1/tts/voice/active', { params: { object_id: oid } }).then((r) => r.data)
+export const setActiveVoice = (oid: string, uri: string | null) =>
+  api.put('/api/v1/tts/voice/active', { uri }).then((r) => r.data)
+
 // —— 系统 system ——
 export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) => r.data)
 export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => r.data)
