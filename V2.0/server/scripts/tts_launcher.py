@@ -49,8 +49,10 @@ def main():
     else:
         print(f"[启动] api_v2.py(加载模型到 GPU 约 15-30s,请等)...")
         try:
-            # api_v2 输出混入本 console(用户看加载进度),cwd=GAG_DIR 让相对路径生效
-            api_proc = subprocess.Popen(API_CMD, cwd=GAG_DIR)
+            # 清除 pyinstaller 注入的 _MEIPASS/_PYI*/PYTHONPATH(会污染 runtime\python.exe 致 GPT-SoVITS 推理 Errno 22)
+            clean_env = {k: v for k, v in os.environ.items() if not k.startswith(('_ME', '_PYI'))}
+            clean_env.pop('PYTHONPATH', None)
+            api_proc = subprocess.Popen(API_CMD, cwd=GAG_DIR, env=clean_env)
         except Exception as e:
             print(f"[错误] api_v2 启动失败: {e}")
             input("按回车退出..."); return
