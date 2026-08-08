@@ -8,12 +8,11 @@
 import { ref, computed, onMounted } from 'vue'
 import {
   NCard, NSpace, NButton, NSwitch, NTag, NEmpty, NCollapse, NCollapseItem,
-  NForm, NFormItem, NInputNumber, NInput, NSelect, NPopconfirm, useMessage,
+  NForm, NFormItem, NInputNumber, NInput, NSelect, useMessage,
 } from 'naive-ui'
 import {
   listPlugins, enablePlugin, disablePlugin, reloadPlugin, reloadStar,
   getPluginParams, setPluginParams, previewTTS,
-  uploadVoice, listVoices, deleteVoice, getActiveVoice, setActiveVoice,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
 
@@ -32,7 +31,6 @@ async function load() {
     if (!paramsMap.value[p.name]) paramsMap.value[p.name] = {}
   }
   await loadAllParams()
-  await loadVoices()
 }
 
 async function loadAllParams() {
@@ -85,84 +83,6 @@ async function previewVoice(p: any) {
   } finally {
     previewing.value = false
   }
-}
-
-// 自定义音色(声音克隆)管理:上传音/视频→硅基流动 zero-shot 克隆→uri→设为当前→全 TTS 复用
-const cloneVoices = ref<any[]>([])
-const activeVoiceUri = ref<string | null>(null)
-const uploadFile = ref<File | null>(null)
-const uploadName = ref('')
-const uploadText = ref('')
-const uploadStart = ref(0)
-const uploadDur = ref(0)
-const uploading = ref(false)
-
-async function loadVoices() {
-  try {
-    const [lv, av] = await Promise.all([listVoices(), getActiveVoice(oid.value)])
-    cloneVoices.value = lv.result || []
-    activeVoiceUri.value = av.uri
-  } catch (e: any) { /* 静默(oid 未就绪等) */ }
-}
-function onFileChange(e: Event) {
-  const t = e.target as HTMLInputElement
-  uploadFile.value = t.files && t.files[0] ? t.files[0] : null
-  if (uploadFile.value && !uploadName.value) {
-    uploadName.value = uploadFile.value.name.replace(/\.[^.]+$/, '')
-  }
-}
-async function onUpload() {
-  if (!uploadFile.value) { message.warning('请选择音频或视频文件'); return }
-  if (!uploadName.value.trim()) { message.warning('请填写音色名'); return }
-  try {
-    uploading.value = true
-    const r = await uploadVoice(uploadFile.value, uploadName.value.trim(),
-      uploadText.value, uploadStart.value, uploadDur.value)
-    message.success(`克隆成功:${r.customName}`)
-    uploadFile.value = null; uploadName.value = ''; uploadText.value = ''
-    uploadStart.value = 0; uploadDur.value = 0
-    const inp = document.getElementById('clone-file') as HTMLInputElement | null
-    if (inp) inp.value = ''
-    await loadVoices()
-  } catch (e: any) {
-    message.error('克隆失败: ' + (e?.response?.data?.detail || e?.message || e))
-  } finally {
-    uploading.value = false
-  }
-}
-async function previewClone(uri: string) {
-  try {
-    const blob = await previewTTS(uri)
-    stopPreview()
-    audioEl = new Audio(URL.createObjectURL(blob))
-    await audioEl.play()
-  } catch (e: any) {
-    message.error('试听失败: ' + (e?.response?.status || e?.message || e))
-  }
-}
-async function deleteClone(uri: string) {
-  try {
-    await deleteVoice(uri)
-    if (activeVoiceUri.value === uri) {
-      await setActiveVoice(oid.value, null); activeVoiceUri.value = null
-    }
-    message.success('已删除')
-    await loadVoices()
-  } catch (e: any) { message.error('删除失败: ' + e) }
-}
-async function useClone(uri: string) {
-  try {
-    await setActiveVoice(oid.value, uri)
-    activeVoiceUri.value = uri
-    message.success('已设为当前音色(全 TTS 复用,含代答)')
-  } catch (e: any) { message.error('设置失败: ' + e) }
-}
-async function clearActive() {
-  try {
-    await setActiveVoice(oid.value, null)
-    activeVoiceUri.value = null
-    message.success('已恢复预设音色')
-  } catch (e: any) { message.error('清除失败: ' + e) }
 }
 
 async function toggle(p: any) {
@@ -226,38 +146,6 @@ onMounted(load)
           <n-button size="small" type="primary" @click="saveParams(p)">保存</n-button>
         </n-collapse-item>
       </n-collapse>
-    </n-card>
-
-    <!-- 自定义音色(声音克隆,M-tts):上传音/视频→克隆 uri→设为当前→全 TTS 复用 -->
-    <n-card title="自定义音色(声音克隆)" size="small">
-      <span style="color:#999;font-size:12px">上传目标音色的音频/视频(8-10s 干净片段最佳,单一说话人无噪),硅基流动秒级克隆(zero-shot,免训练)。「设为当前」后全 TTS(自动回复+代答)复用此音色。需账号已实名。</span>
-      <n-space align="center" :wrap="false" style="margin-top:10px">
-        <input id="clone-file" type="file" accept="audio/*,video/*" @change="onFileChange" />
-        <n-input v-model:value="uploadName" placeholder="音色名" style="width:130px" />
-        <n-input v-model:value="uploadText" placeholder="参考音频对应文字(助对齐,可选)" style="width:220px" />
-        <n-input-number v-model:value="uploadStart" :min="0" :step="1" placeholder="起(s)" style="width:88px" />
-        <n-input-number v-model:value="uploadDur" :min="0" :step="1" placeholder="取(s)" style="width:88px" />
-        <n-button type="primary" size="small" :loading="uploading" @click="onUpload">克隆</n-button>
-      </n-space>
-      <div style="margin-top:10px;font-size:13px;display:flex;align-items:center;gap:6px">
-        当前音色:
-        <n-tag v-if="activeVoiceUri" size="small" type="success">克隆音色</n-tag>
-        <n-tag v-else size="small">预设(上方插件参数所选)</n-tag>
-        <n-button v-if="activeVoiceUri" size="tiny" quaternary @click="clearActive">恢复预设</n-button>
-      </div>
-      <div v-for="v in cloneVoices" :key="v.uri"
-           style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f5">
-        <span style="font-weight:600;min-width:100px">{{ v.customName }}</span>
-        <span style="color:#bbb;font-size:11px;flex:1;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ v.uri }}</span>
-        <n-button size="tiny" @click="previewClone(v.uri)">试听</n-button>
-        <n-button size="tiny" :type="activeVoiceUri === v.uri ? 'success' : 'default'" @click="useClone(v.uri)">
-          {{ activeVoiceUri === v.uri ? '当前' : '设为当前' }}
-        </n-button>
-        <n-popconfirm @positive-click="deleteClone(v.uri)">
-          <template #trigger><n-button size="tiny" quaternary type="error">删</n-button></template>
-          删除此克隆音色?
-        </n-popconfirm>
-      </div>
     </n-card>
   </n-space>
 </template>
