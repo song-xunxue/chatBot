@@ -1,7 +1,7 @@
 """
-GPT-SoVITS + frpc 一键启动器(console 版,M-tts 2026-08-08)
-双击启动 GAG(GPT-SoVITS api_v2 9880)+ frpc(穿透),console 窗口实时监控状态,关窗=停止 frpc。
-用 console 而非 tkinter(GUI):避免 conda 环境 pyinstaller 打包 tkinter DLL 失败。
+GPT-SoVITS(api_v2) + frpc 一键启动器(console,2026-08-08)
+直接跑 api_v2.py(跳过 GAG GUI),从 tts_infer.yaml 自动加载清浔 dania 模型。
+启动器 console 显示 api_v2 加载日志 + 9880 端口状态。关窗口=停止两者。
 打包:pyinstaller --onefile --console --name GPT-SoVITS启动器 tts_launcher.py
 
 作者: 李文煜
@@ -14,7 +14,15 @@ import sys
 import time
 
 BASE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
-GAG = r"E:\GPT-SoVITS\GAG v0.4.3.exe"
+GAG_DIR = r"E:\GPT-SoVITS"
+# 直接跑 api_v2(不经 GAG GUI;tts_infer.yaml 已配 dania 模型,api_v2 启动自动加载)
+API_CMD = [
+    os.path.join(GAG_DIR, "runtime", "python.exe"),
+    "api_v2.py",
+    "-a", "0.0.0.0",   # 监听所有接口(frpc 要连,不能只 127.0.0.1)
+    "-p", "9880",
+    "-c", "GPT_SoVITS/configs/tts_infer.yaml",
+]
 FRPC = os.path.join(BASE, "frp", "frp_0.70.0_windows_amd64", "frpc.exe")
 FRPC_CFG = os.path.join(BASE, "frp", "frp_0.70.0_windows_amd64", "frpc.toml")
 API_PORT = 9880
@@ -31,20 +39,21 @@ def _port_open(port):
 
 def main():
     print("=" * 50)
-    print("  GPT-SoVITS(GAG) + frpc 一键启动器")
+    print("  GPT-SoVITS(api_v2 直跑) + frpc 启动器")
+    print("  跳过 GAG GUI,直接 api_v2.py 加载清浔(dania)模型")
     print("=" * 50)
 
-    gag = None
+    api_proc = None
     if _port_open(API_PORT):
-        print(f"[跳过] GAG 已在跑(9880 监听),不重复启动")
+        print(f"[跳过] api_v2 已在跑(9880 监听)")
     else:
-        print(f"[启动] GAG(GPT-SoVITS)... 等它自动起 api(约 10-30s)")
+        print(f"[启动] api_v2.py(加载模型到 GPU 约 15-30s,请等)...")
         try:
-            gag = subprocess.Popen([GAG], cwd=os.path.dirname(GAG))  # cwd=GAG 目录,相对路径 runtime\python.exe 解析对
+            # api_v2 输出混入本 console(用户看加载进度),cwd=GAG_DIR 让相对路径生效
+            api_proc = subprocess.Popen(API_CMD, cwd=GAG_DIR)
         except Exception as e:
-            print(f"[错误] GAG 启动失败: {e}")
-            input("按回车退出...")
-            return
+            print(f"[错误] api_v2 启动失败: {e}")
+            input("按回车退出..."); return
 
     print("[启动] frpc(穿透隧道)...")
     si = subprocess.STARTUPINFO()
@@ -54,19 +63,16 @@ def main():
                                 creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception as e:
         print(f"[错误] frpc 启动失败: {e}")
-        input("按回车退出...")
-        return
+        input("按回车退出..."); return
 
-    print("\n[监控中] 关此窗口=停止 frpc(GAG 若本启动器启动也一并停,外部启动的不动)")
-    print("状态每 2s 刷新:\n")
+    print("\n[监控中] 关此窗口=停止 api_v2 + frpc")
+    print("等 9880 监听后(显示 [OK])再发 QQ 消息\n")
     try:
         while True:
-            gag_ok = _port_open(API_PORT)
+            api_ok = _port_open(API_PORT)
             frpc_ok = frpc.poll() is None
-            status = (f"\r  GAG(9880): {'[OK] 监听' if gag_ok else '[..] 启动中'}"
-                      f"   frpc: {'[OK] 运行' if frpc_ok else '[!!] 已退出'}"
-                      f"        ")
-            print(status, end="", flush=True)
+            print(f"\r  api_v2(9880): {'[OK] 监听' if api_ok else '[..] 加载中(等模型)'}"
+                  f"   frpc: {'[OK] 运行' if frpc_ok else '[!!] 已退出'}        ", end="", flush=True)
             time.sleep(2)
     except (KeyboardInterrupt, SystemExit):
         pass
@@ -74,9 +80,9 @@ def main():
         print("\n\n[停止] 关闭中...")
         if frpc.poll() is None:
             frpc.terminate()
-        if gag and gag.poll() is None:
-            gag.terminate()
-        print("[完成] frpc + GAG(本启动器启动的)已停止")
+        if api_proc and api_proc.poll() is None:
+            api_proc.terminate()
+        print("[完成] 已停止")
 
 
 if __name__ == "__main__":
