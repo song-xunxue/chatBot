@@ -39,6 +39,10 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
 2026-08-04 #2
 变更说明：
   1. M-tts 新增 TTS 语音合成配置(tts_enable/voice/speed/gain/emotion/send_text_also/provider/model)
+
+2026-08-08
+变更说明：
+  1. 加 GPT-SoVITS(GAG/api_v2 本地服务)作为主力 TTS provider:api_base/gpt_model/sovits_model/ref_audio/prompt_text
 """
 from pathlib import Path
 
@@ -173,11 +177,17 @@ class Settings(BaseSettings):
     # 16.日志(2026-08-04):应用 logging 级别,配合 core/logging_config.setup_logging 修盲区
     log_level: str = "INFO"  # 根 logger 级别(INFO/DEBUG/WARNING;.env LOG_LEVEL 覆盖;排障用 DEBUG)
 
-    # 17.TTS 语音合成(M-tts,2026-08-04):CosyVoice2-0.5B via 硅基流动 → 转 silk → QQ 语音条
-    #    provider/model 级配置(用户面板开关/音色/语速/gain 在 plugins/tts_reply/plugin.yaml config_schema)
-    tts_provider: str = "siliconflow"  # TTS provider(仅 siliconflow 实现 CosyVoice2;无 key 降级 stub)
-    tts_model: str = "FunAudioLLM/CosyVoice2-0.5B"  # TTS 模型(硅基流动 CosyVoice2)
-    tts_emotion_provider: str = ""  # 情感推导 LLM provider(空=用 chat_provider)
+    # 17.TTS 语音合成(M-tts):QQ 语音条。provider 可选 siliconflow(CosyVoice2,已弃用)/gptsovits(GAG/api_v2 主力)/stub
+    #    用户面板开关/音色/语速/gain 在 plugins/tts_reply/plugin.yaml config_schema
+    tts_provider: str = "siliconflow"  # TTS provider(siliconflow/gptsovits/stub;切 gptsovits 用本地 GPT-SoVITS)
+    tts_model: str = "FunAudioLLM/CosyVoice2-0.5B"  # CosyVoice2 模型(siliconflow 用;gptsovits 忽略)
+    tts_emotion_provider: str = ""  # 情感推导 LLM provider(空=用 chat_provider;gptsovits 首版单音色不用)
+    # GPT-SoVITS(GAG/api_v2 本地服务,M-tts 2026-08-08 主力 TTS)
+    gptsovits_api_base: str = "http://127.0.0.1:9880"  # api_v2 地址(本地直连;云部署改穿透地址)
+    gptsovits_gpt_model: str = ""       # GPT 权重(.ckpt;相对 GPT-SoVITS 根 或 绝对路径)
+    gptsovits_sovits_model: str = ""    # SoVITS 权重(.pth)
+    gptsovits_ref_audio: str = ""       # 参考音频绝对路径(GPT-SoVITS 服务端机器可访问)
+    gptsovits_prompt_text: str = ""     # 参考音频对应文本(逐字准确,质量关键)
 
 
 # 全局配置单例

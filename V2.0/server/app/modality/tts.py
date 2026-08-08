@@ -88,10 +88,72 @@ class StubTTSProvider(TTSProvider):
         return b""
 
 
+# —— GPT-SoVITS(GAG/api_v2 本地服务)provider,M-tts 2026-08-08 主力 TTS ——
+# 服务端已加载的模型(幂等:换模型才重新 set weights,避免每次合成重复加载)
+_loaded_gpt_model: str | None = None
+_loaded_sovits_model: str | None = None
+
+
+class GPTSoVitsProvider(TTSProvider):
+    """GPT-SoVITS(本地 GAG 启动的 api_v2 服务)TTS provider。
+    音色由 gpt_model + sovits_model + ref_audio_path + prompt_text 决定(config 配置,首版固定单音色)。
+    voice/emotion 参数本版忽略(GPT-SoVITS 无音色名/情感指令;多情感档位后续扩多条参考音频)。
+    合成返 wav bytes,直接喂 to_tencent_silk(ffmpeg 按内容探测格式,文件名 in.mp3 仅变量名不影响)。"""
+    name = "gptsovits"
+
+    def __init__(self, api_base: str = "", gpt_model: str = "", sovits_model: str = "",
+                 ref_audio: str = "", prompt_text: str = ""):
+        self.api_base = (api_base or settings.gptsovits_api_base).rstrip("/")
+        self.gpt_model = gpt_model or settings.gptsovits_gpt_model
+        self.sovits_model = sovits_model or settings.gptsovits_sovits_model
+        self.ref_audio = ref_audio or settings.gptsovits_ref_audio
+        self.prompt_text = prompt_text or settings.gptsovits_prompt_text
+
+    async def _ensure_weights(self) -> None:
+        """确保服务端加载了配置的模型(幂等,换模型才重新 set)。GAG 启动器或 GUI 可能已加载。"""
+        global _loaded_gpt_model, _loaded_sovits_model
+        if self.gpt_model and _loaded_gpt_model != self.gpt_model:
+            async with httpx.AsyncClient(timeout=30.0) as c:
+                r = await c.get(f"{self.api_base}/set_gpt_weights",
+                                params={"weights_path": self.gpt_model})
+                r.raise_for_status()
+            _loaded_gpt_model = self.gpt_model
+        if self.sovits_model and _loaded_sovits_model != self.sovits_model:
+            async with httpx.AsyncClient(timeout=30.0) as c:
+                r = await c.get(f"{self.api_base}/set_sovits_weights",
+                                params={"weights_path": self.sovits_model})
+                r.raise_for_status()
+            _loaded_sovits_model = self.sovits_model
+
+    async def synthesize(self, text: str, voice: str, speed: float = 1.0,
+                         gain: float = 0.0, emotion: str = "") -> bytes:
+        if not self.ref_audio:
+            raise RuntimeError("GPT-SoVITS 未配 ref_audio_path(参考音频,必填)")
+        await self._ensure_weights()
+        # 清浔预设合成参数(从 GAG_config.json 抄;voice/emotion 忽略,首版固定单音色)
+        payload = {
+            "text": text, "text_lang": "all_zh",
+            "ref_audio_path": self.ref_audio,
+            "prompt_text": self.prompt_text, "prompt_lang": "all_zh",
+            "top_k": 5, "top_p": 1.0, "temperature": 1.0,
+            "text_split_method": "cut1", "batch_size": 4, "batch_threshold": 0.75,
+            "split_bucket": False, "return_fragment": False,
+            "speed_factor": speed, "streaming_mode": False, "seed": -1,
+            "parallel_infer": True, "repetition_penalty": 1.35,
+            "media_type": "wav",
+        }
+        async with httpx.AsyncClient(timeout=120.0) as client:  # 合成可能慢(GPU),长 timeout
+            resp = await client.post(f"{self.api_base}/tts", json=payload)
+            resp.raise_for_status()
+            return resp.content
+
+
 def get_tts(name: str = "") -> TTSProvider:
-    """按名实例化 TTS provider;未配 key 或未知名 → stub(链路不断,语音被跳过)。
-    优先显式 name,否则 settings.tts_provider,默认 siliconflow。"""
+    """按名实例化 TTS provider;未知名 → settings.tts_provider,默认 siliconflow。
+    siliconflow 无 key / gptsovits 未配 → 降级 stub(链路不断,语音跳过,文本兜底)。"""
     n = (name or settings.tts_provider or "siliconflow").lower()
+    if n == "gptsovits":
+        return GPTSoVitsProvider()
     if n == "siliconflow" and settings.siliconflow_api_key:
         return SiliconFlowTTSProvider()
     return StubTTSProvider()

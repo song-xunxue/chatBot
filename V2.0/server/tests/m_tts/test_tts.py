@@ -11,7 +11,7 @@ import httpx
 from llm.base import LLMResponse
 from modality import tts as tts_mod
 from modality.tts import (
-    DEFAULT_VOICE, TTS_VOICES, SiliconFlowTTSProvider, StubTTSProvider,
+    DEFAULT_VOICE, TTS_VOICES, GPTSoVitsProvider, SiliconFlowTTSProvider, StubTTSProvider,
     _full_voice, get_tts, infer_tts_emotion,
 )
 
@@ -126,3 +126,71 @@ async def test_infer_tts_emotion_llm_error_fallback(monkeypatch):
 async def test_stub_returns_empty():
     """StubTTSProvider 返空 bytes(调用方据此跳过语音)"""
     assert await StubTTSProvider().synthesize("x", "claire") == b""
+
+
+# —— GPT-SoVITS(GAG/api_v2)provider 测试,M-tts 2026-08-08 ——
+
+
+def test_get_tts_gptsovits(monkeypatch):
+    """tts_provider=gptsovits → 返 GPTSoVitsProvider"""
+    monkeypatch.setattr(tts_mod.settings, "tts_provider", "gptsovits")
+    assert isinstance(get_tts(""), GPTSoVitsProvider)
+
+
+async def test_gptsovits_synthesize_payload(monkeypatch):
+    """synthesize:_ensure_weights 跳过(已加载)+ POST /tts 透传 text/ref/prompt/speed,返 wav bytes"""
+    captured = {}
+
+    def handler(request):
+        captured["url"] = str(request.url)
+        if request.method == "POST":
+            captured["body"] = __import__("json").loads(request.content)
+        return httpx.Response(200, content=b"WAVBYTES")
+
+    _patch_async_client(monkeypatch, handler)
+    # _loaded=模型 → _ensure_weights 跳过 set weights(只测 /tts 透传)
+    monkeypatch.setattr(tts_mod, "_loaded_gpt_model", "mymodel")
+    monkeypatch.setattr(tts_mod, "_loaded_sovits_model", "mysovits")
+    p = GPTSoVitsProvider(api_base="http://x", gpt_model="mymodel", sovits_model="mysovits",
+                          ref_audio="/ref.wav", prompt_text="参考文本")
+    out = await p.synthesize("夫君辛苦啦", voice="ignored", speed=1.2)
+    assert out == b"WAVBYTES"
+    assert "/tts" in captured["url"]
+    assert captured["body"]["text"] == "夫君辛苦啦"
+    assert captured["body"]["ref_audio_path"] == "/ref.wav"
+    assert captured["body"]["prompt_text"] == "参考文本"
+    assert captured["body"]["speed_factor"] == 1.2
+    assert captured["body"]["text_lang"] == "all_zh"
+
+
+async def test_gptsovits_loads_weights_when_model_changes(monkeypatch):
+    """_loaded=None → 首次合成调 set_gpt/sovits_weights;再次合成幂等跳过"""
+    monkeypatch.setattr(tts_mod, "_loaded_gpt_model", None)
+    monkeypatch.setattr(tts_mod, "_loaded_sovits_model", None)
+    urls = []
+
+    def handler(request):
+        urls.append(str(request.url))
+        if request.method == "POST":
+            return httpx.Response(200, content=b"WAV")
+        return httpx.Response(200)  # set weights GET
+
+    _patch_async_client(monkeypatch, handler)
+    p = GPTSoVitsProvider(api_base="http://x", gpt_model="g.ckpt", sovits_model="s.pth",
+                          ref_audio="/r.wav", prompt_text="x")
+    await p.synthesize("hi", "v")
+    assert any("set_gpt_weights" in u for u in urls)
+    assert any("set_sovits_weights" in u for u in urls)
+    # 第二次:_loaded 已设,幂等跳过 set
+    urls.clear()
+    await p.synthesize("hi2", "v")
+    assert not any("set_gpt_weights" in u for u in urls)
+
+
+async def test_gptsovits_no_ref_audio_raises(monkeypatch):
+    """未配 ref_audio → synthesize 抛 RuntimeError(调用方软失败降级文本)"""
+    monkeypatch.setattr(tts_mod.settings, "gptsovits_ref_audio", "")  # __init__ 回退 settings,须清空
+    p = GPTSoVitsProvider(api_base="http://x", ref_audio="", prompt_text="")
+    import pytest
+    with pytest.raises(RuntimeError):
+        await p.synthesize("x", "v")
