@@ -43,6 +43,9 @@ services:
     volumes:
       # 人设 JSON 双写 / .star 插件 / 桌宠头像等运行时数据持久(容器重建不丢)
       - ./server/data:/app/server/data
+    # host-gateway:容器经 host.docker.internal 访问宿主机(M-tts:frp 转发的 GPT-SoVITS 9880 在宿主机)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - chatbot_v2_net
 
