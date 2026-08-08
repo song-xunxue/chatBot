@@ -1,7 +1,8 @@
 """
-GPT-SoVITS + frpc 一键启动器(M-tts,2026-08-08)
-双击启动 GAG(GPT-SoVITS api_v2 9880)+ frpc(穿透),状态监控,一键停止。
-pyinstaller 打包:pyinstaller --onefile --windowed --name GPT-SoVITS启动器 tts_launcher.py
+GPT-SoVITS + frpc 一键启动器(console 版,M-tts 2026-08-08)
+双击启动 GAG(GPT-SoVITS api_v2 9880)+ frpc(穿透),console 窗口实时监控状态,关窗=停止 frpc。
+用 console 而非 tkinter(GUI):避免 conda 环境 pyinstaller 打包 tkinter DLL 失败。
+打包:pyinstaller --onefile --console --name GPT-SoVITS启动器 tts_launcher.py
 
 作者: 李文煜
 日期: 2026-08-08
@@ -10,21 +11,16 @@ import os
 import socket
 import subprocess
 import sys
+import time
 
-import tkinter as tk
-from tkinter import ttk
-
-# 路径(改位置改这里)
-# BASE = 启动器所在目录(exe 运行时取 sys.executable 目录;源码跑取脚本目录),frp 跟启动器同级
 BASE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
-GAG = r"E:\GPT-SoVITS\GAG v0.4.3.exe"   # GAG(GPT-SoVITS)启动器,E 盘固定位置
-FRPC = os.path.join(BASE, "frp", "frp_0.70.0_windows_amd64", "frpc.exe")      # frp 跟启动器同级 frp\ 下
+GAG = r"E:\GPT-SoVITS\GAG v0.4.3.exe"
+FRPC = os.path.join(BASE, "frp", "frp_0.70.0_windows_amd64", "frpc.exe")
 FRPC_CFG = os.path.join(BASE, "frp", "frp_0.70.0_windows_amd64", "frpc.toml")
 API_PORT = 9880
 
 
-def _port_open(port: int) -> bool:
-    """检测本地端口是否在监听(GAG api_v2 起来的标志)"""
+def _port_open(port):
     try:
         s = socket.create_connection(("127.0.0.1", port), timeout=1)
         s.close()
@@ -33,78 +29,55 @@ def _port_open(port: int) -> bool:
         return False
 
 
-class Launcher:
-    def __init__(self, root):
-        self.root = root
-        self.gag = None
-        self.frpc = None
-        root.title("GPT-SoVITS 启动器")
-        root.geometry("340x220")
-        root.resizable(False, False)
+def main():
+    print("=" * 50)
+    print("  GPT-SoVITS(GAG) + frpc 一键启动器")
+    print("=" * 50)
 
-        ttk.Label(root, text="GPT-SoVITS(GAG) + frpc 一键启动", font=("", 10, "bold")).pack(pady=8)
-        self.btn = ttk.Button(root, text="▶ 启动", command=self.toggle, width=18)
-        self.btn.pack(pady=6)
-        self.status = tk.Label(root, text="状态:未启动", justify="left", font=("Consolas", 9))
-        self.status.pack(pady=8)
-        ttk.Label(root, text="关此窗口=停止两者\n开机自启:把 exe 放「启动」文件夹", foreground="gray").pack(side="bottom", pady=6)
-
-        root.protocol("WM_DELETE_WINDOW", self.on_close)
-        self._poll()
-
-    def toggle(self):
-        if self.gag or self.frpc:
-            self.stop()
-        else:
-            self.start()
-
-    def start(self):
-        # GAG:9880 已监听则跳过(避免重复启动 GAG,如外部已开/上次未关)
-        if _port_open(API_PORT):
-            self.gag = None   # 已在跑(不管谁起),本启动器不管它的生命周期
-        else:
-            try:
-                self.gag = subprocess.Popen([GAG])
-            except Exception as e:
-                self.status.config(text=f"GAG 启动失败:{e}")
-                return
-        # frpc(命令行,隐藏控制台窗口)
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    gag = None
+    if _port_open(API_PORT):
+        print(f"[跳过] GAG 已在跑(9880 监听),不重复启动")
+    else:
+        print(f"[启动] GAG(GPT-SoVITS)... 等它自动起 api(约 10-30s)")
         try:
-            self.frpc = subprocess.Popen([FRPC, "-c", FRPC_CFG], startupinfo=si,
-                                         creationflags=subprocess.CREATE_NO_WINDOW)
+            gag = subprocess.Popen([GAG])
         except Exception as e:
-            self.status.config(text=f"frpc 启动失败:{e}")
-        self.btn.config(text="■ 停止")
+            print(f"[错误] GAG 启动失败: {e}")
+            input("按回车退出...")
+            return
 
-    def stop(self):
-        # 只 terminate 自己启动的(GAG 若外部启动 self.gag=None 不动它)
-        if self.frpc and self.frpc.poll() is None:
-            self.frpc.terminate()
-        if self.gag and self.gag.poll() is None:
-            self.gag.terminate()
-        self.gag = self.frpc = None
-        self.btn.config(text="▶ 启动")
+    print("[启动] frpc(穿透隧道)...")
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    try:
+        frpc = subprocess.Popen([FRPC, "-c", FRPC_CFG], startupinfo=si,
+                                creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception as e:
+        print(f"[错误] frpc 启动失败: {e}")
+        input("按回车退出...")
+        return
 
-    def _poll(self):
-        """每 2s 刷新状态(GAG=9880 监听 / frpc 进程 / 9880 端口)"""
-        gag_ok = _port_open(API_PORT)   # GAG 状态看 9880(不管谁起)
-        frpc_ok = self.frpc is not None and self.frpc.poll() is None
-        self.status.config(
-            text=f"GAG  : {'运行' if gag_ok else '停止'}\n"
-                 f"frpc : {'运行' if frpc_ok else '停止'}\n"
-                 f"9880 : {'监听 ✓' if gag_ok else '未监听'}"
-                 + ("" if gag_ok else "\n(等 GAG 自动起 api,约 10-30s)")
-        )
-        self.root.after(2000, self._poll)
-
-    def on_close(self):
-        self.stop()
-        self.root.destroy()
+    print("\n[监控中] 关此窗口=停止 frpc(GAG 若本启动器启动也一并停,外部启动的不动)")
+    print("状态每 2s 刷新:\n")
+    try:
+        while True:
+            gag_ok = _port_open(API_PORT)
+            frpc_ok = frpc.poll() is None
+            status = (f"\r  GAG(9880): {'[OK] 监听' if gag_ok else '[..] 启动中'}"
+                      f"   frpc: {'[OK] 运行' if frpc_ok else '[!!] 已退出'}"
+                      f"        ")
+            print(status, end="", flush=True)
+            time.sleep(2)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        print("\n\n[停止] 关闭中...")
+        if frpc.poll() is None:
+            frpc.terminate()
+        if gag and gag.poll() is None:
+            gag.terminate()
+        print("[完成] frpc + GAG(本启动器启动的)已停止")
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    Launcher(root)
-    root.mainloop()
+    main()
