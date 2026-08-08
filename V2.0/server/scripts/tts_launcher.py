@@ -59,13 +59,17 @@ class Launcher:
             self.start()
 
     def start(self):
-        # GAG(GUI exe,autostart_api=true 自动起 api_v2);frpc(命令行,隐藏控制台窗口)
-        try:
-            self.gag = subprocess.Popen([GAG])
-        except Exception as e:
-            self.status.config(text=f"GAG 启动失败:{e}")
-            return
-        si = subprocess.STARTUPINFO()  # 隐藏 frpc 黑窗
+        # GAG:9880 已监听则跳过(避免重复启动 GAG,如外部已开/上次未关)
+        if _port_open(API_PORT):
+            self.gag = None   # 已在跑(不管谁起),本启动器不管它的生命周期
+        else:
+            try:
+                self.gag = subprocess.Popen([GAG])
+            except Exception as e:
+                self.status.config(text=f"GAG 启动失败:{e}")
+                return
+        # frpc(命令行,隐藏控制台窗口)
+        si = subprocess.STARTUPINFO()
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         try:
             self.frpc = subprocess.Popen([FRPC, "-c", FRPC_CFG], startupinfo=si,
@@ -75,22 +79,23 @@ class Launcher:
         self.btn.config(text="■ 停止")
 
     def stop(self):
-        for p in (self.gag, self.frpc):
-            if p and p.poll() is None:
-                p.terminate()
+        # 只 terminate 自己启动的(GAG 若外部启动 self.gag=None 不动它)
+        if self.frpc and self.frpc.poll() is None:
+            self.frpc.terminate()
+        if self.gag and self.gag.poll() is None:
+            self.gag.terminate()
         self.gag = self.frpc = None
         self.btn.config(text="▶ 启动")
 
     def _poll(self):
-        """每 2s 刷新状态(GAG 进程 / frpc 进程 / 9880 端口)"""
-        gag_ok = self.gag is not None and self.gag.poll() is None
+        """每 2s 刷新状态(GAG=9880 监听 / frpc 进程 / 9880 端口)"""
+        gag_ok = _port_open(API_PORT)   # GAG 状态看 9880(不管谁起)
         frpc_ok = self.frpc is not None and self.frpc.poll() is None
-        port_ok = _port_open(API_PORT)
         self.status.config(
             text=f"GAG  : {'运行' if gag_ok else '停止'}\n"
                  f"frpc : {'运行' if frpc_ok else '停止'}\n"
-                 f"9880 : {'监听 ✓' if port_ok else '未监听'}"
-                 + ("" if port_ok else "\n(等 GAG 自动起 api,约 10-30s)")
+                 f"9880 : {'监听 ✓' if gag_ok else '未监听'}"
+                 + ("" if gag_ok else "\n(等 GAG 自动起 api,约 10-30s)")
         )
         self.root.after(2000, self._poll)
 
