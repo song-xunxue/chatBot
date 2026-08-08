@@ -40,7 +40,7 @@ def main():
     else:
         print(f"[启动] GAG(GPT-SoVITS)... 等它自动起 api(约 10-30s)")
         try:
-            gag = subprocess.Popen([GAG])
+            gag = subprocess.Popen([GAG], cwd=os.path.dirname(GAG))  # cwd=GAG 目录,相对路径 runtime\python.exe 解析对
         except Exception as e:
             print(f"[错误] GAG 启动失败: {e}")
             input("按回车退出...")
