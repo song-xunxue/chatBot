@@ -17,6 +17,7 @@ CosyVoice2 情感指令:input 形如 "{情感描述}<|endofprompt|>{实际文本
 作者: 李文煜
 日期: 2026-08-04
 """
+import asyncio
 import logging
 
 import httpx
@@ -109,20 +110,27 @@ class GPTSoVitsProvider(TTSProvider):
         self.ref_audio = ref_audio or settings.gptsovits_ref_audio
         self.prompt_text = prompt_text or settings.gptsovits_prompt_text
 
+    # frp 隧道对异步 httpx(httpcore)不兼容(Server disconnected),改用同步 httpx + asyncio.to_thread
+    def _sync_get(self, endpoint, params=None):
+        with httpx.Client(timeout=30.0) as c:
+            r = c.get(f"{self.api_base}/{endpoint}", params=params or {})
+            r.raise_for_status()
+            return r
+
+    def _sync_post(self, endpoint, payload):
+        with httpx.Client(timeout=120.0) as c:
+            r = c.post(f"{self.api_base}/{endpoint}", json=payload)
+            r.raise_for_status()
+            return r.content
+
     async def _ensure_weights(self) -> None:
         """确保服务端加载了配置的模型(幂等,换模型才重新 set)。GAG 启动器或 GUI 可能已加载。"""
         global _loaded_gpt_model, _loaded_sovits_model
         if self.gpt_model and _loaded_gpt_model != self.gpt_model:
-            async with httpx.AsyncClient(timeout=30.0) as c:
-                r = await c.get(f"{self.api_base}/set_gpt_weights",
-                                params={"weights_path": self.gpt_model})
-                r.raise_for_status()
+            await asyncio.to_thread(self._sync_get, "set_gpt_weights", {"weights_path": self.gpt_model})
             _loaded_gpt_model = self.gpt_model
         if self.sovits_model and _loaded_sovits_model != self.sovits_model:
-            async with httpx.AsyncClient(timeout=30.0) as c:
-                r = await c.get(f"{self.api_base}/set_sovits_weights",
-                                params={"weights_path": self.sovits_model})
-                r.raise_for_status()
+            await asyncio.to_thread(self._sync_get, "set_sovits_weights", {"weights_path": self.sovits_model})
             _loaded_sovits_model = self.sovits_model
 
     async def synthesize(self, text: str, voice: str, speed: float = 1.0,
@@ -142,10 +150,7 @@ class GPTSoVitsProvider(TTSProvider):
             "parallel_infer": True, "repetition_penalty": 1.35,
             "media_type": "wav",
         }
-        async with httpx.AsyncClient(timeout=120.0) as client:  # 合成可能慢(GPU),长 timeout
-            resp = await client.post(f"{self.api_base}/tts", json=payload)
-            resp.raise_for_status()
-            return resp.content
+        return await asyncio.to_thread(self._sync_post, "tts", payload)
 
 
 def get_tts(name: str = "") -> TTSProvider:
