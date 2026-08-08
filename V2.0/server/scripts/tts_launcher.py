@@ -6,6 +6,7 @@ pyinstaller 打包:pyinstaller --onefile --windowed --name GPT-SoVITS启动器 t
 作者: 李文煜
 日期: 2026-08-08
 """
+import os
 import socket
 import subprocess
 import sys
@@ -13,10 +14,12 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-# 路径(硬编码用户环境;改路径改这里)
-GAG = r"D:\GPT-SoVITS\GAG v0.4.3.exe"
-FRPC = r"D:\frp\frp_0.70.0_windows_amd64\frpc.exe"
-FRPC_CFG = r"D:\frp\frp_0.70.0_windows_amd64\frpc.toml"
+# 路径(改位置改这里)
+# BASE = 启动器所在目录(exe 运行时取 sys.executable 目录;源码跑取脚本目录),frp 跟启动器同级
+BASE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+GAG = r"E:\GPT-SoVITS\GAG v0.4.3.exe"   # GAG(GPT-SoVITS)启动器,E 盘固定位置
+FRPC = os.path.join(BASE, "frp", "frp_0.70.0_windows_amd64", "frpc.exe")      # frp 跟启动器同级 frp\ 下
+FRPC_CFG = os.path.join(BASE, "frp", "frp_0.70.0_windows_amd64", "frpc.toml")
 API_PORT = 9880
 
 
