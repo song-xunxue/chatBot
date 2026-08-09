@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class TTSReplyPlugin(Plugin):
-    """回复转语音发送。config_schema 参数(voice/speed/gain/emotion_enable/send_text_also)面板可配。"""
+    """回复转语音发送。config_schema 参数(voice/speed/gain/emotion_enable/send_text_also + top_k/top_p/temperature/batch_size/repetition_penalty)面板可配。"""
 
     async def on_message_out(self, ctx):
         params = await self.get_params(ctx.object_id)
@@ -36,7 +36,7 @@ class TTSReplyPlugin(Plugin):
         from modality.tts import resolve_voice, send_voice_reply
         # 当前音色:优先克隆 uri(面板「设为当前」),回退 config 预设
         voice = await resolve_voice(self.pctx.redis, ctx.object_id, params.get("voice") or "claire")
-        # 机器回复过守卫(human_authored=False);msg_seq 从 1 起(voice-only 用 1,text+voice 用 1/2)
+        # 合成参数从 config 透传(面板可调;GPT-SoVITS 用,其他 provider 忽略 kwargs)
         r = await send_voice_reply(
             ctx.object_id, text, msg_id=msg_id, msg_seq=1,
             voice=voice,
@@ -45,6 +45,11 @@ class TTSReplyPlugin(Plugin):
             emotion_enable=bool(params.get("emotion_enable", True)),
             send_text_also=bool(params.get("send_text_also", False)),
             human_authored=False,
+            top_k=int(params.get("top_k", 5)),
+            top_p=float(params.get("top_p", 1.0)),
+            temperature=float(params.get("temperature", 1.0)),
+            batch_size=int(params.get("batch_size", 4)),
+            repetition_penalty=float(params.get("repetition_penalty", 1.35)),
         )
         if r and r.get("delivered"):
             ctx.reply_sent = True  # 标记已处理,webhook+continuous_send 跳过默认文本

@@ -134,20 +134,25 @@ class GPTSoVitsProvider(TTSProvider):
             _loaded_sovits_model = self.sovits_model
 
     async def synthesize(self, text: str, voice: str, speed: float = 1.0,
-                         gain: float = 0.0, emotion: str = "") -> bytes:
+                         gain: float = 0.0, emotion: str = "", **kwargs) -> bytes:
         if not self.ref_audio:
             raise RuntimeError("GPT-SoVITS 未配 ref_audio_path(参考音频,必填)")
         await self._ensure_weights()
-        # 清浔预设合成参数(从 GAG_config.json 抄;voice/emotion 忽略,首版固定单音色)
+        # 合成参数:面板可配的走 kwargs(透传),不可配的固定;voice/emotion 忽略(GPT-SoVITS 音色=参考音频)
         payload = {
             "text": text, "text_lang": "all_zh",
             "ref_audio_path": self.ref_audio,
             "prompt_text": self.prompt_text, "prompt_lang": "all_zh",
-            "top_k": 5, "top_p": 1.0, "temperature": 1.0,
-            "text_split_method": "cut1", "batch_size": 4, "batch_threshold": 0.75,
+            "top_k": kwargs.get('top_k', 5),
+            "top_p": kwargs.get('top_p', 1.0),
+            "temperature": kwargs.get('temperature', 1.0),
+            "text_split_method": "cut1",
+            "batch_size": kwargs.get('batch_size', 4),
+            "batch_threshold": 0.75,
             "split_bucket": False, "return_fragment": False,
             "speed_factor": speed, "streaming_mode": False, "seed": -1,
-            "parallel_infer": True, "repetition_penalty": 1.35,
+            "parallel_infer": True,
+            "repetition_penalty": kwargs.get('repetition_penalty', 1.35),
             "media_type": "wav",
         }
         return await asyncio.to_thread(self._sync_post, "tts", payload)
@@ -208,7 +213,7 @@ async def resolve_voice(redis, oid: str, fallback: str) -> str:
 async def send_voice_reply(oid: str, text: str, *, msg_id: str, msg_seq: int,
                            voice: str, speed: float, gain: float,
                            emotion_enable: bool, send_text_also: bool,
-                           human_authored: bool = False) -> dict | None:
+                           human_authored: bool = False, **tts_params) -> dict | None:
     """共享:TTS 合成 + 转 silk + 上传 + 发语音(可选先文本)。插件 on_message_out 与 takeover _deliver 复用。
 
     成功返 {delivered:True, mode},失败/空产出返 None(调用方降级文本下发,不阻塞主流程)。
@@ -222,7 +227,7 @@ async def send_voice_reply(oid: str, text: str, *, msg_id: str, msg_seq: int,
                                send_c2c_voice, upload_c2c_file)
     try:
         emotion = await infer_tts_emotion(text) if emotion_enable else ""
-        mp3 = await get_tts().synthesize(text, voice, speed, gain, emotion)
+        mp3 = await get_tts().synthesize(text, voice, speed, gain, emotion, **tts_params)
         if not mp3:
             logger.info("TTS 空产出(stub/无 key),跳过语音 oid=%s", oid)
             return None

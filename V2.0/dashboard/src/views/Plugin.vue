@@ -48,6 +48,8 @@ async function loadAllParams() {
 const LABELS: Record<string, string> = {
   voice: '音色', speed: '语速', gain: '增益(dB)',
   emotion_enable: '情感推导', send_text_also: '同时发文本',
+  top_k: 'Top K', top_p: 'Top P', temperature: '温度',
+  batch_size: '批量大小', repetition_penalty: '重复惩罚',
   max_segments: '最大段数', min_segments: '最小段数',
   interval_min_ms: '段间最小(ms)', interval_max_ms: '段间最大(ms)',
   reply_delay_min_ms: '思考延迟最小(ms)', reply_delay_max_ms: '思考延迟最大(ms)',
@@ -127,20 +129,23 @@ onMounted(load)
           <n-form label-placement="left" :show-feedback="false" style="padding:4px 0">
             <n-form-item v-for="(spec, key) in p.config_schema" :key="String(key)"
                          :label="labelOf(String(key))" style="margin-bottom:10px">
-              <n-space v-if="String(key) === 'voice' && spec.options" align="center" :wrap="false">
-                <n-select v-model:value="paramsMap[p.name].voice" :options="spec.options" style="width:200px" />
-                <n-button size="small" :loading="previewing" @click="previewVoice(p)">试听</n-button>
-              </n-space>
-              <n-switch v-else-if="spec.type === 'bool'"
-                        v-model:value="paramsMap[p.name][String(key)]" />
-              <n-input-number v-else-if="spec.type === 'number'"
-                        v-model:value="paramsMap[p.name][String(key)]"
-                        :min="spec.min" :max="spec.max" :step="spec.step || 1" />
-              <n-select v-else-if="spec.type === 'string' && spec.options"
-                        v-model:value="paramsMap[p.name][String(key)]"
-                        :options="spec.options" style="width:220px" />
-              <n-input v-else-if="spec.type === 'string'"
-                       v-model:value="paramsMap[p.name][String(key)]" style="width:220px" />
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <n-space v-if="String(key) === 'voice' && spec.options" align="center" :wrap="false">
+                  <n-select v-model:value="paramsMap[p.name].voice" :options="spec.options" style="width:200px" />
+                  <n-button size="small" :loading="previewing" @click="previewVoice(p)">试听</n-button>
+                </n-space>
+                <n-switch v-else-if="spec.type === 'bool'"
+                          v-model:value="paramsMap[p.name][String(key)]" />
+                <n-input-number v-else-if="spec.type === 'number'"
+                          v-model:value="paramsMap[p.name][String(key)]"
+                          :min="spec.min" :max="spec.max" :step="spec.step || 1" />
+                <n-select v-else-if="spec.type === 'string' && spec.options"
+                          v-model:value="paramsMap[p.name][String(key)]"
+                          :options="spec.options" style="width:220px" />
+                <n-input v-else-if="spec.type === 'string'"
+                         v-model:value="paramsMap[p.name][String(key)]" style="width:220px" />
+                <span v-if="spec.description" style="font-size:11px;color:#bbb;line-height:1.3">{{ spec.description }}</span>
+              </div>
             </n-form-item>
           </n-form>
           <n-button size="small" type="primary" @click="saveParams(p)">保存</n-button>

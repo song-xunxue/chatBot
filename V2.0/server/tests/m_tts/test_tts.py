@@ -27,6 +27,17 @@ def _patch_async_client(monkeypatch, handler):
     monkeypatch.setattr(httpx, "AsyncClient", factory)
 
 
+def _patch_sync_client(monkeypatch, handler):
+    """patch httpx.Client(sync)让 GPTSoVitsProvider._sync_get/_sync_post 走 MockTransport。
+    provider 改用同步 httpx + asyncio.to_thread(frp 异步不兼容修复)。"""
+    real = httpx.Client
+
+    def factory(**kw):
+        return real(transport=httpx.MockTransport(handler), **kw)
+
+    monkeypatch.setattr(httpx, "Client", factory)
+
+
 def test_voices_are_four_female():
     """仅 4 个女声(anna/bella/claire/diana),无男声"""
     assert set(TTS_VOICES.keys()) == {"anna", "bella", "claire", "diana"}
@@ -147,7 +158,7 @@ async def test_gptsovits_synthesize_payload(monkeypatch):
             captured["body"] = __import__("json").loads(request.content)
         return httpx.Response(200, content=b"WAVBYTES")
 
-    _patch_async_client(monkeypatch, handler)
+    _patch_sync_client(monkeypatch, handler)
     # _loaded=模型 → _ensure_weights 跳过 set weights(只测 /tts 透传)
     monkeypatch.setattr(tts_mod, "_loaded_gpt_model", "mymodel")
     monkeypatch.setattr(tts_mod, "_loaded_sovits_model", "mysovits")
@@ -175,7 +186,7 @@ async def test_gptsovits_loads_weights_when_model_changes(monkeypatch):
             return httpx.Response(200, content=b"WAV")
         return httpx.Response(200)  # set weights GET
 
-    _patch_async_client(monkeypatch, handler)
+    _patch_sync_client(monkeypatch, handler)
     p = GPTSoVitsProvider(api_base="http://x", gpt_model="g.ckpt", sovits_model="s.pth",
                           ref_audio="/r.wav", prompt_text="x")
     await p.synthesize("hi", "v")

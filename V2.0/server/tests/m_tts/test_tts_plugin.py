@@ -52,7 +52,7 @@ def _mock_chain(monkeypatch, *, mp3=b"MP3", silk=b"\x02SILK", file_info="FI-xxx"
     captured = {"send_msg": [], "send_voice": [], "upload": []}
 
     class FakeProvider:
-        async def synthesize(self, text, voice, speed, gain, emotion=""):
+        async def synthesize(self, text, voice, speed, gain, emotion="", **kwargs):
             captured["synth"] = dict(text=text, voice=voice, speed=speed, gain=gain, emotion=emotion)
             if synth_exc:
                 raise synth_exc
