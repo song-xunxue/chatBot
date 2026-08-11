@@ -21,14 +21,25 @@ const routes: RouteRecordRaw[] = [
       { path: 'takeover', name: 'takeover', component: () => import('@/views/Takeover.vue'), meta: { title: '代人代答' } },
     ],
   },
+  // —— 移动端 /m/*(手机端管理面板,独立 MobileLayout 绕开 PC 侧栏;走标准登录页鉴权)——
+  {
+    path: '/m',
+    component: () => import('@/layouts/MobileLayout.vue'),
+    children: [
+      { path: '', redirect: '/m/takeover' },
+      { path: 'takeover', name: 'm-takeover', component: () => import('@/views/TakeoverMobile.vue'), meta: { title: '代人代答', mobile: true } },
+    ],
+  },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
 
-// 鉴权守卫:无 token → 跳登录
+// 鉴权守卫:无 token → 跳登录(带 redirect 回跳;移动端 /m/* 登录后回到原页面,比 URL ?token= 更安全)
 router.beforeEach((to) => {
   const token = localStorage.getItem('access_token')
-  if (!token && to.name !== 'login') return { name: 'login' }
+  if (!token && to.name !== 'login') {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
 })
 
 export default router
