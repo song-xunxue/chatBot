@@ -5,14 +5,14 @@
  * (音色下拉/语速/gain/开关等),单人设 object_id 取 useObject 全局 oid。顺带让 continuous_send 等也可配。
  * 作者: 李文煜
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   NCard, NSpace, NButton, NSwitch, NTag, NEmpty, NCollapse, NCollapseItem,
   NForm, NFormItem, NInputNumber, NInput, NSelect, useMessage,
 } from 'naive-ui'
 import {
   listPlugins, enablePlugin, disablePlugin, reloadPlugin, reloadStar,
-  getPluginParams, setPluginParams, previewTTS,
+  getPluginParams, setPluginParams, previewTTS, getGPTSoVITSStatus,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
 
@@ -102,11 +102,87 @@ async function reload(p: any) {
   } catch (e: any) { message.error('重载失败: ' + e) }
 }
 
-onMounted(load)
+// —— GPT-SoVITS 本地模型就绪状态(M-tts-2,2026-08-10:折叠懒检测 + 心跳缓存 + 展开轮询)——
+// 折叠态零开销(只 onMounted 读一次心跳缓存填标题点);展开才主动探测(心跳过期时);展开态轮询只读心跳
+const ttsStatus = ref<any>(null)
+const statusLoading = ref(false)
+const statusExpanded = ref(false)
+let statusTimer: any = null
+
+async function loadStatus(opts: { force?: boolean; probe?: boolean } = {}) {
+  statusLoading.value = true
+  try {
+    ttsStatus.value = await getGPTSoVITSStatus(opts.force ?? false, opts.probe ?? true)
+  } catch (e: any) {
+    ttsStatus.value = { source: 'none', reachable: false, detail: '查询失败: ' + (e?.message || e) }
+  } finally {
+    statusLoading.value = false
+  }
+}
+
+function onStatusExpand(val: boolean) {
+  statusExpanded.value = val
+  if (val) {
+    loadStatus()                                        // 展开:检测一次(心跳命中秒回,过期才探测)
+    statusTimer = setInterval(() => loadStatus({ probe: false }), 15000)  // 展开态每15s 跟随心跳(只读不探)
+  } else if (statusTimer) {
+    clearInterval(statusTimer)                          // 折叠:停轮询
+    statusTimer = null
+  }
+}
+
+// 状态徽标(四态:就绪/在线·配置缺/未连接/非本地/检测中)
+const statusTag = computed(() => {
+  const s = ttsStatus.value
+  if (!s) return { type: 'default', text: '检测中…' }
+  if ((s.tts_provider || '').toLowerCase() !== 'gptsovits')
+    return { type: 'default', text: `非本地 TTS（${s.tts_provider || '-'}）` }
+  if (s.reachable && s.config_ok) return { type: 'success', text: '就绪' }
+  if (s.reachable && !s.config_ok) return { type: 'warning', text: '在线·配置缺' }
+  return { type: 'error', text: '未连接' }
+})
+
+onMounted(() => {
+  load()
+  loadStatus({ probe: false })   // 进页只读心跳缓存填标题点(不打 frp);展开才主动探测
+})
+onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
 </script>
 
 <template>
   <n-space vertical size="large">
+    <!-- 本地语音合成(GPT-SoVITS)就绪状态:折叠懒检测,展开轮询跟随心跳 -->
+    <n-card size="small">
+      <template #header>
+        <n-space align="center" :wrap="false" size="small">
+          <span>本地语音合成（GPT-SoVITS）</span>
+          <n-tag :type="statusTag.type" size="small" round>{{ statusTag.text }}</n-tag>
+        </n-space>
+      </template>
+      <template #header-extra>
+        <n-switch :value="statusExpanded" @update:value="onStatusExpand" size="small" />
+      </template>
+      <div v-if="statusExpanded">
+        <n-space vertical size="small">
+          <n-space align="center" size="small">
+            <n-button size="small" :loading="statusLoading" @click="loadStatus({ force: true })">
+              重新检测（强制探测）
+            </n-button>
+            <span style="font-size:12px;color:#999" v-if="ttsStatus?.source === 'heartbeat'">心跳缓存命中（未探测隧道）</span>
+            <span style="font-size:12px;color:#999" v-else-if="ttsStatus?.source === 'probe'">主动探测</span>
+          </n-space>
+          <div style="font-size:13px;line-height:1.8">
+            <div>api_base：{{ ttsStatus?.api_base || '-' }}</div>
+            <div>状态：{{ ttsStatus?.detail || '-' }}</div>
+            <div v-if="ttsStatus?.reachable">延迟：{{ ttsStatus?.latency_ms ?? '-' }} ms</div>
+            <div v-if="ttsStatus?.missing?.length" style="color:#a08400">
+              配置缺失：{{ ttsStatus.missing.join('、') }}
+            </div>
+          </div>
+        </n-space>
+      </div>
+    </n-card>
+
     <n-space><n-button @click="load">刷新插件</n-button></n-space>
 
     <n-card title="插件列表(原生 + .star)" size="small">

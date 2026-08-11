@@ -14,8 +14,10 @@ TTS 语音 REST 接口(M-tts,2026-08-04):音色试听 + 自定义音色(声音�
 日期: 2026-08-04
 """
 import asyncio
+import json
 import os
 import tempfile
+import time
 from pathlib import Path
 
 import httpx
@@ -25,7 +27,9 @@ from fastapi.responses import Response
 from api._auth import verify_token
 from core.config import settings
 from modality.silk import find_ffmpeg
-from modality.tts import TTS_VOICES, get_tts
+from modality.tts import (
+    HEARTBEAT_KEY, HEARTBEAT_TTL, TTS_VOICES, check_gptsovits_status, get_tts,
+)
 from storage.redis_client import get_redis
 
 router = APIRouter(prefix="/api/v1", tags=["tts"])
@@ -181,3 +185,37 @@ async def set_active_voice(object_id: str, body: dict = Body(...)):
     else:
         await redis.delete(key)
     return {"object_id": object_id, "uri": uri}
+
+
+# ================ GPT-SoVITS 就绪状态(M-tts-2,2026-08-10) ================
+# 本地启动器(api_v2+frpc)就绪后定期上报心跳 → Redis 缓存;前端 status 查询心跳命中就不探测 frp。
+
+@router.get("/tts/gptsovits/status", dependencies=[Depends(verify_token)])
+async def gptsovits_status(force: bool = False, probe: bool = True):
+    """GPT-SoVITS 就绪状态。心跳缓存优先(命中不打 frp);force=True 跳心跳强探;
+    probe=False 只读心跳(前端折叠态/轮询用,绝不打 frp)。"""
+    redis = await get_redis()
+    return await check_gptsovits_status(redis, force=force, probe=probe)
+
+
+@router.post("/tts/gptsovits/heartbeat", dependencies=[Depends(verify_token)])
+async def gptsovits_heartbeat(body: dict = Body(...)):
+    """本地启动器上报心跳。body {ready, gpt_model?, sovits_model?, latency_ms?}。
+    ready=true 写 Redis TTL 90s(启动器每 30s 续期);ready=false 清除(启动器关闭时上报)。"""
+    redis = await get_redis()
+    ready = bool(body.get("ready", False))
+    if ready:
+        payload = {
+            "ready": True,
+            "ts": int(time.time()),
+            "models": {
+                "gpt_model": body.get("gpt_model", ""),
+                "sovits_model": body.get("sovits_model", ""),
+            },
+            "latency_ms": body.get("latency_ms", -1),
+            "reported_by": body.get("reported_by", "launcher"),
+        }
+        await redis.set(HEARTBEAT_KEY, json.dumps(payload), ex=HEARTBEAT_TTL)
+        return {"ok": True, "ttl": HEARTBEAT_TTL}
+    await redis.delete(HEARTBEAT_KEY)
+    return {"ok": True, "cleared": True}

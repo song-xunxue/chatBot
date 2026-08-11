@@ -18,7 +18,9 @@ CosyVoice2 情感指令:input 形如 "{情感描述}<|endofprompt|>{实际文本
 日期: 2026-08-04
 """
 import asyncio
+import json
 import logging
+import time
 
 import httpx
 
@@ -156,6 +158,82 @@ class GPTSoVitsProvider(TTSProvider):
             "media_type": "wav",
         }
         return await asyncio.to_thread(self._sync_post, "tts", payload)
+
+
+# —— GPT-SoVITS 就绪状态检测(M-tts-2,2026-08-10:心跳缓存优先 + 懒探测,免重复打 frp 隧道)——
+# 心跳:本地启动器 api_v2 就绪后每 30s POST /tts/gptsovits/heartbeat 上报,服务端写 Redis TTL 90s。
+# status 查询:心跳未过期直接返不探测;过期/无心跳且 probe=True 才主动探测根路径。
+HEARTBEAT_KEY = "mychat:tts:gptsovits:heartbeat"
+HEARTBEAT_TTL = 90  # 秒;启动器每 30s 续期,90s=3 周期容错(崩溃后最多 90s 状态过期)
+
+
+def _sync_probe(api_base: str, timeout: float = 4.0):
+    """同步探测 api_v2 根路径。任何 HTTP 响应(含 404)= TCP/HTTP 通 = 服务在线;
+    连接拒绝/超时 = 离线。同步 httpx + asyncio.to_thread 包装(避 frp 隧道异步不兼容坑,与 GPTSoVitsProvider 同款)。
+    GPT-SoVITS api_v2 启动先加载完模型再开服务,故"响应"即"模型就绪"。返 (reachable, latency_ms, detail)。"""
+    t0 = time.perf_counter()
+    try:
+        with httpx.Client(timeout=timeout) as c:                   # 同步 client(可被测试 _patch_sync_client mock)
+            r = c.get(f"{api_base.rstrip('/')}/")                   # 根路径探测(不依赖具体路由,404 也算在线)
+        return True, int((time.perf_counter() - t0) * 1000), f"HTTP {r.status_code}"
+    except httpx.ConnectTimeout:
+        return False, -1, "连接超时(api_v2 未启动或 frp 隧道断)"
+    except httpx.ConnectError:
+        return False, -1, "连接被拒(api_v2 加载中或未启动)"
+    except Exception as e:
+        return False, -1, f"探测失败: {type(e).__name__}"
+
+
+async def check_gptsovits_status(redis=None, *, force: bool = False, probe: bool = True) -> dict:
+    """聚合 GPT-SoVITS 就绪状态。心跳缓存优先(命中不打 frp);否则按 probe 决定是否探测。
+
+    force:True 跳过心跳直接探测(前端「重新检测」按钮)。
+    probe:心跳未命中时是否主动探测;False 只读心跳(折叠态/轮询:绝不打 frp)。
+    返 {tts_provider, api_base, source('heartbeat'/'probe'/'none'), reachable, latency_ms,
+        config_ok, missing, detail, heartbeat_ts}。"""
+    api_base = settings.gptsovits_api_base
+    res = {
+        "tts_provider": settings.tts_provider, "api_base": api_base,
+        "source": "none", "reachable": False, "latency_ms": -1,
+        "config_ok": False, "missing": [], "detail": "", "heartbeat_ts": None,
+    }
+    # config 完整性(ref_audio 必填——synthesize 空会 raise;gpt/sovits 通常 tts_infer.yaml 预配但建议显式)
+    missing = [k for k, v in (
+        ("ref_audio", settings.gptsovits_ref_audio),
+        ("gpt_model", settings.gptsovits_gpt_model),
+        ("sovits_model", settings.gptsovits_sovits_model),
+    ) if not v]
+    res["missing"] = missing
+    res["config_ok"] = not missing
+
+    # 非 gptsovits provider:不探测(本地模型概念不适用,前端据此灰显)
+    if (settings.tts_provider or "").lower() != "gptsovits":
+        res["detail"] = f"当前 TTS provider={settings.tts_provider}（非本地 GPT-SoVITS）"
+        return res
+
+    # 心跳优先(force 时跳过;命中即返,不打 frp)
+    if not force and redis is not None:
+        try:
+            raw = await redis.get(HEARTBEAT_KEY)
+            if raw:
+                hb = json.loads(raw)
+                res.update(source="heartbeat", reachable=True,
+                           latency_ms=hb.get("latency_ms", -1),
+                           detail="本地启动器已上报就绪", heartbeat_ts=hb.get("ts"))
+                return res
+        except Exception:
+            logger.warning("读 GPT-SoVITS 心跳缓存失败,降级探测", exc_info=True)
+
+    # 心跳未命中 + probe=False → 不探测(折叠态/轮询:零 frp 开销)
+    if not probe:
+        res["detail"] = "未检测（展开或点重新检测）"
+        return res
+
+    # 主动探测(force 或 probe=True 且心跳未命中)
+    reachable, lat, detail = await asyncio.to_thread(_sync_probe, api_base)
+    res.update(source="probe", reachable=reachable, latency_ms=lat,
+               detail=detail if reachable else f"未连接：{detail}")
+    return res
 
 
 def get_tts(name: str = "") -> TTSProvider:

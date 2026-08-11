@@ -113,6 +113,11 @@ export const getActiveVoice = (oid: string) =>
 export const setActiveVoice = (oid: string, uri: string | null) =>
   api.put('/api/v1/tts/voice/active', { uri }).then((r) => r.data)
 
+// —— GPT-SoVITS 就绪状态(M-tts-2,2026-08-10:心跳缓存优先;展开懒检测+轮询)——
+// force=true 跳心跳强探(手动「重新检测」);probe=false 只读心跳不探测(折叠态/轮询,零 frp 开销)
+export const getGPTSoVITSStatus = (force = false, probe = true) =>
+  api.get('/api/v1/tts/gptsovits/status', { params: { force, probe } }).then((r) => r.data)
+
 // —— 系统 system ——
 export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) => r.data)
 export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => r.data)

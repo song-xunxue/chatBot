@@ -36,7 +36,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Python 项目，IDE 为 PyCharm/IntelliJ。遵循全局 CLAUDE.md 的环境规范：
   - 运行 Python 时优先用 conda 环境，通过完整路径调用 `python.exe`（conda 不在 bash PATH 中）
-  - 已知 conda 环境：`mypytorch`、`langchain`、`coze_env`、`DeepRibo`；不确定用哪个时主动询问用户
+  - **已知 conda 环境（按项目区分，勿混用）**：
+    - `mychat` — **V1.0 专属**（V2.0 早期测试曾借用，现已区分开）
+    - `qingxun` — **V2.0 / 清浔专属**（python 3.11，匹配 `server/Dockerfile`；打包启动器/工具链用此，2026-08-10 新建）
+    - 其他通用：`mypytorch`（PyTorch/CUDA）、`langchain`、`coze_env`
+  - 不确定用哪个时主动询问用户；conda.exe 完整路径 `C:/Users/26904/anaconda3/Scripts/conda.exe`
 - **项目类型已确认：项目类型**（非作业类型）。所有代码文件统一采用项目类型头部注释风格：功能说明 + 作者（`李文煜`）+ 日期（`yyyy-mm-dd`）+ 变更日志
 - 其余规范（中文文档/注释、Windows 兼容性、conda 环境等）见全局 `~/.claude/CLAUDE.md`
 
@@ -45,3 +49,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `.claude/skills-guide.md` — Matt Pocock Skills 开发流程指南（已从全局同步）
 - `.claude/settings.local.json` — 本地权限配置（已同步全局 `permissions.allow` 通配规则）
 - `.claude/chat.md` — 用于记录长文本（如运行报错日志），按需创建
+
+## 部署访问（核心 · 每次会话必读，勿遗忘）
+
+V2.0 线上部署在云服务器，访问凭证（曾因没记牢重复踩坑，特此固化为项目级记忆）：
+
+- **服务器**：`43.140.219.99`，**用户 `ubuntu`**（非 root），**sudo 免密**
+- **SSH 私钥**：`D:\code\Git_Local\ChatBot\.claude\ubuntu.pem`（**项目目录内，非 `~/.ssh/`**）
+  - 命令：`ssh -i D:/code/Git_Local/ChatBot/.claude/ubuntu.pem ubuntu@43.140.219.99`
+  - `~/.ssh/` 下**无私钥文件**（只有 config/known_hosts），认证必须 `-i` 指定 pem
+- **部署目录**：`~/ChatBot-V2/`（ubuntu 家目录 `/home/ubuntu/ChatBot-V2/`，**非 `/root/`**）
+- **面板**：`http://43.140.219.99:8000`（IP+8000 绕开域名未备案），token = `.env` 的 `ACCESS_TOKEN`
+- **REST 鉴权 header**：`X-Access-Token: <token>`（**非 `Authorization: Bearer`**，见 `server/app/api/_auth.py`）
+- **部署一条龙**：本地 `tar`（排除 `V2.0/tts-tools` / `V2.0/Ref` / `node_modules` / `.env`）→ `scp -i pem 包 ubuntu@43.140.219.99:~/` → 远端 `cd ~/ChatBot-V2 && tar xzf 包 --strip-components=1 && sudo bash scripts/deploy_v2.sh`
+- 细节见记忆 [[deploy-ssh-authorization]] [[v2-0-deploy]]
