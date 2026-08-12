@@ -1,0 +1,30 @@
+# NapCat Docker(M-V3-0 最小验证用,独立于 V2.0,不接 pipeline)
+# 官方仓库: https://github.com/NapNeko/NapCat-Docker
+# 镜像: mlikiowa/napcat-docker:latest(v4.17.53+,amd64)
+#
+# 端口(容器 network_mode:host,直接用宿主机端口,无需 ports 映射):
+#   6099 = WebUI(扫码登录 / 配反向WS / 查看状态)— 公网暴露需注意安全,务必改强 Token
+#   3000 = NapCat 默认 OneBot HTTP API(echo 通过 http://127.0.0.1:3000 调 send_private_msg)
+#   3001 = NapCat OneBot WebSocket 服务端(本验证不用)
+#
+# network_mode: host — NapCat 直接用宿主机网络,反向WS连宿主机 echo(8091)+ echo 通过 127.0.0.1:3000 调 NapCat HTTP,
+#   无需端口映射,host 内互访最省心(最小验证场景)。生产/多租户可改回 bridge + 显式映射。
+#
+# 持久化:
+#   ./QQ      → /app/.config/QQ       (QQ 登录态,免每次扫码)
+#   ./config  → /app/napcat/config    (NapCat 配置:反向WS目标/Token/HTTP等)
+#
+# 启动:NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose up -d
+# 首次 Token:docker logs napcat-v3 | grep -i token(查看 WebUI 登录 Token)
+services:
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat-v3
+    restart: unless-stopped
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID}
+      - NAPCAT_GID=${NAPCAT_GID}
+    volumes:
+      - ./QQ:/app/.config/QQ
+      - ./config:/app/napcat/config
+    network_mode: host     # 直接用宿主机网络(6099 WebUI / 3000 OneBot HTTP / 反向WS 出站都在宿主机)
