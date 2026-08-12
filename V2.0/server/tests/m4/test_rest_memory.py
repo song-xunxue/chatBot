@@ -101,3 +101,49 @@ async def test_batch_forget_by_category(monkeypatch, fake_redis):
                           json={"category": "preference"}, headers=_H)
         assert r.status_code == 200
         assert r.json()["forgotten"] == 1
+
+
+# —— 2026-08-13 三要素 + useful_score/tier:PATCH 扩字段 + POST 手动新增 ——
+async def test_patch_three_fields_and_tier(monkeypatch, fake_redis):
+    """PATCH 接 reason/tags/useful_score/tier + 校验"""
+    app = _wire(monkeypatch, fake_redis)
+    await store.upsert_long_term(fake_redis, "u1", MemoryItem(id="m1", content="用户喜欢动漫"))
+    async with await _ac(app) as ac:
+        r = await ac.patch("/api/v1/memory/u1/m1", json={
+            "reason": "多次提及", "tags": ["喜好", "日常"],
+            "useful_score": 0.8, "tier": 2,
+        }, headers=_H)
+        assert r.status_code == 200
+        d = r.json()
+        assert d["reason"] == "多次提及"
+        assert d["tags"] == ["喜好", "日常"]
+        assert abs(d["useful_score"] - 0.8) < 1e-6
+        assert d["tier"] == 2
+        # 非法 tier 400
+        bad = await ac.patch("/api/v1/memory/u1/m1", json={"tier": 9}, headers=_H)
+        assert bad.status_code == 400
+        # 非法 useful_score 400
+        bad2 = await ac.patch("/api/v1/memory/u1/m1", json={"useful_score": 2.0}, headers=_H)
+        assert bad2.status_code == 400
+
+
+async def test_post_create_manual_memory(monkeypatch, fake_redis):
+    """POST 手动新增记忆(source=manual)"""
+    app = _wire(monkeypatch, fake_redis)
+    async with await _ac(app) as ac:
+        r = await ac.post("/api/v1/memory/u1", json={
+            "content": "煜君习惯深夜聊天", "category": "preference",
+            "importance": 0.7, "reason": "观察规律", "tags": ["作息"],
+            "useful_score": 0.9, "tier": 2, "locked": True,
+        }, headers=_H)
+        assert r.status_code == 200
+        d = r.json()
+        assert d["content"] == "煜君习惯深夜聊天"
+        assert d["source"] == "manual"
+        assert d["reason"] == "观察规律"
+        assert d["tags"] == ["作息"]
+        assert d["tier"] == 2
+        assert d["locked"] is True
+        # content 缺失 400
+        bad = await ac.post("/api/v1/memory/u1", json={"category": "fact"}, headers=_H)
+        assert bad.status_code == 400

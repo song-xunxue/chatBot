@@ -110,6 +110,12 @@ class Settings(BaseSettings):
     memory_forget_w_emotion: float = 0.15
     memory_forget_threshold: float = 0.3
     memory_forget_halflife_hours: float = 72.0
+    # 2026-08-13 useful_score 用进废退(三档衰减闭环)
+    memory_useful_score_delta: float = 0.1        # 评分驱动增减步长(本轮>=85 +δ / <60 -δ)
+    memory_useful_score_init: str = "importance"  # 新记忆 useful_score 初始(importance|0.5)
+    memory_tier0_threshold: float = 0.3           # 自动档:useful_score<此→T0(自然衰减);T1 跌破此值也忘
+    memory_tier1_threshold: float = 0.7           # 自动档:useful_score>=此→T2(永不衰减)
+    memory_forget_loop_interval_hours: float = 6.0  # forget_tick 后台循环周期(小时)
     # M4 记忆融合增强(借鉴 angel_memory:BM25 检索 / 加权随机召回 / 睡眠巩固)
     memory_retriever: str = "bm25"  # 检索器:bm25(BM25 评分)/ keyword(交集计数)
     memory_weighted_sample: bool = True  # 加权随机召回(避确定性偏见,angel_memory 借鉴)

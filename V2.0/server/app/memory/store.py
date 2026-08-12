@@ -157,9 +157,14 @@ async def set_locked(redis: Redis, oid: str, mid: str, locked: bool) -> bool:
 
 async def update_long_term(redis: Redis, oid: str, mid: str, *,
                            content: str | None = None,
-                           category=None, importance: float | None = None) -> bool:
-    """编辑长期记忆条目(content/category/importance 任一,2026-07-06 手动修正)。
-    返回是否找到。其他字段(access_count/locked/forgotten/...)保留不变。"""
+                           category=None, importance: float | None = None,
+                           reason: str | None = None,
+                           tags: list | None = None,
+                           useful_score: float | None = None,
+                           tier: int | None = None) -> bool:
+    """编辑长期记忆条目(content/category/importance/reason/tags/useful_score/tier 任一)。
+    返回是否找到。其他字段(access_count/locked/forgotten/...)保留不变。
+    2026-08-13 加 reason/tags/useful_score/tier(三要素+用进废退手填)。"""
     m = await get_long_term(redis, oid, mid)
     if not m:
         return False
@@ -169,6 +174,16 @@ async def update_long_term(redis: Redis, oid: str, mid: str, *,
         m.category = category
     if importance is not None:
         m.importance = max(0.0, min(1.0, float(importance)))
+    if reason is not None:
+        m.reason = str(reason)
+    if tags is not None:
+        # 容错 + 上限 5
+        t = tags if isinstance(tags, list) else []
+        m.tags = [str(x).strip() for x in t if str(x).strip()][:5]
+    if useful_score is not None:
+        m.useful_score = max(0.0, min(1.0, float(useful_score)))
+    if tier is not None:
+        m.tier = int(tier)
     await upsert_long_term(redis, oid, m)
     return True
 

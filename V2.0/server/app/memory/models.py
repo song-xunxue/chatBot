@@ -38,9 +38,9 @@ class Category(str, Enum):
 
 @dataclass
 class MemoryItem:
-    """长期记忆条目(含 category/emotion/source)"""
+    """长期记忆条目(含 category/emotion/source + reason/tags/useful_score/tier)"""
     id: str                              # mid, uuid4
-    content: str                         # 记忆文本
+    content: str                         # 记忆文本(论断)
     category: Category = Category.FACT
     importance: float = 0.5              # 0~1, 写入时 LLM 评定
     emotion: float = 0.0                 # 0~1, 情感强度,影响衰减
@@ -48,8 +48,13 @@ class MemoryItem:
     last_access_ts: int = 0
     access_count: int = 0
     forgotten: bool = False              # 软遗忘标记,可恢复
-    source: str = "dialog"               # dialog/import/proxy/extract
+    source: str = "dialog"               # dialog/import/proxy/extract/roleplay/manual
     locked: bool = False                 # 锁定防遗忘(手动锁定,should_forget 跳过)
+    # 2026-08-13 记忆三要素 + 用进废退(借鉴 angel_memory)
+    reason: str = ""                     # 理由:为什么这条值得记(含金量,面板展示)
+    tags: list = field(default_factory=list)  # 标签:自由分类(网络化检索入口,面板展示/编辑)
+    useful_score: float = 0.5            # 用进废退评分(0~1,评分驱动增减;T1/T2 自动档依据)
+    tier: int = -1                       # 手动档位:-1=自动(由useful_score判),0/1/2=强制T0/T1/T2
 
     def __post_init__(self):
         now = int(time.time() * 1000)
@@ -71,6 +76,10 @@ class MemoryItem:
             category = Category(raw.get("category", "fact"))
         except ValueError:
             category = Category.FACT
+        # tags 容错:list/缺失/非list 都兜底为 []
+        tags = raw.get("tags", [])
+        if not isinstance(tags, list):
+            tags = []
         return cls(
             id=raw.get("id", ""),
             content=raw.get("content", ""),
@@ -83,6 +92,10 @@ class MemoryItem:
             forgotten=bool(raw.get("forgotten", False)),
             source=raw.get("source", "dialog"),
             locked=bool(raw.get("locked", False)),
+            reason=raw.get("reason", ""),
+            tags=tags,
+            useful_score=float(raw.get("useful_score", 0.5)),
+            tier=int(raw.get("tier", -1)),
         )
 
 
@@ -157,3 +170,6 @@ class ForgetConfig:
     retain_threshold: float = 0.3        # 跌破则 forgotten=True
     decay_half_life_hours: float = 72.0  # recency_decay 半衰期
     cleanup_interval_turns: int = 50     # 物理清理周期
+    # 2026-08-13 三档衰减自动档阈值(tier=-1 时由 useful_score 判档)
+    tier0_threshold: float = 0.3         # useful_score < 此 → T0(自然衰减);T1 跌破此值也忘
+    tier1_threshold: float = 0.7         # useful_score >= 此 → T2(永不衰减)

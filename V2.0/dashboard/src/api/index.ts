@@ -74,8 +74,15 @@ export const restoreMemory = (oid: string, mid: string) =>
   api.post(`/api/v1/memory/${oid}/${mid}/restore`).then((r) => r.data)
 export const lockMemory = (oid: string, mid: string, locked = true) =>
   api.post(`/api/v1/memory/${oid}/${mid}/lock`, { locked }).then((r) => r.data)
-export const updateMemory = (oid: string, mid: string, body: { content?: string; category?: string; importance?: number }) =>
-  api.patch(`/api/v1/memory/${oid}/${mid}`, body).then((r) => r.data)
+export const updateMemory = (oid: string, mid: string, body: {
+  content?: string; category?: string; importance?: number;
+  reason?: string; tags?: string[]; useful_score?: number; tier?: number;
+}) => api.patch(`/api/v1/memory/${oid}/${mid}`, body).then((r) => r.data)
+// 手动新增长期记忆(2026-08-13:由用户完善角色记忆,source=manual)
+export const createMemory = (oid: string, body: {
+  content: string; category?: string; importance?: number;
+  reason?: string; tags?: string[]; useful_score?: number; tier?: number; locked?: boolean;
+}) => api.post(`/api/v1/memory/${oid}`, body).then((r) => r.data)
 export const batchForgetMemory = (oid: string, body: any = {}) =>
   api.post(`/api/v1/memory/${oid}/forget`, body).then((r) => r.data)
 

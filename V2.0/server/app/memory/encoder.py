@@ -84,9 +84,12 @@ async def extract_facts(user_text: str, reply_text: str, llm: LLMProvider | None
         f"3. 严格区分'我'(角色)与'{label}'(对方),切勿把角色名字/特征记成{label}的。\n"
         f"content 用角色口吻,例如'我叫清浔''{label}喜欢动漫''我和{label}是同学'。\n"
         f"{label}: {user_text}\n角色(我): {reply_text}\n"
+        "每条记忆还需给出:reason(为什么这条值得长期记,含金量,没有则空串)、"
+        "tags(1-3 个简短分类标签,如['喜好','日常'])。\n"
         "严格只输出一个 JSON 数组,每个元素形如 "
         '{"content": str, "importance": 0-1, "emotion": 0-1, '
-        '"category": "fact|preference|relationship|event|personality"},没有则返回 []。'
+        '"category": "fact|preference|relationship|event|personality", '
+        '"reason": str, "tags": [str]},没有则返回 []。'
     )
     try:
         resp = await llm.chat([Message(role="user", content=prompt)], model=model)
@@ -123,9 +126,12 @@ async def extract_facts_batch(messages: list, llm: LLMProvider | None,
         f"3. 严格区分'我'(角色)与'{label}'(对方),切勿把角色名字/特征记成{label}的。\n"
         f"content 用角色口吻(如'我叫清浔''{label}喜欢动漫''我和{label}是同学')。\n\n"
         f"{dialog}\n\n"
+        "每条记忆还需给出:reason(为什么这条值得长期记,含金量,没有则空串)、"
+        "tags(1-3 个简短分类标签,如['喜好','日常'])。\n"
         "严格只输出一个 JSON 数组,每个元素形如 "
         '{"content": str, "importance": 0-1, "emotion": 0-1, '
-        '"category": "fact|preference|relationship|event|personality"},没有则返回 []。'
+        '"category": "fact|preference|relationship|event|personality", '
+        '"reason": str, "tags": [str]},没有则返回 []。'
     )
     try:
         resp = await llm.chat([Message(role="user", content=prompt)], model=model)
@@ -137,7 +143,7 @@ async def extract_facts_batch(messages: list, llm: LLMProvider | None,
 
 def _parse_facts(text: str) -> list[dict]:
     """从 LLM 输出解析 JSON 事实数组(首个数组,容忍前后多余文本/嵌套);每元素做结构校验。
-    数组提取收口于 llm.json_extract。"""
+    数组提取收口于 llm.json_extract。2026-08-13 加 reason/tags(记忆三要素)。"""
     from llm.json_extract import extract_json_array
     arr = extract_json_array(text)
     if not arr:
@@ -147,11 +153,18 @@ def _parse_facts(text: str) -> list[dict]:
         if not isinstance(f, dict) or not f.get("content"):
             continue
         cat = f.get("category", "fact")
+        # tags 容错:list/缺失/非list;上限 5 个防滥用
+        raw_tags = f.get("tags", [])
+        if not isinstance(raw_tags, list):
+            raw_tags = []
+        tags = [str(t).strip() for t in raw_tags if str(t).strip()][:5]
         facts.append({
             "content": str(f["content"]),
             "importance": _clamp(float(f.get("importance", 0.5))),
             "emotion": _clamp(float(f.get("emotion", 0.0))),
             "category": cat if cat in _VALID_CATEGORIES else "fact",
+            "reason": str(f.get("reason", "")).strip(),
+            "tags": tags,
         })
     return facts
 
@@ -171,9 +184,12 @@ async def consolidate_facts(episodic_summaries: list[str], llm: LLMProvider | No
         f"关于{label}的特点/偏好、角色与{label}的关系、角色自身的事。\n"
         f"关键:严格区分'我'(角色)与'{label}'(对方),切勿把角色名字/特征记成{label}的。"
         f"content 用角色口吻(如'我叫清浔''{label}喜欢动漫')。\n" + joined +
-        "\n严格只输出一个 JSON 数组,每个元素形如 "
+        "\n每条记忆还需给出:reason(为什么这条值得长期记,含金量,没有则空串)、"
+        "tags(1-3 个简短分类标签,如['喜好','日常'])。\n"
+        "严格只输出一个 JSON 数组,每个元素形如 "
         '{"content": str, "importance": 0-1, "emotion": 0-1, '
-        '"category": "fact|preference|relationship|event|personality"},没有则返回 []。'
+        '"category": "fact|preference|relationship|event|personality", '
+        '"reason": str, "tags": [str]},没有则返回 []。'
     )
     try:
         resp = await llm.chat([Message(role="user", content=prompt)], model=model)

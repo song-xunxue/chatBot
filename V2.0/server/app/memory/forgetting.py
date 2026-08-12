@@ -33,10 +33,30 @@ def retain_score(item: MemoryItem, cfg: ForgetConfig, now_ts: int = 0) -> float:
     )
 
 
+def _auto_tier(item: MemoryItem, cfg: ForgetConfig) -> int:
+    """2026-08-13 自动档判定(tier==-1 时由 useful_score 推档):
+    useful_score >= tier1_threshold → T2(永不);>= tier0_threshold → T1(评分驱动);否则 T0(自然衰减)。"""
+    if item.useful_score >= cfg.tier1_threshold:
+        return 2
+    if item.useful_score >= cfg.tier0_threshold:
+        return 1
+    return 0
+
+
 def should_forget(item: MemoryItem, cfg: ForgetConfig, now_ts: int = 0) -> bool:
-    """是否应遗忘:已 forgotten→True;locked→False(锁定防遗忘);否则 retain 跌破阈值→True"""
+    """是否应遗忘(2026-08-13 三档衰减):
+    - forgotten→True;locked→False(手动锁,强制永不)
+    - tier>=0 用手动档;tier==-1 由 useful_score 自动判档(_auto_tier)
+    - T2(永不)→False;T1(评分驱动)→useful_score 跌破 tier0_threshold 才忘;T0(自然衰减)→retain_score 跌破阈值才忘"""
     if item.forgotten:
         return True
     if item.locked:
         return False
+    tier = item.tier if item.tier >= 0 else _auto_tier(item, cfg)
+    if tier == 2:
+        return False
+    if tier == 1:
+        # T1:只在 useful_score 跌破 T0 阈值时才忘(评分驱动的用进废退)
+        return item.useful_score < cfg.tier0_threshold
+    # T0:自然衰减(原 retain_score 逻辑)
     return retain_score(item, cfg, now_ts) < cfg.retain_threshold

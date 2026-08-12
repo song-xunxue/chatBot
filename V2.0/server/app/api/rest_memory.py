@@ -98,13 +98,19 @@ async def lock(object_id: str, mid: str, body: dict = Body(default={})):
 
 @router.patch("/memory/{object_id}/{mid}", dependencies=[Depends(verify_token)])
 async def edit_memory(object_id: str, mid: str, body: dict = Body(default={})):
-    """编辑长期记忆条目(2026-07-06 手动修正)。body: {content?, category?, importance?}(至少其一)。
-    category 须为 fact/preference/relationship/event/personality。返回更新后的条目。"""
+    """编辑长期记忆条目。body 任一: {content?, category?, importance?, reason?, tags?,
+    useful_score?, tier?, locked?}(至少其一,2026-08-13 扩 reason/tags/useful_score/tier)。
+    category 须为 fact/preference/relationship/event/personality;
+    tier 须为 -1(自动)/0/1/2;useful_score 须为 0-1。返回更新后的条目。"""
     content = body.get("content")
     category = body.get("category")
     importance = body.get("importance")
-    if content is None and category is None and importance is None:
-        raise HTTPException(status_code=400, detail="至少传 content/category/importance 之一")
+    reason = body.get("reason")
+    tags = body.get("tags")
+    useful_score = body.get("useful_score")
+    tier = body.get("tier")
+    if all(v is None for v in [content, category, importance, reason, tags, useful_score, tier]):
+        raise HTTPException(status_code=400, detail="至少传一个可编辑字段")
     cat = None
     if category is not None:
         from memory.models import Category
@@ -113,14 +119,86 @@ async def edit_memory(object_id: str, mid: str, body: dict = Body(default={})):
         except ValueError:
             raise HTTPException(status_code=400,
                                 detail=f"category 须为 {[c.value for c in Category]}")
+    tier_v = None
+    if tier is not None:
+        try:
+            tier_v = int(tier)
+        except (TypeError, ValueError):
+            tier_v = None
+        if tier_v not in (-1, 0, 1, 2):
+            raise HTTPException(status_code=400, detail="tier 须为 -1/0/1/2")
+    us_v = None
+    if useful_score is not None:
+        try:
+            us_v = float(useful_score)
+        except (TypeError, ValueError):
+            us_v = None
+        if us_v is None or not (0.0 <= us_v <= 1.0):
+            raise HTTPException(status_code=400, detail="useful_score 须为 0-1")
+    tags_v = None
+    if tags is not None:
+        if not isinstance(tags, list):
+            raise HTTPException(status_code=400, detail="tags 须为数组")
+        tags_v = [str(t).strip() for t in tags if str(t).strip()][:5]
     redis = await get_redis()
     ok = await store.update_long_term(
-        redis, object_id, mid, content=content, category=cat,
-        importance=float(importance) if importance is not None else None)
+        redis, object_id, mid,
+        content=content, category=cat,
+        importance=float(importance) if importance is not None else None,
+        reason=str(reason) if reason is not None else None,
+        tags=tags_v,
+        useful_score=us_v,
+        tier=tier_v,
+    )
     if not ok:
         raise HTTPException(status_code=404, detail="memory not found")
     updated = await store.get_long_term(redis, object_id, mid)
     return updated.to_dict() if updated else {"updated": True}
+
+
+@router.post("/memory/{object_id}", dependencies=[Depends(verify_token)])
+async def create_memory(object_id: str, body: dict = Body(default={})):
+    """手动新增长期记忆(2026-08-13 由用户完善角色记忆)。
+    body: {content(必填), category?, importance?, reason?, tags?, useful_score?, tier?, locked?}。
+    source 标记 'manual' 便于区分。返回新建条目。"""
+    import uuid
+    from memory.models import MemoryItem, Category
+    content = (body.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content 必填")
+    try:
+        cat = Category(body.get("category", "fact"))
+    except ValueError:
+        raise HTTPException(status_code=400,
+                            detail=f"category 须为 {[c.value for c in Category]}")
+    importance = float(body.get("importance", 0.5))
+    if not (0.0 <= importance <= 1.0):
+        raise HTTPException(status_code=400, detail="importance 须为 0-1")
+    useful_score = float(body.get("useful_score", importance))   # 默认同 importance
+    if not (0.0 <= useful_score <= 1.0):
+        raise HTTPException(status_code=400, detail="useful_score 须为 0-1")
+    tier = int(body.get("tier", -1))
+    if tier not in (-1, 0, 1, 2):
+        raise HTTPException(status_code=400, detail="tier 须为 -1/0/1/2")
+    tags = body.get("tags") or []
+    if not isinstance(tags, list):
+        raise HTTPException(status_code=400, detail="tags 须为数组")
+    tags = [str(t).strip() for t in tags if str(t).strip()][:5]
+    redis = await get_redis()
+    item = MemoryItem(
+        id=f"mem_{uuid.uuid4().hex[:12]}",
+        content=content,
+        category=cat,
+        importance=importance,
+        reason=str(body.get("reason", "")).strip(),
+        tags=tags,
+        useful_score=useful_score,
+        tier=tier,
+        source="manual",
+        locked=bool(body.get("locked", False)),
+    )
+    await store.upsert_long_term(redis, object_id, item)
+    return item.to_dict()
 
 
 @router.post("/memory/{object_id}/forget", dependencies=[Depends(verify_token)])

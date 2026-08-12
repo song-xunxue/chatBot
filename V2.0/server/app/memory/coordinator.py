@@ -50,6 +50,37 @@ def _similar(a: str, b: str, threshold: float = _DEDUP_THRESHOLD) -> bool:
     return len(ta & tb) / len(ta | tb) >= threshold
 
 
+def _merge_meta_fields(m: MemoryItem, fact: dict) -> None:
+    """2026-08-13 去重命中时合并三要素+useful_score(就地改 m):
+    - reason:新非空覆盖旧空,旧非空保留(取首个非空)
+    - tags:并集去重,上限 5
+    - useful_score:取 max(语义去重命中=巩固,不重置)"""
+    new_reason = str(fact.get("reason", "")).strip()
+    if new_reason and not m.reason:
+        m.reason = new_reason
+    new_tags = fact.get("tags") or []
+    if isinstance(new_tags, list):
+        merged = list(m.tags) + [str(t).strip() for t in new_tags if str(t).strip()]
+        # 去重保序,上限 5
+        seen, out = set(), []
+        for t in merged:
+            if t not in seen:
+                seen.add(t)
+                out.append(t)
+        m.tags = out[:5]
+    fact_us = fact.get("useful_score")
+    if fact_us is not None:
+        m.useful_score = max(m.useful_score, float(fact_us))
+
+
+def _init_useful_score(importance: float) -> float:
+    """2026-08-13 新记忆 useful_score 初始值:默认=importance(可配 0.5 固定)。"""
+    from core.config import settings
+    if getattr(settings, "memory_useful_score_init", "importance") == "0.5":
+        return 0.5
+    return max(0.0, min(1.0, float(importance)))
+
+
 class MemoryCoordinator:
     """记忆协调器:检索→组装→编码→遗忘的唯一入口,服务端常驻"""
 
@@ -172,6 +203,27 @@ class MemoryCoordinator:
         ))
         await store.set_core(self.redis, oid, core_list)
 
+    async def _apply_score_to_recalled(self, oid: str, ctx, sign: int) -> None:
+        """2026-08-13 useful_score RL credit assignment:本轮被召回的记忆(ctx.memory_meta.hit_mids)
+        随本轮评分集体增减 useful_score(sign=+1 强化/-1 衰减)。调用方须持 _lock(oid)。
+        手动档 tier>=0 与 locked 跳过(不动用户显式设定);步长 settings.memory_useful_score_delta。"""
+        from core.config import settings
+        mids = []
+        meta = getattr(ctx, "memory_meta", None) or {}
+        if isinstance(meta, dict):
+            hm = meta.get("hit_mids") or []
+            if isinstance(hm, list):
+                mids = [str(x) for x in hm if x]
+        if not mids:
+            return
+        delta = float(settings.memory_useful_score_delta) * sign
+        for mid in mids:
+            m = await store.get_long_term(self.redis, oid, mid)
+            if not m or m.locked or m.tier >= 0:
+                continue   # 锁定 / 手动档不动
+            m.useful_score = max(0.0, min(1.0, m.useful_score + delta))
+            await store.upsert_long_term(self.redis, oid, m)
+
     def render(self, result: RecallResult) -> str:
         """组装 memory_block:核心记忆(常驻) + 长期记忆(召回) + 情景摘要。
         2026-07-07 优化4:激活 core 层渲染(原 retrieve 取了 core 但 render 不用,是死代码)。"""
@@ -233,8 +285,10 @@ class MemoryCoordinator:
                 if facts:
                     # 2026-07-07 优化3:评分联动 importance(本轮高分 +0.1 强化/低分 -0.1 弱化新 facts)
                     score_final = getattr(ctx, "last_score", -1.0)
+                    sign = 0
                     if score_final >= 0:
                         delta = 0.1 if score_final >= 85 else (-0.1 if score_final < 60 else 0.0)
+                        sign = 1 if delta > 0 else (-1 if delta < 0 else 0)
                         if delta:
                             for f in facts:
                                 f["importance"] = max(0.0, min(1.0, float(f.get("importance", 0.5)) + delta))
@@ -243,8 +297,14 @@ class MemoryCoordinator:
                         for f in facts:
                             await self._upsert_fact_dedup(oid, f, existing)
                             # 2026-07-07 优化4:高重要度/关系事实升级 core 层(常驻注入)
-                            if float(f.get("importance", 0)) >= 0.8 or f.get("category") == "relationship":
+                            # 2026-08-13 补:useful_score 达 T2 阈值也升 core(高频巩固常驻)
+                            if (float(f.get("importance", 0)) >= 0.8
+                                    or f.get("category") == "relationship"):
                                 await self._upsert_core_fact(oid, f)
+                        # 2026-08-13 useful_score RL credit assignment:本轮召回的记忆随评分集体增减
+                        # (本轮>=85 强化 / <60 衰减;手动档 tier>=0 与 locked 不动,避免改用户显式设定)
+                        if sign:
+                            await self._apply_score_to_recalled(oid, ctx, sign)
             # 2026-07-07 拟人化:自动学用户称呼(每轮扫 working span,用户自报"叫我X"则更新 persona.user_alias)
             try:
                 await self._learn_user_alias(oid)
@@ -335,9 +395,10 @@ class MemoryCoordinator:
                         await store.set_vec(self.redis, oid, m.id, v)
                 if v and cosine_similarity(new_vec, v) >= settings.memory_embedding_sim_threshold:
                     m.access_count += 1
-                    m.importance = max(m.importance, fact["importance"])
+                    m.importance = max(m.importance, float(fact.get("importance", 0.5)))
                     if fact.get("emotion"):
-                        m.emotion = max(m.emotion, fact["emotion"])
+                        m.emotion = max(m.emotion, float(fact.get("emotion", 0.0)))
+                    _merge_meta_fields(m, fact)   # 2026-08-13 合并 reason/tags/useful_score
                     await store.upsert_long_term(self.redis, oid, m)
                     dup_found = True
                     break
@@ -346,9 +407,10 @@ class MemoryCoordinator:
             for m in existing:
                 if _similar(m.content, fact["content"]):
                     m.access_count += 1
-                    m.importance = max(m.importance, fact["importance"])
+                    m.importance = max(m.importance, float(fact.get("importance", 0.5)))
                     if fact.get("emotion"):
-                        m.emotion = max(m.emotion, fact["emotion"])
+                        m.emotion = max(m.emotion, float(fact.get("emotion", 0.0)))
+                    _merge_meta_fields(m, fact)   # 2026-08-13 合并 reason/tags/useful_score
                     await store.upsert_long_term(self.redis, oid, m)
                     dup_found = True
                     break
@@ -358,9 +420,12 @@ class MemoryCoordinator:
             id=f"mem_{uuid.uuid4().hex[:12]}",
             content=fact["content"],
             category=Category(fact.get("category", "fact")),
-            importance=fact["importance"],
-            emotion=fact["emotion"],
+            importance=float(fact.get("importance", 0.5)),
+            emotion=float(fact.get("emotion", 0.0)),
             source=fact.get("source", "dialog"),
+            reason=str(fact.get("reason", "")),
+            tags=list(fact.get("tags", []))[:5],
+            useful_score=_init_useful_score(float(fact.get("importance", 0.5))),   # 2026-08-13 用进废退初始分
         )
         await store.upsert_long_term(self.redis, oid, new)
         if new_vec:
@@ -395,6 +460,8 @@ class MemoryCoordinator:
             w_emotion=settings.memory_forget_w_emotion,
             retain_threshold=settings.memory_forget_threshold,
             decay_half_life_hours=settings.memory_forget_halflife_hours,
+            tier0_threshold=settings.memory_tier0_threshold,
+            tier1_threshold=settings.memory_tier1_threshold,
         )
         now = int(time.time() * 1000)
         marked = 0
@@ -508,3 +575,29 @@ def reset_coordinator() -> None:
     """重置单例(测试用)"""
     global _coordinator
     _coordinator = None
+
+
+async def _forget_loop(interval_hours: float) -> None:
+    """2026-08-13 记忆衰减后台主循环:每 interval_hours 小时跑一次 forget_tick
+    (软遗忘 + 上限淘汰 + 物理清理 + 睡眠巩固 + useful_score 三档判定)。"""
+    while True:
+        await asyncio.sleep(interval_hours * 3600)
+        try:
+            coord = await get_memory_coordinator()
+            if coord.redis is not None:
+                n = await coord.forget_tick()
+                if n:
+                    logger.info("forget_tick 标记遗忘 %d 条长期记忆", n)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("forget loop iteration failed")
+
+
+def start_forget_loop(interval_hours: float | None = None) -> asyncio.Task:
+    """启动记忆衰减后台循环(返回 Task,供 main.py lifespan 关闭时 cancel)。
+    间隔默认 settings.memory_forget_loop_interval_hours。仿 mood/decay.start_decay_loop。"""
+    from core.config import settings
+    if interval_hours is None:
+        interval_hours = settings.memory_forget_loop_interval_hours
+    return asyncio.create_task(_forget_loop(interval_hours))

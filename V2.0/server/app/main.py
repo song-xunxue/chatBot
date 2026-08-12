@@ -122,12 +122,21 @@ async def lifespan(app: FastAPI):
     from mood.decay import start_decay_loop
     decay_task = start_decay_loop(redis)
 
+    # 记忆衰减循环(2026-08-13 用进废退:forget_tick 后台定时跑,软遗忘+上限淘汰+物理清理+睡眠巩固)
+    from memory.coordinator import start_forget_loop
+    forget_task = start_forget_loop()
+
     yield
 
     # 关闭:衰减循环 → MCP client → 插件 → httpx 客户端
     decay_task.cancel()
     try:
         await decay_task
+    except asyncio.CancelledError:
+        pass
+    forget_task.cancel()
+    try:
+        await forget_task
     except asyncio.CancelledError:
         pass
     if mcp_servers:
