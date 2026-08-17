@@ -1,0 +1,16 @@
+# MyChat V2.0 服务端运行依赖
+# 作者: 李文煜
+# 日期: 2026-06-25
+#
+# M1 范围:QQ 官方机器人 Webhook 适配层 + FastAPI 骨架。
+# LLM/记忆/插件/多模态依赖随后续里程碑(M2+)逐步补齐。
+
+fastapi>=0.110            # Web 框架(应用工厂、lifespan、路由、/health)
+uvicorn[standard]>=0.29  # ASGI 服务器(部署用)
+pydantic-settings>=2.2   # 配置加载(从项目根 .env 读,大写 env→小写属性)
+redis>=5.0               # 异步 Redis 客户端(redis.asyncio),token 缓存/后续 chat_store
+httpx>=0.27              # 异步 HTTP,调 QQ REST(发消息)+ 换 access_token
+pynacl>=1.5              # Ed25519 签名/验签(QQ Webhook 回调签名校验的核心)
+pyyaml>=6.0              # 插件 manifest 解析(plugins/manifest.py;M2 manager import 链需要,M6 加载 .star)
+mcp>=1.28                # MCP client(M5,连外部 MCP server,tool-loop 接外部工具:搜索/浏览/fetch)
+silk-python>=0.2.6       # Tencent SILK 编码(M-tts:TTS mp3/wav → silk QQ 语音条;pysilk 模块,tencent=True 出 0x02 前缀)

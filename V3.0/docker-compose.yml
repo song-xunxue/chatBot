@@ -1,0 +1,47 @@
+# V3.0 独立栈(2026-08-16 M-V3-2;2026-08-17 数据隔离改造):
+# server 8091(API+OneBot反向WS+面板)+ 独立 redis(与 V2.0 数据完全分开——记忆/历史/评分独立积累,
+# 仅启动时从 V2.0 迁移人设与功能配置,migrate_seed_from_v2.sh)。
+# NapCat(napcat-v4,host 网络)反向WS连 ws://127.0.0.1:8091/ws?access_token=...
+# V2.0(8000)完全不动:官方机器人 fallback,双栈并存。
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: mychat-redis-v3
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data-v3:/data
+    networks:
+      - chatbot_v3_net
+
+  server:
+    build:
+      context: .                  # V3.0 根(Dockerfile COPY server/ 与 dashboard/dist 相对根)
+      dockerfile: server/Dockerfile
+    container_name: mychat-server-v3
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # 容器内经服务名 redis 访问本栈独立实例(数据隔离;覆盖 .env 里可能的 V2 地址)
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    ports:
+      # 宿主 8091 → 容器 8000(API/OneBot反向WS/面板同端口;NapCat 即连 127.0.0.1:8091)
+      - "8091:8000"
+    volumes:
+      # 人设 JSON 双写 / 运行时数据持久(容器重建不丢)
+      - ./server/data:/app/server/data
+    # host-gateway:容器经 host.docker.internal 访问宿主机(GPT-SoVITS frp 9880 在宿主机,与 V2.0 同)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - chatbot_v3_net
+
+volumes:
+  redis-data-v3:
+
+networks:
+  chatbot_v3_net:
+    driver: bridge

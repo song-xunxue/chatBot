@@ -1,0 +1,18 @@
+name: continuous_send
+version: 0.1.0
+author: 李文煜
+description: 消息分段发送——按换行拆回复成多段逐条下发(多个气泡,像真人微信连发),段间随机间隔模拟打字节奏
+entry: plugin.py
+display_name: 分段发送
+category: 对话处理
+hooks:
+  - { name: on_before_llm, priority: 50 }
+  - { name: on_message_out, priority: 400 }
+default_enabled: false
+config_schema:
+  max_segments: { type: number, default: 3 }
+  min_segments: { type: number, default: 2 }
+  interval_min_ms: { type: number, default: 500 }
+  interval_max_ms: { type: number, default: 1500 }
+  reply_delay_min_ms: { type: number, default: 3000 }
+  reply_delay_max_ms: { type: number, default: 5000 }
