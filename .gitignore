@@ -1,0 +1,74 @@
+# MyChat Git 忽略规则
+# 作者: 李文煜
+# 日期: 2026-06-15
+
+# 环境与密钥（绝不入库）
+.env
+*.key
+*.pem
+
+# 数据库与运行时数据
+*.db
+*.sqlite
+*.sqlite3
+data/
+server/data/
+
+# 用户上传资源（头像/人设图/表情包/背景）
+server/data/static/uploads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node / 前端构建
+node_modules/
+dist/
+server/dashboard/dist/
+server/dashboard/node_modules/
+
+# 打包产物
+build/
+release/
+*.spec
+
+# IDE（保留 .claude 项目配置，忽略本地权限覆盖与 IDE 私有配置）
+.idea/
+.vscode/
+.claude/settings.local.json
+.claude/chat.md
+.claude/memory_path.txt
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+logs/
+
+# 参考资料（仅本地：含大体积样本 APK 与 persona 样本，不入库）
+Ref/
+
+# 客户端本地启动脚本（内置 access_token，不入库）
+client/run_cloud.bat
+client/run_cloud.sh
+client/run_local.*
+
+# 本地快捷方式（绝对路径，机器相关）+ 桌宠图标产物（由 fox.svg 生成）
+*.lnk
+client/fox.ico
+
+# TTS 实测产物(real_tts_check/probe_voices/silk_transcode_check 生成,不入库)
+V2.0/server/scripts/*.mp3
+V2.0/server/scripts/*.silk
+V2.0/server/scripts/_tmp_*
+
+# GPT-SoVITS 工具链(启动器exe+frp+GAG_config,不入库;源码 tts_launcher.py 入库)
+V2.0/tts-tools/
+V3.0/tts-tools/

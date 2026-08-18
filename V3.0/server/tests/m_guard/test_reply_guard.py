@@ -55,3 +55,34 @@ def test_fallback_is_in_character():
     out = sanitize_reply("Traceback (most recent call last)")
     assert "Traceback" not in out
     assert len(out) > 0
+
+
+# —— 句号铁律(2026-08-17 V3.0):出口确定性剥句末句号 ——
+from adapter.reply_guard import strip_trailing_period
+
+
+def test_strip_trailing_period_chinese():
+    """句末全角句号剥除(单个/多个/带尾空白)"""
+    assert strip_trailing_period("今天好累。") == "今天好累"
+    assert strip_trailing_period("嗯。。") == "嗯"
+    assert strip_trailing_period("晚安~ ") == "晚安~"          # 尾空白剥但波浪号保留
+
+
+def test_strip_trailing_period_keeps_others():
+    """问叹/省略号/正文中间句号不动"""
+    assert strip_trailing_period("真的吗？") == "真的吗？"
+    assert strip_trailing_period("好呀!") == "好呀!"
+    assert strip_trailing_period("等你…") == "等你…"
+    assert strip_trailing_period("早。你吃了吗") == "早。你吃了吗"   # 中间句号保留(契约管)
+
+
+def test_strip_trailing_period_decimal_protected():
+    """小数保护:'3.5' 结尾的 ASCII 点不剥"""
+    assert strip_trailing_period("考了3.5") == "考了3.5"
+    assert strip_trailing_period("ok.") == "ok"                 # 非数字前缀的 . 剥
+
+
+def test_sanitize_strips_period_on_clean_text():
+    """sanitize_reply 对干净文本剥句末句号(机器产出统一过铁律)"""
+    out = sanitize_reply("今天也要开心哦。")
+    assert out == "今天也要开心哦"
