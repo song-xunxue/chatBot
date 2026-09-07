@@ -21,13 +21,20 @@ const routes: RouteRecordRaw[] = [
       { path: 'takeover', name: 'takeover', component: () => import('@/views/Takeover.vue'), meta: { title: '代人代答' } },
     ],
   },
-  // —— 移动端 /m/*(手机端管理面板,独立 MobileLayout 绕开 PC 侧栏;走标准登录页鉴权)——
+  // —— 移动端 /m/*(手机端管理面板,独立 MobileLayout+底部 tab 导航;走标准登录页鉴权)——
+  // 2026-09-08 全页适配:七页对等 PC 端(窄屏重排),代答置首(手机最高频)
   {
     path: '/m',
     component: () => import('@/layouts/MobileLayout.vue'),
     children: [
       { path: '', redirect: '/m/takeover' },
       { path: 'takeover', name: 'm-takeover', component: () => import('@/views/TakeoverMobile.vue'), meta: { title: '代人代答', mobile: true } },
+      { path: 'history', name: 'm-history', component: () => import('@/views/HistoryMobile.vue'), meta: { title: '对话历史', mobile: true } },
+      { path: 'memory', name: 'm-memory', component: () => import('@/views/MemoryMobile.vue'), meta: { title: '记忆查看', mobile: true } },
+      { path: 'persona', name: 'm-persona', component: () => import('@/views/PersonaMobile.vue'), meta: { title: '人设管理', mobile: true } },
+      { path: 'mood', name: 'm-mood', component: () => import('@/views/MoodMobile.vue'), meta: { title: '心情系统', mobile: true } },
+      { path: 'plugin', name: 'm-plugin', component: () => import('@/views/PluginMobile.vue'), meta: { title: '插件管理', mobile: true } },
+      { path: 'system', name: 'm-system', component: () => import('@/views/SystemMobile.vue'), meta: { title: '系统配置', mobile: true } },
     ],
   },
 ]
