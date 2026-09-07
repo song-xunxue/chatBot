@@ -24,6 +24,11 @@ M2 实现:load_history / persona_inject / memory_retrieve / mood_inject / build_
 2026-07-07
 变更说明：
   1. 记忆优化阶段2:run_post_reply_chain 把 score 回流到 ctx.last_score(供 memory 联动 importance)
+
+2026-09-07
+变更说明：
+  1. stage_score/run_post_reply_chain 加 force_positive 参数穿透(手动回复链路:样本恒正
+     source='manual',见 score.service.score_reply;LLM 四元组照算)
 """
 from typing import AsyncIterator
 import asyncio
@@ -147,10 +152,12 @@ async def stage_save(ctx: MessageContext, redis: Redis, *,
 
 async def stage_score(ctx: MessageContext, redis: Redis, *,
                       mood_value: float | None = None,
-                      provider_name: str = "") -> dict | None:
+                      provider_name: str = "",
+                      force_positive: bool = False) -> dict | None:
     """阶段④.5:对回复自动 LLM 评分(对照人设)+ 心情补偿 + 写 score 四元组 + 样本归类。
     在 stage_save 后执行(用 ctx.reply_mid 定位);score_enabled=False 或无 reply_mid/text 则跳过。
     mood_value/provider_name:pipeline 传 ctx.mood_value/ctx.provider_name;takeover 传 None/""(读 get_mood/默认)。
+    force_positive(2026-09-07):手动回复链路样本恒正 source='manual'(见 score_reply)。
     软失败(评分异常 → 记日志返回 None,不阻塞)。返回 score 四元组(或 None)。"""
     if not settings.score_enabled:
         return None
@@ -161,6 +168,7 @@ async def stage_score(ctx: MessageContext, redis: Redis, *,
         return await score_service.score_reply(
             redis, ctx.object_id, ctx.reply_text, ctx.persona_card, ctx.reply_mid,
             mood_value=mood_value, provider_name=provider_name,
+            force_positive=force_positive,
         )
     except Exception:
         logger.exception("score stage failed")   # 评分失败不阻塞主流程与记忆编码
@@ -235,16 +243,19 @@ async def run_post_reply_chain(ctx: MessageContext, redis: Redis, *,
                                 user_ts: int | None = None, reply_ts: int | None = None,
                                 score_mood_value: float | None = None,
                                 score_provider: str = "",
-                                await_memory: bool = False) -> dict | None:
+                                await_memory: bool = False,
+                                force_positive: bool = False) -> dict | None:
     """统一回合后副作用链(架构 #1,pipeline 与 takeover 共用):stage_save → stage_score → stage_memory_write。
     消除此前 run_stream 与 resolve_and_deliver 两套手撸编排(save/score/memory 顺序 + 软/硬失败发散、
     append_message ts+1 时序两处手撸)。顺序不变量:score 需 stage_save 写入的 ctx.reply_mid;memory 需 ctx.reply_text。
     save 硬(落库是回合契约);score/memory 软(各自 try 吞,不阻塞)。返回 score 四元组(或 None)。
+    force_positive(2026-09-07):手动回复链路(takeover.record_manual_reply)样本恒正 source='manual'。
     mood_update 不在此链——pipeline 在 save 前(后接 ON_MESSAGE_OUT 钩子,可能改 reply_text)、
     takeover 在 memory 后,时序语义不同且与 reply_text 修改耦合,各调用方按既有时机调 stage_mood_update。"""
     await stage_save(ctx, redis, reply_sender=reply_sender, reply_source=reply_source,
                      user_ts=user_ts, reply_ts=reply_ts)
-    score = await stage_score(ctx, redis, mood_value=score_mood_value, provider_name=score_provider)
+    score = await stage_score(ctx, redis, mood_value=score_mood_value, provider_name=score_provider,
+                              force_positive=force_positive)
     if score and isinstance(score, dict):
         # 2026-07-07 优化3:评分回流,供 memory extract 联动 importance(高分强化/低分弱化)
         ctx.last_score = float(score.get("score", score.get("score_base", -1)))

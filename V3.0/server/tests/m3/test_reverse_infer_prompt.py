@@ -54,3 +54,34 @@ async def test_llm_extract_prompt_marks_sample_source():
     assert "训练剧本" in p
     assert "真实对话回复" in p
     assert "剧本偏离回复" in p
+
+
+async def test_llm_extract_prompt_marks_correction_source():
+    """2026-08-18:纠正样本(source=correction)标注 [管理员纠正](黄金标准,最高权威)"""
+    llm = _CaptureLLM()
+    await _llm_extract(
+        [{"text": "管理员改写的理想回复", "source": "correction"},
+         {"text": "普通高分回复", "source": "dialog"}],
+        [],
+        llm,
+    )
+    p = llm.captured
+    assert "[管理员纠正]" in p
+    assert "管理员改写的理想回复" in p
+    assert "黄金标准" in p
+
+
+async def test_llm_extract_prompt_marks_manual_source():
+    """2026-09-07:手动回复样本(source=manual,角色QQ号手动回复)标注 [管理员亲手回复]
+    (同为黄金标准,与 [管理员纠正] 同级最优先采信)"""
+    llm = _CaptureLLM()
+    await _llm_extract(
+        [{"text": "管理员亲手发的回复", "source": "manual"},
+         {"text": "普通高分回复", "source": "dialog"}],
+        [],
+        llm,
+    )
+    p = llm.captured
+    assert "[管理员亲手回复]" in p
+    assert "管理员亲手发的回复" in p
+    assert "最优先采信" in p

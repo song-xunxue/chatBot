@@ -8,6 +8,11 @@ chat_store block 三层单测:append/get_history/sender→role 映射/UUID mid/
 2026-06-27
 变更说明：
   1. M2 创建 chat_store block 三层单测
+
+2026-09-07
+变更说明：
+  1. 新增 ts 驱动块簿记回归(审查修复):归档旧 ts 并入当前块不拆块不倒挂/静默按消息 ts
+     判定新块 start_ts=消息 ts/has_history
 """
 import time as _time
 
@@ -64,6 +69,66 @@ async def test_same_block_within_silence(fake_redis, monkeypatch):
     assert block1 == block2   # 同 block
 
 
+# ================ ts 驱动块簿记(2026-09-07 审查修复回归)================
+
+async def test_archive_old_ts_joins_current_block(fake_redis, monkeypatch):
+    """归档写入(旧 ts,如代答队列归档/手动回复)并入当前活跃块:不拆块、end_ts 不回拨
+    (防 start_ts>end_ts 倒挂与后续写入被误判静默)"""
+    now = int(_time.time() * 1000)
+    monkeypatch.setattr(chat_store, "_now_ms", lambda: now)
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="新消息", ts=now)
+    block1 = await fake_redis.get(chat_store._active_key("u1"))
+    # 归档 3 小时前的旧消息(显式旧 ts)
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="归档旧消息",
+                                    ts=now - 3 * 3600 * 1000)
+    assert await fake_redis.get(chat_store._active_key("u1")) == block1   # 同块,不拆
+    meta = await fake_redis.hgetall(chat_store._block_key(block1))
+    assert int(meta["end_ts"]) == now                                      # end_ts 不回拨
+    assert int(meta["start_ts"]) <= int(meta["end_ts"])                    # 无倒挂
+    # 后续正常写入仍并入(不被归档的旧 end_ts 误判静默)
+    await chat_store.append_message(fake_redis, "u1", sender="ai", content="再聊", ts=now + 1)
+    assert await fake_redis.get(chat_store._active_key("u1")) == block1
+
+
+async def test_silence_split_by_message_ts_new_block_start(fake_redis, monkeypatch):
+    """静默判定按消息 ts:间隔超阈开新块,新块 start_ts=该消息 ts(不再统一 now,
+    归档场景面板不再出现'刚刚'的假块)"""
+    t0 = int(_time.time() * 1000) - 3600 * 1000   # 1 小时前
+    monkeypatch.setattr(chat_store, "_now_ms", lambda: t0)
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="旧", ts=t0)
+    block1 = await fake_redis.get(chat_store._active_key("u1"))
+    # 模拟真实时间已过 1 小时,但消息 ts 只前进 11 分钟(归档语义):按消息 ts 判定超阈
+    now_real = int(_time.time() * 1000)
+    monkeypatch.setattr(chat_store, "_now_ms", lambda: now_real)
+    t1 = t0 + 11 * 60 * 1000
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="归档", ts=t1)
+    block2 = await fake_redis.get(chat_store._active_key("u1"))
+    assert block2 != block1                              # 拆块(消息间隔超阈)
+    meta = await fake_redis.hgetall(chat_store._block_key(block2))
+    assert int(meta["start_ts"]) == t1                   # 新块 start_ts=消息 ts,非 now_real
+
+
+async def test_clear_queue_archives_into_one_block(fake_redis, monkeypatch):
+    """一键清空 N 条旧 ts 消息:不产生 N 个'刚刚'单消息块(全并入当前活跃块)"""
+    now = int(_time.time() * 1000)
+    monkeypatch.setattr(chat_store, "_now_ms", lambda: now)
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="当前", ts=now)
+    block1 = await fake_redis.get(chat_store._active_key("u1"))
+    for i in range(5):                                   # 归档 5 条半小时前的旧消息
+        await chat_store.append_message(fake_redis, "u1", sender="user", content=f"旧{i}",
+                                        ts=now - 1800 * 1000 - i)
+    assert await fake_redis.get(chat_store._active_key("u1")) == block1   # 仍在同一块
+    blocks = await fake_redis.zcard(chat_store._blocks_key("u1"))
+    assert blocks == 1                                   # 无块洪水
+
+
+async def test_has_history(fake_redis):
+    """has_history:无历史 False,append 后 True(陌生人门控用)"""
+    assert await chat_store.has_history(fake_redis, "u1") is False
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="hi")
+    assert await chat_store.has_history(fake_redis, "u1") is True
+
+
 async def test_roleplay_isolation(fake_redis):
     """roleplay 样本绝不进 get_history(物理隔离铁律)"""
     await chat_store.append_message(fake_redis, "u1", sender="user", content="真实聊天")
@@ -76,14 +141,16 @@ async def test_roleplay_isolation(fake_redis):
     assert rps[0]["content"] == "训练样本"
 
 
-async def test_soft_delete_filtered_from_history(fake_redis):
-    """软删消息不进 get_history(但保留在存储)"""
+async def test_hard_delete_message(fake_redis):
+    """真删消息(2026-08-18 软删→物理删,对齐 QQ 删除语义):不进 get_history,存储也移除"""
     mid = await chat_store.append_message(fake_redis, "u1", sender="user", content="删我")
-    await chat_store.delete_message(fake_redis, mid)
-    assert await chat_store.get_history(fake_redis, "u1") == []
-    # 消息仍存在(软删,非物理删)
-    msg = await chat_store.get_message(fake_redis, mid)
-    assert msg["status"] == "deleted"
+    keep = await chat_store.append_message(fake_redis, "u1", sender="ai", content="留下")
+    assert await chat_store.hard_delete_message(fake_redis, mid) is True
+    assert await chat_store.get_history(fake_redis, "u1") != []   # 剩余消息不受影响
+    assert all(m.content != "删我" for m in await chat_store.get_history(fake_redis, "u1"))
+    assert await chat_store.get_message(fake_redis, mid) is None  # 消息 hash 已物理删
+    assert await chat_store.hard_delete_message(fake_redis, keep) is True
+    assert await chat_store.hard_delete_message(fake_redis, keep) is False   # 再删返 False
 
 
 async def test_count_messages(fake_redis):

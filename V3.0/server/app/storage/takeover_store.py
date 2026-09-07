@@ -24,6 +24,14 @@ V1.0 用单 active(SET 覆盖),管理员连发代答只留最后一条;V2.0 改 
 变更说明：
   1. M8 新建 takeover_store:per-object FIFO 队列(替 V1.0 单 active 覆盖丢消息)
      + 孤儿 pid 惰性清理(pending TTL 过期)+ msgseq per-oid 防 QQ 去重
+
+2026-09-07
+变更说明：
+  1. 新增 drain_queue:出队全部 pending(手动回复消化/一键清空用)——逐条标记 status+LREM
+     (非 DEL 整键,处理期间新入队不受影响);跳过并发已被 resolve/skip 消费的(status!=pending),
+     防同一 pending 双重落库
+  2. 新增 skip_mark(跳过保留 Hash 1h 审计,归档失败可恢复)/ requeue(drain 回灌兜底,
+     手动回复全链失败时待答消息不丢)
 """
 import json
 import time
@@ -171,6 +179,67 @@ async def skip(redis: Redis, oid: str, pid: str | None = None) -> bool:
     pipe.lrem(queue_key, 1, pid)
     await pipe.execute()
     return bool(existed)
+
+
+async def drain_queue(redis: Redis, oid: str, *, status: str = "manual") -> list[dict]:
+    """出队全部 pending 并返回详情(FIFO 正序)。2026-09-07 手动回复消化队列/面板一键清空共用。
+    快照 pids 后逐条处理(标记 status+续期 1h 审计+LREM 出队,同 resolve 审计语义)——
+    逐条而非 DEL 整键:处理期间的新入队不受影响;已过期孤儿直接 LREM 丢弃;
+    跳过 status!=pending 的(并发已被 resolve/skip 消费,防同一 pending 双重落库)。"""
+    queue_key = _K_QUEUE.format(oid=oid)
+    pids = await redis.lrange(queue_key, 0, -1)
+    out: list[dict] = []
+    for pid in pids:
+        pending_key = _K_PENDING.format(oid=oid, pid=pid)
+        pending = await redis.hgetall(pending_key)
+        pipe = redis.pipeline()
+        if pending and pending.get("status") == "pending":
+            pipe.hset(pending_key, "status", status)
+            pipe.expire(pending_key, 3600)   # 审计续期 1h(同 resolve)
+            pending["status"] = status       # 回填返回 dict
+            out.append(pending)
+        pipe.lrem(queue_key, 1, pid)         # 活 pending 出队/孤儿清理,统一 LREM
+        await pipe.execute()
+    return out
+
+
+async def skip_mark(redis: Redis, oid: str, pid: str | None = None, *,
+                    status: str = "skipped") -> bool:
+    """跳过但保留 pending Hash 1h 审计(2026-09-07):status!=pending 视为已被并发消费返 False,
+    命中则标记 status+续期 1h+LREM 出队(不 DEL——归档失败时待答详情留存可人工恢复)。
+    skip_and_archive 用(先原子占位再归档)。pid=None 跳队首(先清孤儿,同 skip)。"""
+    queue_key = _K_QUEUE.format(oid=oid)
+    if pid is None:
+        await _purge_orphan_head(redis, oid)
+        pid = await redis.lindex(queue_key, 0)
+        if pid is None:
+            return False
+    pending_key = _K_PENDING.format(oid=oid, pid=pid)
+    pending = await redis.hgetall(pending_key)
+    if not pending or pending.get("status") != "pending":
+        await redis.lrem(queue_key, 1, pid)   # 已被 resolve/drain 消费或孤儿:仅清出队
+        return False
+    pipe = redis.pipeline()
+    pipe.hset(pending_key, "status", status)
+    pipe.expire(pending_key, 3600)            # 审计续期 1h(归档失败可人工恢复)
+    pipe.lrem(queue_key, 1, pid)
+    await pipe.execute()
+    return True
+
+
+async def requeue(redis: Redis, oid: str, pendings: list[dict]) -> int:
+    """把 drain 出的 pending 回灌队列(2026-09-07 降级兜底):status 重置 pending + RPUSH
+    保原 FIFO 顺序。手动回复副作用链与降级归档都失败时调,待答消息不丢(可再代答/清空)。"""
+    n = 0
+    for p in pendings:
+        pid = p.get("pid")
+        if not pid:
+            continue
+        key = _K_PENDING.format(oid=oid, pid=pid)
+        await redis.hset(key, "status", "pending")
+        await redis.rpush(_K_QUEUE.format(oid=oid), pid)
+        n += 1
+    return n
 
 
 # ================ 交付状态(代答下发后回写)================

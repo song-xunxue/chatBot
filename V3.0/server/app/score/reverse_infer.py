@@ -23,6 +23,16 @@ docs/01 §4(评分驱动反推)/ docs/02 §5.1(score<60 负样本 / score>85 正
 变更说明:
   1. B-4 _llm_extract prompt 加风格提炼约束(speech_style/personality 禁总结成"括号动作描写",
      防反推把舞台指示风格学进人设字段)
+
+2026-08-18
+变更说明：
+  1. 样本来源标注加第三级 [管理员纠正](source=correction,manual_set_score corrected 参数写入):
+     管理员亲自改写的理想回复=黄金标准,权威度 [管理员纠正] > [真实对话] > [训练剧本]
+
+2026-09-07
+变更说明：
+  1. 样本来源标注加 [管理员亲手回复](source=manual,角色 QQ 号手动回复经 message_sent 链路
+     写入的恒正样本):同为黄金标准,与 [管理员纠正] 同级最优先采信
 """
 import difflib
 import json
@@ -160,10 +170,16 @@ async def _llm_extract(samples_pos: list[dict], samples_neg: list[dict], llm) ->
     """调 LLM 从评分样本提炼人设字段 JSON。samples_* 为 list_samples 返回的 dict 列表
     (含 text/source/mid/score)。prompt 按来源标注(2026-07-07):真实对话(dialog)权威,
     训练剧本(roleplay)参考——修 score 队列 roleplay/live 共池无 source 区分的已存在污染。
+    2026-09-07:新增 [管理员亲手回复](source=manual,角色 QQ 号手动回复,黄金标准同 correction)。
     失败返回 {}。"""
     def _label(s: dict) -> str:
-        # 标注样本来源:[真实对话] 权威 / [训练剧本] 参考
-        return "[训练剧本]" if s.get("source") == "roleplay" else "[真实对话]"
+        # 标注样本来源:[管理员纠正]/[管理员亲手回复] 黄金标准 / [真实对话] 权威 / [训练剧本] 参考
+        src = s.get("source")
+        if src == "correction":
+            return "[管理员纠正]"
+        if src == "manual":
+            return "[管理员亲手回复]"
+        return "[训练剧本]" if src == "roleplay" else "[真实对话]"
 
     pos_txt = "\n".join(f"{_label(s)} {s.get('text', '')}"
                         for s in samples_pos[:20] if s.get("text")) or "(无)"
@@ -182,9 +198,12 @@ async def _llm_extract(samples_pos: list[dict], samples_neg: list[dict], llm) ->
         "绝对不要总结成'使用括号动作描写''加舞台指示/旁白''用（轻声笑了）这类格式'——"
         "任何鼓励括号动作/旁白/颜文字堆砌的描述都禁止输出。\n\n"
         "【样本来源说明——重要】\n"
-        "每条样本前标注了来源:[真实对话]=与真用户的实际对话(权威依据,优先采信);"
+        "每条样本前标注了来源,权威度从高到低:[管理员纠正]=管理员对不当回复的亲自改写"
+        "(黄金标准,最优先采信);[管理员亲手回复]=管理员直接以角色身份发出的真实回复"
+        "(同为黄金标准,最优先采信);[真实对话]=与真用户的实际对话(权威依据);"
         "[训练剧本]=人工录入的训练样本(参考补充,可能含设定性/非自然对话内容)。\n"
-        "提炼人设风格时主要依据 [真实对话] 样本,[训练剧本] 仅作补充参考,勿被其设定性措辞带偏。\n\n"
+        "提炼人设风格时优先依据 [管理员纠正] 和 [管理员亲手回复] 和 [真实对话] 样本,"
+        "[训练剧本] 仅作补充参考,勿被其设定性措辞带偏。\n\n"
         f"【高分优秀回复(正样本,应贴合的风格)】\n{pos_txt}\n\n"
         f"【低分偏离回复(负样本,应避免的风格)】\n{neg_txt}\n"
     )

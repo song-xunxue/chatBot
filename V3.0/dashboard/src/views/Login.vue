@@ -27,7 +27,7 @@ function login() {
 
 <template>
   <div style="height:100vh;display:flex;align-items:center;justify-content:center;background:#faf7f2">
-    <n-card title="MyChat 管理面板" style="width:90%;max-width:360px" :bordered="true">
+    <n-card title="清浔 3.0 管理面板" style="width:90%;max-width:360px" :bordered="true">
       <n-space vertical>
         <n-input v-model:value="token" placeholder="访问令牌 access_token" type="password" show-password-on="click" @keyup.enter="login" />
         <n-button type="primary" block @click="login">进入</n-button>

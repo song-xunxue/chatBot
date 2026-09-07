@@ -27,10 +27,8 @@ export const listBlocks = (oid: string, limit = 100) =>
 export const listMessages = (oid: string, params: { block_id?: string; limit?: number } = {}) =>
   api.get(`/api/v1/chat/${oid}/messages`, { params }).then((r) => r.data)
 export const getMessage = (mid: string) => api.get(`/api/v1/chat/messages/${mid}`).then((r) => r.data)
-export const updateMessage = (mid: string, body: any) =>
-  api.put(`/api/v1/chat/messages/${mid}`, body).then((r) => r.data)
-export const deleteMessage = (mid: string, reason = 'out_of_character') =>
-  api.delete(`/api/v1/chat/messages/${mid}`, { data: { reason } }).then((r) => r.data)
+export const deleteMessage = (mid: string) =>
+  api.delete(`/api/v1/chat/messages/${mid}`).then((r) => r.data)
 export const closeBlock = (bid: string, reason = 'manual') =>
   api.post(`/api/v1/chat/blocks/${bid}/close`, { reason }).then((r) => r.data)
 export const deleteBlock = (bid: string) =>
@@ -40,8 +38,10 @@ export const clearHistory = (oid: string) =>
 
 // —— 评分 score(M3 + M7 samples)——
 export const getScore = (mid: string) => api.get(`/api/v1/chat/messages/${mid}/score`).then((r) => r.data)
-export const setScore = (mid: string, score_base: number, score_note?: string) =>
-  api.patch(`/api/v1/chat/messages/${mid}/score`, { score_base, score_note }).then((r) => r.data)
+export const setScore = (mid: string, score_base: number, score_note?: string,
+                         corrected?: string, corrected_score?: number) =>
+  api.patch(`/api/v1/chat/messages/${mid}/score`, { score_base, score_note, corrected, corrected_score })
+    .then((r) => r.data)
 export const getHealth = (oid: string, window = 0) =>
   api.get(`/api/v1/chat/${oid}/health`, { params: { window } }).then((r) => r.data)
 export const getSamples = (oid: string, kind = 'negative') =>
@@ -144,6 +144,9 @@ export const answerTakeoverBatch = (oid: string, items: { pid?: string; answer: 
   api.post(`/api/v1/takeover/${oid}/answer/batch`, { items }).then((r) => r.data)
 export const skipTakeover = (oid: string, pid?: string) =>
   api.post(`/api/v1/takeover/${oid}/skip`, { pid }).then((r) => r.data)
+// 一键清空待答队列(逐条归档用户消息到历史后清队,2026-09-07)
+export const clearTakeoverQueue = (oid: string) =>
+  api.post(`/api/v1/takeover/${oid}/queue/clear`).then((r) => r.data)
 export const sendTakeover = (oid: string, content: string) =>
   api.post(`/api/v1/takeover/${oid}/send`, { content }).then((r) => r.data)
 // 代答 TTS 开关(M-tts 2026-08-04:两开关 enable/send_text_also;voice 参数复用 tts_reply 插件 config)

@@ -172,6 +172,19 @@ async def test_gptsovits_synthesize_payload(monkeypatch):
     assert captured["body"]["prompt_text"] == "参考文本"
     assert captured["body"]["speed_factor"] == 1.2
     assert captured["body"]["text_lang"] == "all_zh"
+    # 2026-08-18 默认值对齐 GSV WebUI 面板(用户比对发现网页与面板合成不一致):
+    # sample_steps=8(WebUI 默认,api 原默认 32)/top_k=15(面板默认)/fragment_interval=0.3(「句间停顿」滑条)
+    assert captured["body"]["sample_steps"] == 8
+    assert captured["body"]["top_k"] == 15
+    assert captured["body"]["fragment_interval"] == 0.3
+    assert captured["body"]["split_bucket"] is True
+    # kwargs 覆盖默认(面板可调)
+    out2 = await p.synthesize("再合成", voice="ignored", speed=1.0,
+                              fragment_interval=0.15, sample_steps=16, top_k=30)
+    assert out2 == b"WAVBYTES"
+    assert captured["body"]["fragment_interval"] == 0.15
+    assert captured["body"]["sample_steps"] == 16
+    assert captured["body"]["top_k"] == 30
 
 
 async def test_gptsovits_loads_weights_when_model_changes(monkeypatch):

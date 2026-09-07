@@ -40,6 +40,14 @@ M2 实现:
 变更说明：
   1. list_recent_blocks 改混合:同时返回 chat 真实 block + roleplay 训练 block,加 source 字段
      (real/training)区分,供面板历史页混合展示(训练样本并入对话历史,拟人化一体体验)
+
+2026-09-07
+变更说明：
+  1. 块簿记单调化+归档感知(审查修复):open_or_get_block 静默判定改 ts 驱动(本条消息 ts vs
+     block.end_ts,替代 wall-clock now)——归档写入(旧 ts,代答队列归档/手动回复)并入当前块
+     不误拆;_new_block start_ts=首条消息 ts(不再统一 now,防面板"刚刚"块洪水);append_message
+     的 end_ts 只前进不回拨(防 start_ts>end_ts 倒挂与后续写入被误判静默)
+  2. 新增 has_history(object 是否已有 block,供 message_sent 陌生人门控)
 """
 import json
 import time
@@ -150,26 +158,29 @@ async def _new_block(redis: Redis, object_id: str, *, source: str = "live", ts: 
     return block
 
 
-async def open_or_get_block(redis: Redis, object_id: str, *, source: str = "live") -> dict:
+async def open_or_get_block(redis: Redis, object_id: str, *, source: str = "live", ts: int = 0) -> dict:
     """取当前 open block;若过期(静默超阈值)或不存在,close 旧的并开新 block。
 
-    判定流程(docs/02 §6):
-      1. 取 active block_id(无则开新);
-      2. 读该 block 末条消息 ts(用 block.end_ts 近似),若 now - end_ts > block_silence_min → close 旧 block 开新;
+    判定流程(docs/02 §6;2026-09-07 改 ts 驱动):
+      1. 取 active block_id(无则开新,新块 start_ts=本条消息 ts);
+      2. 读该 block 末条消息 ts(用 block.end_ts 近似),若 本条消息 ts - end_ts > block_silence_min
+         → close 旧 block 开新块。ts 驱动而非 wall-clock now:归档写入(旧 ts,如代答队列归档/
+         手动回复记录)落在 end_ts 之前时并入当前块不误拆;真实间隔超阈仍正常静默分组;
       3. 否则返回当前 open block。
     """
+    ts = ts or _now_ms()
     block_id = await redis.get(_active_key(object_id))
     if not block_id:
-        return await _new_block(redis, object_id, source=source)
+        return await _new_block(redis, object_id, source=source, ts=ts)
     block = await redis.hgetall(_block_key(block_id))
     if not block or block.get("status") != "open":
         # active 失效(被手动 close 或数据缺失),开新 block
-        return await _new_block(redis, object_id, source=source)
-    # 静默分组判定:当前时间与 block 末条 ts 之差超阈值 → 开新 block
+        return await _new_block(redis, object_id, source=source, ts=ts)
+    # 静默分组判定:本条消息 ts 与 block 末条 ts 之差超阈值 → 开新 block
     end_ts = int(block.get("end_ts", 0) or 0)
-    if _now_ms() - end_ts > settings.block_silence_min * 60_000:
+    if ts - end_ts > settings.block_silence_min * 60_000:
         await close_block(redis, block_id, reason="silence")
-        return await _new_block(redis, object_id, source=source)
+        return await _new_block(redis, object_id, source=source, ts=ts)
     return block
 
 
@@ -199,7 +210,7 @@ async def append_message(redis: Redis, object_id: str, *,
     """追加消息到当前 open block,生成全局 UUID mid,返回 mid。
     ai/proxy 消息的 score 四元组由调用方后续用 set_score 补(M3),此处留空。"""
     ts = ts or _now_ms()
-    block = await open_or_get_block(redis, object_id, source=source)
+    block = await open_or_get_block(redis, object_id, source=source, ts=ts)
     block_id = block["block_id"]
     mid = _gen_id()
     msg = {
@@ -222,9 +233,17 @@ async def append_message(redis: Redis, object_id: str, *,
     pipe = redis.pipeline()
     pipe.hset(_msg_key(mid), mapping=msg)            # 消息详情
     pipe.zadd(_msgs_key(block_id), {mid: ts})        # block 内消息索引(按 ts 排序)
-    pipe.hset(_block_key(block_id), "end_ts", ts)    # 更新 block 末条 ts(静默分组依据)
+    # 更新 block 末条 ts(静默分组依据);只前进不回拨(2026-09-07)——归档写入(旧 ts)不把
+    # 块末条时间倒拨,防 start_ts>end_ts 倒挂与后续写入被误判静默拆块
+    pipe.hset(_block_key(block_id), "end_ts", max(ts, int(block.get("end_ts", 0) or 0)))
     await pipe.execute()
     return mid
+
+
+async def has_history(redis: Redis, object_id: str) -> bool:
+    """该 object 是否已有会话历史(存在 block 索引)。2026-09-07:供 message_sent
+    陌生人门控(管理员用角色号私聊非用户对象时,不为陌生 oid 凭空建会话历史)。"""
+    return bool(await redis.zcard(_blocks_key(object_id)))
 
 
 async def append_message_batch(redis: Redis, object_id: str, *, items: list[dict]) -> list[str]:
@@ -435,27 +454,24 @@ async def count_messages(redis: Redis, object_id: str) -> int:
     return sum(await pipe.execute())
 
 
-# ================ Message 改 / 删 ================
+# ================ Message 删 ================
+# 2026-08-18 删 update_message(编辑内容):破坏性改 content 与"纠正回复"语义重复且不可逆,
+# 用户裁决移除——纠错走 score.service.manual_set_score 的 corrected(原内容保留+正样本反推)。
+# 2026-08-18 delete_message 软删 → hard_delete_message 真删(用户裁决,对齐 QQ 客户端删除语义)。
 
-async def update_message(redis: Redis, mid: str, *,
-                         content: str | None = None, sender: str | None = None) -> bool:
-    """改消息内容/sender(改 → status=edited)。命中返回 True。"""
-    if not await redis.exists(_msg_key(mid)):
+async def hard_delete_message(redis: Redis, mid: str) -> bool:
+    """物理删单条消息:msg Hash + 从 block msgs ZSet 移除(2026-08-18 真删除)。
+    原软删只打 status=deleted 标记、内容永留会话——QQ 客户端删除即真删,面板对齐;
+    删前 neg 联动(ai/proxy 有 score 写样本队列)由 rest_chat 负责,训练价值不丢。命中返回 True。"""
+    msg = await redis.hgetall(_msg_key(mid))
+    if not msg:
         return False
-    mapping: dict = {"status": "edited"}
-    if content is not None:
-        mapping["content"] = content
-    if sender is not None:
-        mapping["sender"] = sender
-    await redis.hset(_msg_key(mid), mapping=mapping)
-    return True
-
-
-async def delete_message(redis: Redis, mid: str, *, reason: str = "out_of_character") -> bool:
-    """软删消息:status=deleted + delete_reason,保留供人格负样本(不物理删)。命中返回 True。"""
-    if not await redis.exists(_msg_key(mid)):
-        return False
-    await redis.hset(_msg_key(mid), mapping={"status": "deleted", "delete_reason": reason})
+    block_id = msg.get("block_id", "")
+    pipe = redis.pipeline()
+    pipe.delete(_msg_key(mid))
+    if block_id:
+        pipe.zrem(_msgs_key(block_id), mid)   # block 内消息索引同步移除(会话不再列出)
+    await pipe.execute()
     return True
 
 

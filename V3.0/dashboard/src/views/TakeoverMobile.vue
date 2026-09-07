@@ -15,7 +15,7 @@ import {
 import {
   getTakeoverStatus, toggleTakeover, listTakeoverQueue,
   answerTakeover, answerTakeoverBatch, skipTakeover, sendTakeover,
-  getTakeoverTTSConfig, setTakeoverTTSConfig,
+  clearTakeoverQueue, getTakeoverTTSConfig, setTakeoverTTSConfig,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
 
@@ -93,8 +93,17 @@ async function submitBatch() {
 
 async function skip(p: any) {
   try {
-    await skipTakeover(oid.value, p.pid)
-    message.success('已跳过')
+    const r = await skipTakeover(oid.value, p.pid)
+    if (r.skipped) message.success(r.archived ? '已跳过(消息已存入历史)' : '已跳过')
+    else message.warning('该条已不存在(可能已被手动回复消化)')
+    await load()
+  } catch (e: any) { message.error('' + e) }
+}
+
+async function clearQueue() {
+  try {
+    const r = await clearTakeoverQueue(oid.value)
+    message.success(`已清空待答队列(${r.cleared} 条,${r.archived} 条已归档到历史)`)
     await load()
   } catch (e: any) { message.error('' + e) }
 }
@@ -153,7 +162,16 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <template #header>
         <span>待答队列</span>
         <n-tag size="small" style="margin-left:8px">{{ queueLength }} 条</n-tag>
+        <n-popconfirm @positive-click="clearQueue">
+          <template #trigger>
+            <n-button size="small" type="warning" ghost style="margin-left:8px" :disabled="!queueLength">清空</n-button>
+          </template>
+          清空全部待答消息?用户消息会先逐条归档到聊天历史(不丢失),仅放弃代答。
+        </n-popconfirm>
       </template>
+      <div v-if="queue.length" class="m-hint" style="margin-bottom:8px">
+        用角色 QQ 号(手机端)手动回复会自动消化队列:消息进历史(标「手动」)+ 正样本反哺人设
+      </div>
       <n-empty v-if="!queue.length" size="small" description="暂无待答消息" />
       <n-space v-else vertical size="medium">
         <div v-for="p in queue" :key="p.pid" class="m-pending-card">
@@ -173,7 +191,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
             <n-button type="primary" size="large" style="flex:1" @click="submitOne(p)">代答</n-button>
             <n-popconfirm @positive-click="skip(p)">
               <template #trigger><n-button size="large" quaternary>跳过</n-button></template>
-              跳过该条(不答)?
+              跳过该条(不代答)?消息会保留进聊天历史。
             </n-popconfirm>
           </n-space>
         </div>
@@ -200,8 +218,11 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
           placeholder="输入要主动发给用户的内容..."
           :autosize="{ minRows: 2, maxRows: 6 }"
         />
-        <n-button type="primary" size="large" block @click="sendProactive">主动发送</n-button>
+        <n-button type="primary" size="large" block :disabled="!oid || oid === 'default'" @click="sendProactive">主动发送</n-button>
         <div class="m-hint">不依赖用户先发;落 proxy 消息进历史 + 下发 QQ(主动消息耗月配额)。</div>
+        <div v-if="!oid || oid === 'default'" class="m-hint" style="color:#d03050">
+          oid 未绑定真实会话(V3.0 须为 QQ 号):先在 QQ 上与角色对话一次即可自动绑定
+        </div>
       </n-space>
     </n-card>
 

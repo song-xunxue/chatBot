@@ -8,8 +8,9 @@
   GET  /takeover/{oid}/queue           列 pending 队列(带孤儿过滤)
   POST /takeover/{oid}/answer          单条代答(pid 空取队首)
   POST /takeover/{oid}/answer/batch    批量代答(逐条下发 QQ)
-  POST /takeover/{oid}/skip            跳过(队首或指定 pid)
+  POST /takeover/{oid}/skip            跳过(队首或指定 pid;2026-09-07 起归档用户消息到历史)
   POST /takeover/{oid}/send            主动发送(不依赖 pending,管理员直接推消息给用户)
+  POST /takeover/{oid}/queue/clear     一键清空(逐条归档到历史后清队,2026-09-07)
 
 作者: 李文煜
 日期: 2026-06-30
@@ -18,6 +19,17 @@
 变更说明：
   1. 面板改造:新增 POST /takeover/{oid}/send 主动发送端点(takeover 模式下面板主动触达用户,
      无需用户先发),委托 takeover_svc.send_proactive(落 proxy 消息 + 下发 QQ)
+
+2026-08-18
+变更说明：
+  1. V3.0 oid 语义=QQ 号(纯数字):全部端点前置校验 _require_qq_oid,非数字(如 default/
+     旧 openid)直接 400 明确报错——否则落到 onebot 适配器 int(oid) 才炸,面板只见"下发:失败"
+     (修线上 oid=default 代答下发失败:invalid literal for int())
+
+2026-09-07
+变更说明：
+  1. /skip 改调 skip_and_archive(跳过前用户消息落历史,不再是历史黑洞);
+     新增 /queue/clear 一键清空(逐条归档+清队)
 """
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -29,9 +41,19 @@ from takeover import service as takeover_svc
 router = APIRouter(prefix="/api/v1", tags=["takeover"])
 
 
+def _require_qq_oid(oid: str) -> None:
+    """校验 oid 为 QQ 号(纯数字)。V3.0 出站 user_id=int(oid),非数字必失败;
+    提前 400 给出可操作提示(头部 oid 框填用户 QQ 号),替代静默 delivered=False。"""
+    if not (oid and oid.isdigit()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"oid 必须为 QQ 号(纯数字),当前: {oid!r};请在面板头部 oid 框填用户 QQ 号后回车")
+
+
 @router.post("/takeover/{oid}/toggle", dependencies=[Depends(verify_token)])
 async def toggle(oid: str, body: dict = Body(default={})):
     """开关代答模式。body: {enabled: bool}"""
+    _require_qq_oid(oid)
     enabled = bool(body.get("enabled"))
     redis = await get_redis()
     await takeover_store.set_enabled(redis, oid, enabled)
@@ -41,6 +63,7 @@ async def toggle(oid: str, body: dict = Body(default={})):
 @router.get("/takeover/{oid}/status", dependencies=[Depends(verify_token)])
 async def status(oid: str):
     """代答开关状态 + 队列长度"""
+    _require_qq_oid(oid)
     redis = await get_redis()
     return {
         "object_id": oid,
@@ -52,6 +75,7 @@ async def status(oid: str):
 @router.get("/takeover/{oid}/queue", dependencies=[Depends(verify_token)])
 async def queue(oid: str):
     """列 pending 队列(FIFO 正序,带孤儿过滤)"""
+    _require_qq_oid(oid)
     redis = await get_redis()
     return {"object_id": oid, "queue": await takeover_store.list_queue(redis, oid)}
 
@@ -64,6 +88,7 @@ async def answer(oid: str, body: dict = Body(default={})):
     ans = (body.get("answer") or "").strip()
     if not ans:
         raise HTTPException(status_code=400, detail="answer required")
+    _require_qq_oid(oid)
     redis = await get_redis()
     try:
         return await takeover_svc.resolve_and_deliver(redis, oid, pid, ans)
@@ -78,17 +103,28 @@ async def answer_batch(oid: str, body: dict = Body(default={})):
     items = body.get("items") or []
     if not items:
         raise HTTPException(status_code=400, detail="items required")
+    _require_qq_oid(oid)
     redis = await get_redis()
     return await takeover_svc.resolve_and_deliver_batch(redis, oid, items)
 
 
 @router.post("/takeover/{oid}/skip", dependencies=[Depends(verify_token)])
 async def skip(oid: str, body: dict = Body(default={})):
-    """跳过(放弃代答)。body: {pid?}。pid 空跳队首。命中返 True。"""
+    """跳过(放弃代答)。body: {pid?}。pid 空跳队首。命中返 True。
+    2026-09-07:跳过前用户消息归档到历史(用户说过的话不再凭空消失)。"""
     pid = body.get("pid") or None
+    _require_qq_oid(oid)
     redis = await get_redis()
-    hit = await takeover_store.skip(redis, oid, pid)
-    return {"skipped": hit, "pid": pid}
+    return await takeover_svc.skip_and_archive(redis, oid, pid)
+
+
+@router.post("/takeover/{oid}/queue/clear", dependencies=[Depends(verify_token)])
+async def clear_queue(oid: str):
+    """一键清空待答队列(2026-09-07):全部 pending 的用户消息逐条归档到历史(各自原始 ts)
+    后清空队列。用于线上堆积清理/管理员批量放弃代答。返回 {cleared, archived}。"""
+    _require_qq_oid(oid)
+    redis = await get_redis()
+    return await takeover_svc.clear_queue(redis, oid)
 
 
 @router.post("/takeover/{oid}/send", dependencies=[Depends(verify_token)])
@@ -99,6 +135,7 @@ async def send_proactive(oid: str, body: dict = Body(default={})):
     content = (body.get("content") or "").strip()
     if not content:
         raise HTTPException(status_code=400, detail="content required")
+    _require_qq_oid(oid)
     redis = await get_redis()
     return await takeover_svc.send_proactive(redis, oid, content)
 
@@ -109,6 +146,7 @@ async def send_proactive(oid: str, body: dict = Body(default={})):
 @router.get("/takeover/{oid}/tts_config", dependencies=[Depends(verify_token)])
 async def get_tts_config(oid: str):
     """代答 TTS 配置 {enable, send_text_also};未设置返全 False(纯文本代答)"""
+    _require_qq_oid(oid)
     redis = await get_redis()
     cfg = await takeover_store.get_tts_config(redis, oid)
     return {"object_id": oid,
@@ -122,6 +160,7 @@ async def set_tts_config(oid: str, body: dict = Body(default={})):
     enable=代答是否启用语音;send_text_also=启用时是否同发文本(默认 False 只语音,替换文本)。"""
     enable = bool(body.get("enable"))
     send_text_also = bool(body.get("send_text_also"))
+    _require_qq_oid(oid)
     redis = await get_redis()
     await takeover_store.set_tts_config(redis, oid, enable, send_text_also)
     return {"object_id": oid, "enable": enable, "send_text_also": send_text_also}

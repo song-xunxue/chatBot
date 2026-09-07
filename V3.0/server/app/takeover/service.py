@@ -19,6 +19,17 @@
 变更说明：
   1. 面板改造:新增 send_proactive(主动发送,不依赖 pending;落 proxy 消息 + 下发 QQ,
      不走评分/记忆编码副作用链——无 user 回合,评分无意义)
+
+2026-09-07
+变更说明：
+  1. 手动回复感知(NapCat reportSelfMessage/message_sent 链路,onebot/ws_client 触发):
+     新增 record_manual_reply——管理员直接用角色 QQ 号手动回复用户,消息已亲手发出,本函数只做
+     记录(绝不下发 QQ):drain 全部 pending 消化待答队列 + 用户文本合并(同防抖连发语义)走
+     run_post_reply_chain(force_positive=True,样本恒正 source='manual');无 pending 仅落 proxy 消息
+  2. 队列不再丢消息:skip_and_archive(跳过前用户消息落历史)、clear_queue(一键清空=逐条归档)
+  3. 对抗审查修复:record_manual_reply 降级兜底(副作用链失败→直接归档;归档也失败→requeue
+     回灌待答队列);skip_and_archive 改 skip_mark(占位不 DEL,归档失败详情留存 1h);
+     clear_queue 逐条容错+failed 计数
 """
 import logging
 import time
@@ -201,3 +212,124 @@ async def send_proactive(redis, oid: str, content: str) -> dict:
     msg_seq = await takeover_store.next_msg_seq(redis, oid)
     deliver = await _deliver(redis, oid, content, msg_id="", msg_seq=msg_seq, pid="proactive")
     return {"proxy_mid": proxy_mid, "delivered": deliver["delivered"], "mode": deliver["mode"]}
+
+
+async def record_manual_reply(redis, oid: str, content: str, *, sent_ts: int = 0) -> dict:
+    """手动回复记录(2026-09-07,NapCat message_sent 上报触发,ws_client._handle_manual_sent 调)。
+    管理员直接用角色 QQ 号(手机端等)手动回复用户——消息已亲手发出,本函数只做记录,
+    绝不再下发 QQ(重复下发=用户收到两条)。
+      ① drain 该 oid 全部 pending(逐条安全出队):待答队列全部消化,面板不再堆积
+      ② 有 pending:用户文本合并(\n join,同防抖连发合并语义)+ 手动回复走统一副作用链
+         run_post_reply_chain(reply_sender='proxy', reply_source='manual', force_positive=True)
+         ——落 user+proxy 消息、LLM 评分(四元组照算;样本恒正 source='manual' score=100,
+         黄金标准同 correction,不参与 classify)、记忆编码;心情 apply_emotion(软失败)
+      ③ 无 pending(自动模式插话/队列已清):仅落 proxy 消息(source='manual',同 send_proactive
+         语义——无 user 回合不评分不记忆,消息进历史供后续上下文引用)
+    审查修复(降级兜底):副作用链失败 → 降级为直接归档两条消息;归档也失败 → 回灌待答队列
+    (requeue,消息不丢可再代答/清空)。
+    返回 {proxy_mid, archived_pendings, scored}。"""
+    sent_ts = sent_ts or int(time.time() * 1000)
+    pendings = await takeover_store.drain_queue(redis, oid)
+    user_texts = [p.get("user_text", "") for p in pendings if p.get("user_text")]
+    if not user_texts:
+        # 无待答:仅落手动回复消息(自动模式手动插话/队列已清)
+        proxy_mid = await chat_store.append_message(
+            redis, oid, sender="proxy", content=content, source="manual", ts=sent_ts)
+        return {"proxy_mid": proxy_mid, "archived_pendings": 0, "scored": False}
+    # 有待答:合并用户消息 + 手动回复走统一副作用链(评分恒正 + 记忆编码)
+    user_text = "\n".join(user_texts)
+    base_ts = int(pendings[0].get("created_ts", 0) or 0) or sent_ts   # 用户消息 ts=最早 pending
+    reply_ts = max(sent_ts, base_ts + 1)                             # 防 clock 偏移致回复早于用户消息
+    from pipeline.stages import run_post_reply_chain
+    try:
+        persona_card = None
+        try:
+            persona_card = await _resolve_persona(redis, oid)
+        except Exception:
+            logger.exception("手动回复 persona 解析失败 oid=%s", oid)
+            persona_card = None
+        ctx = MessageContext(object_id=oid, user_text=user_text, reply_text=content,
+                             persona_card=persona_card, created_ts=base_ts)
+        await run_post_reply_chain(ctx, redis,
+                                   reply_sender="proxy", reply_source="manual",
+                                   user_ts=base_ts, reply_ts=reply_ts,
+                                   score_mood_value=None, score_provider="",
+                                   await_memory=True, force_positive=True)
+        proxy_mid = ctx.reply_mid
+    except Exception:
+        # 副作用链失败(如 stage_save 硬失败) → 降级直接归档(消息历史不丢)
+        logger.exception("手动回复副作用链失败,降级为直接归档 oid=%s", oid)
+        try:
+            await chat_store.append_message(redis, oid, sender="user", content=user_text,
+                                            source="live", ts=base_ts)
+            proxy_mid = await chat_store.append_message(
+                redis, oid, sender="proxy", content=content, source="manual", ts=reply_ts)
+        except Exception:
+            # 归档也失败(如 redis 异常) → 回灌待答队列,消息不丢(可再代答/清空)
+            logger.exception("手动回复降级归档也失败,回灌待答队列 oid=%s(共 %d 条)",
+                             oid, len(pendings))
+            await takeover_store.requeue(redis, oid, pendings)
+            return {"proxy_mid": "", "archived_pendings": 0, "scored": False}
+    # 心情更新(软失败,同 resolve_and_deliver 语义:按回复文本关键词调整)
+    try:
+        from mood.service import apply_emotion
+        await apply_emotion(redis, oid, content)
+    except Exception:
+        logger.exception("手动回复 apply_emotion 失败 oid=%s", oid)
+    return {"proxy_mid": proxy_mid, "archived_pendings": len(pendings), "scored": True}
+
+
+async def skip_and_archive(redis, oid: str, pid: str | None = None) -> dict:
+    """跳过并归档(2026-09-07):用户消息先落历史(sender=user,ts=pending 原始时间)再出队。
+    旧行为(直接 skip 丢弃)是历史黑洞——代答模式下用户消息只存于 pending,跳过=用户说过的话
+    在聊天记录里凭空消失,LLM 上下文断裂。
+    审查修复:skip_mark 原子占位(不 DEL,Hash 留 1h)→ 归档;归档失败仅记日志
+    (pending 详情留存 1h 可人工恢复)。
+    pid=None 跳队首。返回 {skipped, archived, pid}。"""
+    pendings = await takeover_store.list_queue(redis, oid)
+    target = None
+    if pid is None:
+        target = pendings[0] if pendings else None
+    else:
+        target = next((p for p in pendings if p.get("pid") == pid), None)
+    if target is None:
+        return {"skipped": False, "archived": False, "pid": pid}
+    real_pid = target.get("pid")
+    # 先原子占位出队(命中才归档;并发已被消费则落空,不归档防双写)
+    hit = await takeover_store.skip_mark(redis, oid, real_pid)
+    if not hit:
+        return {"skipped": False, "archived": False, "pid": real_pid}
+    user_text = (target.get("user_text") or "").strip()
+    archived = False
+    if user_text:
+        try:
+            await chat_store.append_message(redis, oid, sender="user", content=user_text,
+                                            source="live", ts=int(target.get("created_ts", 0) or 0))
+            archived = True
+        except Exception:
+            logger.exception("跳过归档失败 oid=%s pid=%s user_text=%r(待答详情留存 1h 可人工恢复)",
+                             oid, real_pid, user_text)
+    return {"skipped": True, "archived": archived, "pid": real_pid}
+
+
+async def clear_queue(redis, oid: str) -> dict:
+    """一键清空待答队列(2026-09-07):全部 pending 的用户消息逐条落历史(各自原始 ts,保独立性)
+    后清空队列。与手动回复消化(drain 后合并为一条 user 消息+配对手动回复)不同:清空无回复配对,
+    逐条归档。审查修复:逐条容错(单条失败不影响其余,failed 计数返回)。
+    返回 {cleared, archived, failed}。"""
+    pendings = await takeover_store.drain_queue(redis, oid, status="cleared")
+    archived = 0
+    failed = 0
+    for p in pendings:
+        user_text = (p.get("user_text") or "").strip()
+        if not user_text:
+            continue
+        try:
+            await chat_store.append_message(redis, oid, sender="user", content=user_text,
+                                            source="live", ts=int(p.get("created_ts", 0) or 0))
+            archived += 1
+        except Exception:
+            failed += 1
+            logger.exception("清空归档失败 oid=%s pid=%s user_text=%r(待答详情留存 1h 可人工恢复)",
+                             oid, p.get("pid"), user_text)
+    return {"cleared": len(pendings), "archived": archived, "failed": failed}

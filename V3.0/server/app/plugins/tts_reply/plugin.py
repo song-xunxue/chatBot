@@ -45,11 +45,13 @@ class TTSReplyPlugin(Plugin):
             emotion_enable=bool(params.get("emotion_enable", True)),
             send_text_also=bool(params.get("send_text_also", False)),
             human_authored=False,
-            top_k=int(params.get("top_k", 5)),
+            top_k=int(params.get("top_k", 15)),
             top_p=float(params.get("top_p", 1.0)),
             temperature=float(params.get("temperature", 1.0)),
             batch_size=int(params.get("batch_size", 4)),
             repetition_penalty=float(params.get("repetition_penalty", 1.35)),
+            fragment_interval=float(params.get("fragment_interval", 0.3)),
+            sample_steps=int(params.get("sample_steps", 8)),
         )
         if r and r.get("delivered"):
             ctx.reply_sent = True  # 标记已处理,webhook+continuous_send 跳过默认文本

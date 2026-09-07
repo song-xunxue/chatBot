@@ -4,6 +4,10 @@ takeover_store per-object FIFO 队列单测:开关/入队出队/指定pid/孤儿
 
 作者: 李文煜
 日期: 2026-06-30
+
+2026-09-07
+变更说明:
+  1. 新增 drain_queue 用例(FIFO 全出队/status 标记/并发已消费跳过/孤儿清理/自定义 status)
 """
 from storage import takeover_store
 
@@ -100,3 +104,65 @@ async def test_mark_delivered(fake_redis):
     pending = await takeover_store.get_pending(fake_redis, "u1", p1)
     assert pending["delivered"] == "1"
     assert pending["deliver_mode"] == "passive"
+
+
+async def test_drain_queue_fifo_and_status(fake_redis):
+    """drain_queue(2026-09-07):全部出队(FIFO 正序)+ status 标记 manual + 队列清空"""
+    p1 = await takeover_store.enqueue(fake_redis, "u1", user_text="m1")
+    p2 = await takeover_store.enqueue(fake_redis, "u1", user_text="m2")
+    out = await takeover_store.drain_queue(fake_redis, "u1")
+    assert [p["pid"] for p in out] == [p1, p2]   # FIFO 正序
+    assert out[0]["status"] == "manual"          # 标记(审计可查)
+    assert out[0]["user_text"] == "m1"
+    assert await takeover_store.list_queue(fake_redis, "u1") == []
+
+
+async def test_drain_queue_skips_resolved(fake_redis):
+    """并发防护:已被 resolve 消费(status!=pending)的 pending 不返回(防双重落库),但仍出队"""
+    p1 = await takeover_store.enqueue(fake_redis, "u1", user_text="m1")
+    p2 = await takeover_store.enqueue(fake_redis, "u1", user_text="m2")
+    await takeover_store.resolve(fake_redis, "u1", p1)   # p1 已被代答消费
+    out = await takeover_store.drain_queue(fake_redis, "u1")
+    assert [p["pid"] for p in out] == [p2]               # 只剩未消费的 p2
+
+
+async def test_drain_queue_custom_status(fake_redis):
+    """status 参数:一键清空传 cleared"""
+    p1 = await takeover_store.enqueue(fake_redis, "u1", user_text="m1")
+    out = await takeover_store.drain_queue(fake_redis, "u1", status="cleared")
+    assert out[0]["status"] == "cleared"
+
+
+async def test_drain_queue_cleans_orphans(fake_redis):
+    """孤儿 pid(Hash 已过期)不返回,但队列清干净"""
+    p1 = await takeover_store.enqueue(fake_redis, "u1", user_text="m1")
+    await fake_redis.delete(f"mychat:takeover:pending:u1:{p1}")   # 模拟 TTL 过期
+    assert await takeover_store.drain_queue(fake_redis, "u1") == []
+    assert await fake_redis.llen("mychat:takeover:queue:u1") == 0
+
+
+async def test_skip_mark_marks_and_keeps_hash(fake_redis):
+    """skip_mark(2026-09-07):命中标记 status=skipped+LREM(不 DEL,详情留 1h 可恢复)"""
+    p1 = await takeover_store.enqueue(fake_redis, "u1", user_text="m1")
+    assert await takeover_store.skip_mark(fake_redis, "u1", p1) is True
+    assert await takeover_store.list_queue(fake_redis, "u1") == []
+    pending = await takeover_store.get_pending(fake_redis, "u1", p1)
+    assert pending and pending["status"] == "skipped"          # Hash 留存(审计/恢复)
+
+
+async def test_skip_mark_rejects_consumed(fake_redis):
+    """skip_mark 并发防护:已被 resolve/drain 消费(status!=pending)返 False"""
+    p1 = await takeover_store.enqueue(fake_redis, "u1", user_text="m1")
+    await takeover_store.resolve(fake_redis, "u1", p1)         # 已被代答消费
+    assert await takeover_store.skip_mark(fake_redis, "u1", p1) is False
+
+
+async def test_requeue_restores_fifo(fake_redis):
+    """requeue(2026-09-07):drain 出的 pending 回灌,status 重置 pending,FIFO 顺序保持"""
+    p1 = await takeover_store.enqueue(fake_redis, "u1", user_text="m1")
+    p2 = await takeover_store.enqueue(fake_redis, "u1", user_text="m2")
+    pendings = await takeover_store.drain_queue(fake_redis, "u1")
+    assert await takeover_store.requeue(fake_redis, "u1", pendings) == 2
+    q = await takeover_store.list_queue(fake_redis, "u1")
+    assert [p["pid"] for p in q] == [p1, p2]                   # FIFO 顺序恢复
+    assert all(p["status"] == "pending" for p in q)

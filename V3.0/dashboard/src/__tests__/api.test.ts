@@ -11,7 +11,7 @@ const hoisted = vi.hoisted(() => ({
   routerPush: vi.fn(),
   requestFulfilled: null as ((cfg: any) => any) | null,
   responseRejected: null as ((err: any) => any) | null,
-  apiMethods: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  apiMethods: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), patch: vi.fn() },
 }))
 
 vi.mock('@/router', () => ({ default: { push: hoisted.routerPush } }))
@@ -34,17 +34,18 @@ const apiMethods = hoisted.apiMethods
 import {
   listPersonas, bindPersonaModel,
   listBlocks, listMessages, deleteMessage,
-  getSamples, reverseInferDryRun, reverseInferApply,
+  getSamples, reverseInferDryRun, reverseInferApply, setScore,
   getMoodParams, setMoodParams, moodCalc,
   restoreMemory, lockMemory,
   enablePlugin, reloadStar,
   getSystemConfig, reloadSystem,
   toggleTakeover, getTakeoverStatus, listTakeoverQueue, answerTakeover, answerTakeoverBatch, skipTakeover,
+  clearTakeoverQueue,
   addRoleplay, addRoleplayBatch, listRoleplay, updateRoleplay, deleteRoleplay,
   listRoleplaySessions, newRoleplaySession, extractRoleplay,
 } from '@/api'
 
-function mockResolve(method: 'get' | 'post' | 'put' | 'delete', responseData: any) {
+function mockResolve(method: 'get' | 'post' | 'put' | 'delete' | 'patch', responseData: any) {
   apiMethods[method].mockImplementation(async (url: string, config?: any) => {
     const base = { url, headers: {}, ...config }
     const cfg = hoisted.requestFulfilled ? hoisted.requestFulfilled(base) : base
@@ -82,8 +83,8 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/chat/o/blocks', { params: { limit: 10 } })
     await listMessages('o', { block_id: 'b1' })
     expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/chat/o/messages', { params: { block_id: 'b1' } })
-    mockResolve('delete', {}); await deleteMessage('m1', 'bad')
-    expect(apiMethods.delete).toHaveBeenCalledWith('/api/v1/chat/messages/m1', { data: { reason: 'bad' } })
+    mockResolve('delete', {}); await deleteMessage('m1')
+    expect(apiMethods.delete).toHaveBeenCalledWith('/api/v1/chat/messages/m1')
   })
 
   it('score: samples/reverseInfer 两步', async () => {
@@ -93,6 +94,13 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/score/reverse_infer/o/dry_run', { mode: 'overwrite' })
     await reverseInferApply('o', 'tok9')
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/score/reverse_infer/o/apply', { confirm_token: 'tok9' })
+  })
+
+  it('score: setScore 带 corrected 纠正回复 + corrected_score 纠正分数(V3.0 2026-08-18)', async () => {
+    mockResolve('patch', {})
+    await setScore('m1', 40, '太生硬', '换成角色口吻的说法', 95)
+    expect(apiMethods.patch).toHaveBeenCalledWith('/api/v1/chat/messages/m1/score',
+      { score_base: 40, score_note: '太生硬', corrected: '换成角色口吻的说法', corrected_score: 95 })
   })
 
   it('mood: params/calc', async () => {
@@ -125,7 +133,7 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/system/reload')
   })
 
-  it('takeover: toggle/status/queue/answer/batch/skip', async () => {
+  it('takeover: toggle/status/queue/answer/batch/skip/clear', async () => {
     mockResolve('post', {}); await toggleTakeover('o', true)
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/toggle', { enabled: true })
     mockResolve('get', {}); await getTakeoverStatus('o')
@@ -138,6 +146,9 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/answer/batch', { items: [{ answer: 'a' }] })
     await skipTakeover('o', 'p1')
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/skip', { pid: 'p1' })
+    // 一键清空(2026-09-07:逐条归档到历史后清队)
+    mockResolve('post', { cleared: 2, archived: 2 }); await clearTakeoverQueue('o')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/queue/clear')
   })
 
   it('roleplay: add/sessions/batch/list/update/delete', async () => {

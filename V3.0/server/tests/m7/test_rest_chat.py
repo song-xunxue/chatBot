@@ -49,34 +49,37 @@ async def test_list_blocks_and_messages(monkeypatch, fake_redis):
         assert len(r2.json()) == 2
 
 
-async def test_get_update_delete_with_neg_linkage(monkeypatch, fake_redis):
-    """取/编辑/软删(ai+有score → 联动写 neg)"""
+async def test_get_delete_with_neg_linkage(monkeypatch, fake_redis):
+    """取/真删(2026-08-18 软删→物理删:消息 hash+block 索引移除;ai+有score 删前联动写 neg)。"""
     app = _wire(monkeypatch, fake_redis)
     mid = await chat_store.append_message(fake_redis, "u1", sender="ai", content="orig")
     await chat_store.set_score(fake_redis, mid, score_base=40, mood_value=0.5, mood_bias=0)
     async with await _ac(app) as ac:
         # get
         assert (await ac.get(f"/api/v1/chat/messages/{mid}", headers=_H)).json()["content"] == "orig"
-        # update → status=edited
-        r = await ac.put(f"/api/v1/chat/messages/{mid}", json={"content": "edit"}, headers=_H)
-        assert r.json()["status"] == "edited"
-        # delete → 联动 neg(httpx delete 不带 body,用 request 传 json)
-        r2 = await ac.request("DELETE", f"/api/v1/chat/messages/{mid}",
-                              json={"reason": "bad"}, headers=_H)
+        # PUT 编辑端点已删 → 405
+        assert (await ac.put(f"/api/v1/chat/messages/{mid}", json={"content": "edit"}, headers=_H)).status_code == 405
+        # delete → 物理删 + 联动 neg
+        r2 = await ac.delete(f"/api/v1/chat/messages/{mid}", headers=_H)
         assert r2.status_code == 200
-        assert r2.json()["neg_linked"] is True
+        assert r2.json() == {"deleted": True, "neg_linked": True}
+        # 真删验证:消息 hash 已删(GET 404),会话消息列表不再含该 mid
+        assert (await ac.get(f"/api/v1/chat/messages/{mid}", headers=_H)).status_code == 404
+        msgs = await chat_store.list_messages(fake_redis, "u1")
+        assert all(m["mid"] != mid for m in msgs)
     neg = await score_service.list_samples(fake_redis, "u1", "negative")
     assert len(neg) == 1
     assert neg[0]["mid"] == mid
 
 
 async def test_delete_user_no_linkage(monkeypatch, fake_redis):
-    """user 消息软删不联动 neg"""
+    """user 消息删除不联动 neg(同样物理删)"""
     app = _wire(monkeypatch, fake_redis)
     mid = await chat_store.append_message(fake_redis, "u1", sender="user", content="x")
     async with await _ac(app) as ac:
         r = await ac.delete(f"/api/v1/chat/messages/{mid}", headers=_H)
-        assert r.json()["neg_linked"] is False
+        assert r.json() == {"deleted": True, "neg_linked": False}
+        assert (await ac.get(f"/api/v1/chat/messages/{mid}", headers=_H)).status_code == 404
     assert await score_service.list_samples(fake_redis, "u1", "negative") == []
 
 
@@ -84,7 +87,6 @@ async def test_get_message_404(monkeypatch, fake_redis):
     app = _wire(monkeypatch, fake_redis)
     async with await _ac(app) as ac:
         assert (await ac.get("/api/v1/chat/messages/nope", headers=_H)).status_code == 404
-        assert (await ac.put("/api/v1/chat/messages/nope", json={}, headers=_H)).status_code == 404
         assert (await ac.delete("/api/v1/chat/messages/nope", headers=_H)).status_code == 404
 
 

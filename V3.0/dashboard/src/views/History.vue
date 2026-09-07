@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 对话历史(V2.0 拟人化 2026-07-07):左栏混合 chat 真实 block + roleplay 训练 block(source tag 区分),
- * 主区按 source 切换:real=真实对话流(改分/编辑/软删/评分总览/反推)/training=训练样本流(录入/评分/抽取为记忆)。
+ * 主区按 source 切换:real=真实对话流(改分+纠正回复/软删/评分总览/反推)/training=训练样本流(录入/评分/抽取为记忆)。
+ * 2026-08-18:删"编辑内容"(破坏性改 content)——纠错统一走改分弹窗纠正回复(原内容保留+正样本反推)。
  * 训练样本并入对话历史页(去独立菜单),一体体验。sender=user 显示 user_alias(角色对用户称呼,拟人化)。
  * 作者: 李文煜
  */
@@ -13,7 +14,7 @@ import {
   NCollapse, NCollapseItem, NModal, useMessage,
 } from 'naive-ui'
 import {
-  listRecentBlocks, listMessages, updateMessage, deleteMessage, closeBlock, deleteBlock, clearHistory,
+  listRecentBlocks, listMessages, deleteMessage, closeBlock, deleteBlock, clearHistory,
   getHealth, getSamples, reverseInferDryRun, reverseInferApply, setScore,
   listRoleplay, addRoleplay, setRoleplayScore, deleteRoleplay, extractRoleplay,
   newRoleplaySession, deleteRoleplaySession, listPersonas,
@@ -46,16 +47,13 @@ const inferDiff = ref<any>(null)
 const inferToken = ref('')
 const inferring = ref(false)
 
-// —— real 改分弹窗(含 note)——
+// —— real 改分弹窗(含 note + 纠正回复/纠正分数)——
 const scoreModalShow = ref(false)
 const scoreModalMid = ref('')
 const scoreModalBase = ref(80)
 const scoreModalNote = ref('')
-
-// —— real 编辑弹窗(软改)——
-const editModalShow = ref(false)
-const editModalMid = ref('')
-const editModalContent = ref('')
+const scoreModalCorrected = ref('')
+const scoreModalCorrectedScore = ref(100)
 
 // —— training 录入 ——
 const role = ref('user')
@@ -101,11 +99,20 @@ function relTs(ts: any): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
   return `${Math.floor(diff / 86_400_000)}d`
 }
-// 消息发送者标签:real user 显示 user_alias(如"煜君"),否则 sender/role 原值
+// 消息发送者标签:real user 显示 user_alias(如"煜君");proxy=面板代答/角色QQ手动回复;其余原值
+// (training 消息的存储 source 是 'roleplay',原判 'training' 恒不命中,顺手修正)
 function senderLabel(m: any): string {
-  const s = m.source === 'training' ? m.role : m.sender
+  const s = m.source === 'roleplay' ? m.role : m.sender
   if (s === 'user' && userAlias.value) return userAlias.value
+  if (s === 'proxy') return m.source === 'manual' ? '手动' : '代答'
   return s || '—'
+}
+// 评分样本来源标签(反推权威度:纠/手>真>剧);dialog(真实对话)不打标签保持简洁
+function sourceTag(s: any): string {
+  if (s.source === 'correction') return '[纠]'
+  if (s.source === 'manual') return '[手]'
+  if (s.source === 'roleplay') return '[剧]'
+  return ''
 }
 
 // —— 左栏 block 列表(混合 real+training)——
@@ -178,7 +185,7 @@ async function refreshAll() {
 
 // —— real 消息操作 ——
 async function del(mid: string) {
-  try { await deleteMessage(mid); message.success('已软删(若 ai/有分则联动负样本)'); await loadMessages(); await loadScore() }
+  try { await deleteMessage(mid); message.success('已删除(若 ai/有分则已存负样本)'); await loadMessages(); await loadScore() }
   catch (e: any) { message.error('' + e) }
 }
 async function closeBlk(bid: string) {
@@ -204,31 +211,24 @@ async function clearAll() {
     await loadRecentBlocks()
   } catch (e: any) { message.error('' + e) }
 }
-function openScore(mid: string, scoreBase: any, scoreNote: any) {
+function openScore(mid: string, scoreBase: any, scoreNote: any, corrected?: any, correctedScore?: any) {
   scoreModalMid.value = mid
   const b = Number(scoreBase)
   scoreModalBase.value = (!isNaN(b) && scoreBase !== '' && scoreBase !== undefined && scoreBase !== null) ? b : 80
   scoreModalNote.value = scoreNote || ''
+  scoreModalCorrected.value = corrected || ''
+  const cs = Number(correctedScore)
+  scoreModalCorrectedScore.value = (!isNaN(cs) && correctedScore !== '' && correctedScore !== undefined && correctedScore !== null) ? cs : 100
   scoreModalShow.value = true
 }
 async function applyScore() {
   if (!scoreModalMid.value) return
   try {
-    const r = await setScore(scoreModalMid.value, scoreModalBase.value, scoreModalNote.value)
+    const r = await setScore(scoreModalMid.value, scoreModalBase.value, scoreModalNote.value,
+                             scoreModalCorrected.value, scoreModalCorrectedScore.value)
     message.success(`已改分:score = ${r.score}`)
     scoreModalShow.value = false; scoreModalMid.value = ''
     await loadMessages(); await loadScore()
-  } catch (e: any) { message.error('' + e) }
-}
-function openEdit(mid: string, content: string) {
-  editModalMid.value = mid; editModalContent.value = content || ''; editModalShow.value = true
-}
-async function applyEdit() {
-  if (!editModalMid.value) return
-  try {
-    await updateMessage(editModalMid.value, { content: editModalContent.value })
-    message.success('已修改内容'); editModalShow.value = false; editModalMid.value = ''
-    await loadMessages()
   } catch (e: any) { message.error('' + e) }
 }
 async function dryRun() {
@@ -423,13 +423,15 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
               </div>
               <div style="word-break:break-all; white-space:pre-wrap">{{ m.content }}</div>
               <div v-if="m.score_note" style="font-size:11px; color:#888; margin-top:2px; font-style:italic">批注:{{ m.score_note }}</div>
+              <div v-if="m.corrected" style="font-size:11px; color:#2a7de1; background:#f0f7ff; border-radius:4px; padding:3px 6px; margin-top:3px">
+                纠正回复(正样本 {{ m.corrected_score ?? 100 }}分):{{ m.corrected }}
+              </div>
               <n-space v-if="m.status !== 'deleted'" style="margin-top:2px" align="center" :size="4">
                 <n-button v-if="m.sender === 'ai' || m.sender === 'proxy'" size="tiny" type="primary" ghost
-                          @click="openScore(m.mid, m.score_base, m.score_note)">改分</n-button>
-                <n-button size="tiny" type="info" ghost @click="openEdit(m.mid, m.content)">编辑内容</n-button>
+                          @click="openScore(m.mid, m.score_base, m.score_note, m.corrected, m.corrected_score)">改分</n-button>
                 <n-popconfirm @positive-click="del(m.mid)">
-                  <template #trigger><n-button size="tiny" type="error" ghost>软删</n-button></template>
-                  软删(→负样本)?
+                  <template #trigger><n-button size="tiny" type="error" ghost>删除</n-button></template>
+                  删除(不可恢复;ai 回复删前存为负样本)?
                 </n-popconfirm>
               </n-space>
             </div>
@@ -442,13 +444,13 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
             <n-space vertical size="small">
               <div>
                 <n-tag type="success" size="small">正样本({{ posSamples.length }})</n-tag>
-                <div v-for="s in posSamples" :key="s.mid"
-                     style="margin:2px 0; padding:3px 8px; background:#f6ffed; border-radius:4px; font-size:12px">[{{ s.score }}] {{ s.text }}</div>
+                <div v-for="s in posSamples" :key="s.mid + s.source"
+                     style="margin:2px 0; padding:3px 8px; background:#f6ffed; border-radius:4px; font-size:12px">[{{ s.score }}]{{ sourceTag(s) }} {{ s.text }}</div>
               </div>
               <div>
                 <n-tag type="error" size="small">负样本({{ negSamples.length }})</n-tag>
-                <div v-for="s in negSamples" :key="s.mid"
-                     style="margin:2px 0; padding:3px 8px; background:#fff2f0; border-radius:4px; font-size:12px">[{{ s.score }}] {{ s.text }}</div>
+                <div v-for="s in negSamples" :key="s.mid + s.source"
+                     style="margin:2px 0; padding:3px 8px; background:#fff2f0; border-radius:4px; font-size:12px">[{{ s.score }}]{{ sourceTag(s) }} {{ s.text }}</div>
               </div>
             </n-space>
           </n-collapse-item>
@@ -501,29 +503,28 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <!-- 空状态 -->
       <n-empty v-else description="左侧选择一个会话段落(真实/训练)" style="margin:auto" />
 
-      <!-- real 改分弹窗(含 note) -->
+      <!-- real 改分弹窗(含 note + 纠正回复) -->
       <n-modal v-model:show="scoreModalShow" preset="dialog" title="改分">
         <n-space vertical>
           <span style="font-size:12px; color:#999">覆盖 score_base,保留历史 mood_bias 重算 score</span>
           <n-input-number v-model:value="scoreModalBase" :min="0" :max="100" />
           <span style="font-size:12px; color:#999">批注(说明为什么这个分,可选)</span>
           <n-input v-model:value="scoreModalNote" type="textarea" :rows="2" placeholder="例:语气自然但稍微跑题" />
+          <span style="font-size:12px; color:#999">纠正回复(更符合人设的理想回复,可选)</span>
+          <n-input v-model:value="scoreModalCorrected" type="textarea" :rows="3"
+                   placeholder="例:换成角色口吻的理想说法。将作为正样本(最高权威)进人设反推;原回复保留不动" />
+          <n-space align="center">
+            <span style="font-size:12px; color:#999">纠正分数(纠正版有多理想,默认 100)</span>
+            <n-input-number v-model:value="scoreModalCorrectedScore" :min="0" :max="100" size="small" style="width:120px" />
+          </n-space>
+          <span style="font-size:11px; color:#999">
+            用法:原回复打低分(负样本,应避免)+ 填纠正回复(正样本,应学习),双样本驱动反推;QQ 已发的消息不重发
+          </span>
         </n-space>
         <template #action>
           <n-button @click="scoreModalShow = false">取消</n-button>
           <n-button type="primary" @click="applyScore">确定</n-button>
         </template>
-      </n-modal>
-
-      <!-- real 编辑弹窗 -->
-      <n-modal v-model:show="editModalShow" preset="card" title="编辑消息内容" style="width:640px;max-width:92vw">
-        <n-space vertical :size="12">
-          <n-input v-model:value="editModalContent" type="textarea" :rows="10" autofocus />
-          <n-space justify="end">
-            <n-button @click="editModalShow = false">取消</n-button>
-            <n-button type="primary" @click="applyEdit">确定</n-button>
-          </n-space>
-        </n-space>
       </n-modal>
 
       <!-- training 改分弹窗 -->

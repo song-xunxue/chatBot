@@ -105,7 +105,8 @@ async def test_read_voice_params_defaults_no_plugin(monkeypatch):
 
 # —— tts_config 端点 ——
 async def test_endpoint_get_set_tts_config(monkeypatch):
-    """GET 回显(未设全 False);PUT 调 set_tts_config 存"""
+    """GET 回显(未设全 False);PUT 调 set_tts_config 存。
+    2026-08-18:REST 层 oid 校验须为 QQ 号(纯数字),测试 oid 用数字"""
     import api.rest_takeover as rt
 
     class FakeRedis:
@@ -120,11 +121,11 @@ async def test_endpoint_get_set_tts_config(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(rt, "get_redis", lambda: _async_return(fake))
 
-    got = await rt.get_tts_config("oid1")
-    assert got == {"object_id": "oid1", "enable": False, "send_text_also": False}
-    await rt.set_tts_config("oid1", body={"enable": True, "send_text_also": False})
-    got2 = await rt.get_tts_config("oid1")
-    assert got2 == {"object_id": "oid1", "enable": True, "send_text_also": False}
+    got = await rt.get_tts_config("10001")
+    assert got == {"object_id": "10001", "enable": False, "send_text_also": False}
+    await rt.set_tts_config("10001", body={"enable": True, "send_text_also": False})
+    got2 = await rt.get_tts_config("10001")
+    assert got2 == {"object_id": "10001", "enable": True, "send_text_also": False}
 
 
 async def _async_return(val):

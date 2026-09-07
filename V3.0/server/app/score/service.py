@@ -27,6 +27,18 @@ Redis 键:
 2026-06-30
 变更说明:
   1. M7 新增 record_negative_sample(公开写 neg 队列,供 rest_chat 软删联动扩充反推负样本)
+
+2026-08-18
+变更说明:
+  1. manual_set_score 加 corrected 参数(管理员纠正回复:写消息字段 + 正样本 source=correction
+     进反推队列,原 content 不动) + 样本同步(改分后按新 score 清旧重收,手动打分同样驱动反推);
+     get_score 返回 corrected
+
+2026-09-07
+变更说明:
+  1. score_reply 加 force_positive 参数(手动回复评分,NapCat message_sent 链路):LLM 四元组
+     照算(展示/健康度),样本恒正 source='manual' score=100(管理员亲手回复=黄金标准,同 correction
+     待遇,不参与 classify);LLM 评分失败(返 None)时正样本仍单独收集(黄金标准不依赖 LLM 可用性)
 """
 import json
 import logging
@@ -44,6 +56,10 @@ logger = logging.getLogger(__name__)
 # 正/负样本采集键(List,LPUSH 新样本在前,LTRIM 裁剪保留最近 N 条)
 _K_POS = "mychat:score:pos:{oid}"
 _K_NEG = "mychat:score:neg:{oid}"
+
+# 纯媒体占位文本(2026-09-07 审查修复):手动回复为占位时(管理员发了语音/图片等)不作
+# 黄金正样本收进反推队列——"[语音]"这类文本对提炼人设风格毫无价值,反而污染权威样本池
+_PLACEHOLDER_TEXTS = {"[语音]", "[图片]", "[表情]", "[转发]", "[文件]", "[视频]", "[非文本消息]"}
 
 
 def _now_ms() -> int:
@@ -115,32 +131,44 @@ def _parse_score(text: str):
 async def score_reply(redis: Redis, object_id: str, reply_text: str,
                       persona_card, mid: str, *,
                       mood_value: float | None = None,
-                      provider_name: str = "", model: str = "") -> dict | None:
+                      provider_name: str = "", model: str = "",
+                      force_positive: bool = False) -> dict | None:
     """对一条 ai 回复自动评分:LLM 打 score_base → 心情补偿 mood_bias → 写 score 四元组 → 样本归类。
     返回四元组 dict(含 score_base/mood_at_score/mood_bias/score/score_reason);
-    评分失败(无 provider/LLM 异常/解析失败)返回 None,调用方应容错跳过。"""
+    评分失败(无 provider/LLM 异常/解析失败)返回 None,调用方应容错跳过。
+    force_positive(2026-09-07,手动回复专用):样本不按 classify 归类,恒为正样本
+    source='manual' score=100(管理员亲手回复=黄金标准,同 correction 待遇);LLM 四元组照算
+    (仅展示/健康度用);LLM 评分失败(返 None)时正样本仍单独收集(黄金标准不依赖 LLM 可用性)。"""
     from mood import service as mood_service
     from storage import chat_store
 
     result = await _llm_score(reply_text, persona_card, provider_name, model)
-    if result is None:
-        return None
-    score_base, reason = result
-    # 评分时刻 mood(mood_bias 补偿依据;优先用调用方传入的 ctx.mood_value,避免重复读)
-    mood = mood_value if mood_value is not None else await mood_service.get_mood(redis, object_id)
-    mood_bias = await mood_service.bias_for(redis, mood)   # list_kinds+compute_mood_bias 收口(架构 #5)
-    # 写 score 四元组(chat_store.set_score 算 score=clamp(base+bias))
-    quad = await chat_store.set_score(redis, mid,
-                                      score_base=score_base, mood_value=mood, mood_bias=mood_bias)
-    # 额外存 score_reason 到消息 Hash(面板展示用,非四元组字段)
-    if reason:
-        await redis.hset(f"mychat:msg:{mid}", "score_reason", reason)
-    quad["score_reason"] = reason
-    # 正/负样本归类收集(驱动 reverse_infer;neutral 不收集)
-    kind = classify(quad["score"])
-    if kind in ("positive", "negative"):
-        await _collect_sample(redis, object_id, kind, mid, reply_text, quad["score"])
-    return quad
+    if result is not None:
+        score_base, reason = result
+        # 评分时刻 mood(mood_bias 补偿依据;优先用调用方传入的 ctx.mood_value,避免重复读)
+        mood = mood_value if mood_value is not None else await mood_service.get_mood(redis, object_id)
+        mood_bias = await mood_service.bias_for(redis, mood)   # list_kinds+compute_mood_bias 收口(架构 #5)
+        # 写 score 四元组(chat_store.set_score 算 score=clamp(base+bias))
+        quad = await chat_store.set_score(redis, mid,
+                                          score_base=score_base, mood_value=mood, mood_bias=mood_bias)
+        # 额外存 score_reason 到消息 Hash(面板展示用,非四元组字段)
+        if reason:
+            await redis.hset(f"mychat:msg:{mid}", "score_reason", reason)
+        quad["score_reason"] = reason
+        if force_positive:
+            if (reply_text or "").strip() not in _PLACEHOLDER_TEXTS:
+                await _collect_sample(redis, object_id, "positive", mid, reply_text, 100, source="manual")
+        else:
+            # 正/负样本归类收集(驱动 reverse_infer;neutral 不收集)
+            kind = classify(quad["score"])
+            if kind in ("positive", "negative"):
+                await _collect_sample(redis, object_id, kind, mid, reply_text, quad["score"])
+        return quad
+    # LLM 评分失败:force_positive 仍收正样本(手动回复是既成事实的黄金样本,不依赖 LLM;
+    # 占位文本除外——[语音]/[图片]对反推无价值)
+    if force_positive and (reply_text or "").strip() not in _PLACEHOLDER_TEXTS:
+        await _collect_sample(redis, object_id, "positive", mid, reply_text, 100, source="manual")
+    return None
 
 
 async def _collect_sample(redis: Redis, object_id: str, kind: str,
@@ -162,9 +190,18 @@ async def _collect_sample(redis: Redis, object_id: str, kind: str,
 # ================ 手动改分 / 取分(Web 面板 M7 调,M3 先建接口)================
 
 async def manual_set_score(redis: Redis, mid: str, score_base: int,
-                           score_note: str | None = None) -> dict | None:
+                           score_note: str | None = None,
+                           corrected: str | None = None,
+                           corrected_score: int | None = None) -> dict | None:
     """手动改分:覆盖 score_base;mood_bias 保留原值(原为空则按原 mood_at_score 重算);
     重算 score=clamp(base+mood_bias)。score_note(2026-07-07):评分批注,说明为什么这个分。
+    corrected(2026-08-18):管理员纠正回复——更符合人设的理想回复,原消息 content 保留不动
+    (QQ 已发出的无法撤回重发,纠正只用于学习)。非空时写消息 corrected 字段 + 作为正样本
+    (source=correction,反推最高权威)进 pos 队列;空串=清除纠正;None=未提供(不动该字段)。
+    corrected_score(2026-08-18 #2):纠正回复的分数(纠正版"有多理想",仅记录/展示,
+    恒为正样本不参与 classify);None=默认 100,沿用消息已存值。
+    样本同步(2026-08-18):改分后按新 score 重新归类样本(先 remove_sample_by_mid 清旧再按
+    新分收集)——修"手动打负分不进 neg 队列/手动改分后反推仍读旧分样本"的缺口。
     返回新四元组;消息不存在返回 None。设计:手动改分尊重评分时刻的历史心情,只改基础分。"""
     from storage import chat_store
     from mood import service as mood_service
@@ -185,9 +222,9 @@ async def manual_set_score(redis: Redis, mid: str, score_base: int,
         mood_value = float(msg.get("mood_at_score", "") or 0.5) or 0.5
     except (TypeError, ValueError):
         mood_value = 0.5
+    oid = msg.get("object_id", "")
     if not has_bias:
         # 原未自动评分过:用原 mood_at_score 重算一次 mood_bias(保留心情影响语义)
-        oid = msg.get("object_id", "")
         if oid:
             mood_bias = await mood_service.bias_for(redis, mood_value)   # 收口(架构 #5)
     quad = await chat_store.set_score(redis, mid,
@@ -195,6 +232,36 @@ async def manual_set_score(redis: Redis, mid: str, score_base: int,
                                       score_note=score_note)
     await redis.hset(f"mychat:msg:{mid}", "score_manual", "1")   # 标记手动覆盖(面板区分)
     quad["score_manual"] = "1"
+    # —— 样本同步:按新 score 重新归类(手动打分同样驱动反推;清旧防残留)——
+    orig_text = msg.get("content", "")
+    # 有效纠正文本:显式传入优先;未传(None)沿用消息已存纠正(重收后须重建 correction 样本,
+    # 否则 remove_sample_by_mid 会把同 mid 的纠正样本一并清掉而无人补回)
+    eff_corrected = ((corrected or "").strip() if corrected is not None
+                     else (msg.get("corrected", "") or "").strip())
+    # 有效纠正分数:显式传入优先;未传(None)沿用消息已存值;再兜底 100
+    if corrected_score is not None:
+        eff_score = max(0, min(100, int(round(corrected_score))))
+    else:
+        try:
+            eff_score = int(float(msg.get("corrected_score", "") or 100))
+        except (TypeError, ValueError):
+            eff_score = 100
+    if oid:
+        await remove_sample_by_mid(redis, oid, mid)
+        kind = classify(quad["score"])
+        if kind in ("positive", "negative") and orig_text:
+            await _collect_sample(redis, oid, kind, mid, orig_text, quad["score"], source="dialog")
+    # —— 纠正回复:写消息字段 + 正样本进反推(管理员改写=黄金标准)——
+    if corrected is not None:
+        c = (corrected or "").strip()
+        await redis.hset(f"mychat:msg:{mid}", "corrected", c)
+        quad["corrected"] = c
+    if corrected_score is not None:   # 只调纠正分数(不重填文本)也落库
+        await redis.hset(f"mychat:msg:{mid}", "corrected_score", str(eff_score))
+    if eff_corrected:                 # 有纠正即回显有效纠正分数(面板免二次查询)
+        quad["corrected_score"] = eff_score
+    if eff_corrected and oid:
+        await _collect_sample(redis, oid, "positive", mid, eff_corrected, eff_score, source="correction")
     return quad
 
 
@@ -224,6 +291,8 @@ async def get_score(redis: Redis, mid: str) -> dict | None:
         "score_reason": msg.get("score_reason", ""),
         "score_manual": msg.get("score_manual", ""),
         "score_note": msg.get("score_note", ""),   # 评分批注(2026-07-07)
+        "corrected": msg.get("corrected", ""),     # 管理员纠正回复(2026-08-18,原内容保留)
+        "corrected_score": _num(int, msg.get("corrected_score", "")),   # 纠正回复分数(默认 100)
     }
 
 

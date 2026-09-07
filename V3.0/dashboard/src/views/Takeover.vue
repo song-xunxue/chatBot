@@ -13,7 +13,7 @@ import {
 import {
   getTakeoverStatus, toggleTakeover, listTakeoverQueue,
   answerTakeover, answerTakeoverBatch, skipTakeover, sendTakeover,
-  getTakeoverTTSConfig, setTakeoverTTSConfig,
+  clearTakeoverQueue, getTakeoverTTSConfig, setTakeoverTTSConfig,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
 
@@ -91,8 +91,17 @@ async function submitBatch() {
 
 async function skip(p: any) {
   try {
-    await skipTakeover(oid.value, p.pid)
-    message.success('已跳过')
+    const r = await skipTakeover(oid.value, p.pid)
+    if (r.skipped) message.success(r.archived ? '已跳过(消息已存入历史)' : '已跳过')
+    else message.warning('该条已不存在(可能已被手动回复消化)')
+    await load()
+  } catch (e: any) { message.error('' + e) }
+}
+
+async function clearQueue() {
+  try {
+    const r = await clearTakeoverQueue(oid.value)
+    message.success(`已清空待答队列(${r.cleared} 条,${r.archived} 条已归档到历史)`)
     await load()
   } catch (e: any) { message.error('' + e) }
 }
@@ -150,7 +159,17 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
         <n-switch :value="enabled" @update:value="onToggle" />
         <n-tag :type="enabled ? 'warning' : 'default'">{{ enabled ? '代答中(LLM 不回复,用户消息入队)' : '自动回复(LLM 正常)' }}</n-tag>
         <n-tag size="small">队列 {{ queueLength }} 条</n-tag>
+        <n-popconfirm @positive-click="clearQueue">
+          <template #trigger>
+            <n-button size="small" type="warning" ghost :disabled="!queueLength">清空队列</n-button>
+          </template>
+          清空全部待答消息?用户消息会先逐条归档到聊天历史(不丢失),仅放弃代答。
+        </n-popconfirm>
       </n-space>
+      <div style="font-size:12px;color:#999;margin-top:6px">
+        直接用角色 QQ 号(手机端)手动回复用户时,待答队列会自动消化:用户消息+手动回复自动进聊天历史(标「手动」),
+        手动回复作为正样本参与人设反推。
+      </div>
     </n-card>
 
     <!-- 代答 TTS 两开关(M-tts):逻辑同「插件 → 语音回复」,voice 参数复用之 -->
@@ -173,10 +192,13 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <n-space align="center">
         <n-input v-model:value="proactiveText" placeholder="输入要主动发给用户的内容..." style="width:520px"
                  @keyup.enter="sendProactive" />
-        <n-button type="primary" @click="sendProactive">主动发送</n-button>
+        <n-button type="primary" :disabled="!oid || oid === 'default'" @click="sendProactive">主动发送</n-button>
       </n-space>
       <div style="font-size:12px;color:#999;margin-top:6px">
         不依赖用户先发消息;落 proxy 消息进历史 + 下发 QQ(主动消息耗月配额)。代答模式开关与否均可使用。
+      </div>
+      <div v-if="!oid || oid === 'default'" style="font-size:12px;color:#d03050;margin-top:4px">
+        oid 未绑定真实会话(V3.0 须为 QQ 号):先在 QQ 上与角色对话一次,或头部 oid 框手填用户 QQ 号后回车
       </div>
     </n-card>
 
@@ -197,7 +219,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
             <n-button type="primary" size="small" @click="submitOne(p)">代答</n-button>
             <n-popconfirm @positive-click="skip(p)">
               <template #trigger><n-button size="small" quaternary>跳过</n-button></template>
-              跳过该条(不答)?
+              跳过该条(不代答)?消息会保留进聊天历史。
             </n-popconfirm>
           </n-space>
         </div>

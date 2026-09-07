@@ -11,7 +11,7 @@ import { NLayout, NLayoutHeader, NLayoutContent } from 'naive-ui'
 
 const route = useRoute()
 // 顶栏标题取路由 meta.title(与 PC MainLayout 一致),默认回退
-const title = computed(() => (route.meta.title as string) || 'MyChat 管理面板')
+const title = computed(() => (route.meta.title as string) || '清浔 3.0 管理面板')
 </script>
 
 <template>

@@ -26,12 +26,15 @@ function triggerReload() {
 }
 
 /** 确保 oid 已绑定到真实会话:无有效值时自动取最近 block 的 object_id(单人设场景即唯一用户)。
+ * 'default' 视为无效兜底值(V3.0 oid=QQ 号,default 无法出站)——解析时跳过 default 块,
+ * 防"失败的主动发送落库到 default → recent_blocks 返回 default → 永远解析到 default"的自污染。
  * 已有有效值直接返回;取失败(服务端不可达)静默保留当前值,头部仍可手输。各页 onMounted 调用。 */
 async function ensureOid(): Promise<string> {
   if (oid.value && oid.value !== 'default') return oid.value
   try {
-    const blocks = await listRecentBlocks(1)
-    if (blocks.length && blocks[0].object_id) oid.value = blocks[0].object_id
+    const blocks = await listRecentBlocks(10)
+    const hit = blocks.find((b) => b.object_id && b.object_id !== 'default')
+    if (hit) oid.value = hit.object_id
   } catch { /* 静默:面板未登录/服务端不可达时保留 default */ }
   return oid.value
 }

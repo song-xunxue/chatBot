@@ -141,20 +141,25 @@ class GPTSoVitsProvider(TTSProvider):
             raise RuntimeError("GPT-SoVITS 未配 ref_audio_path(参考音频,必填)")
         await self._ensure_weights()
         # 合成参数:面板可配的走 kwargs(透传),不可配的固定;voice/emotion 忽略(GPT-SoVITS 音色=参考音频)
+        # 默认值对齐 GSV WebUI 面板(2026-08-18 用户比对发现网页与 GSV 面板合成不一致):
+        #   api_v2 默认 sample_steps=32 但 WebUI 默认 8(扩散步数直接改变音频生成);
+        #   top_k api 默认 15(原我们写 5);fragment_interval 即 WebUI「句间停顿秒数」滑条(每段尾补静音)
         payload = {
             "text": text, "text_lang": "all_zh",
             "ref_audio_path": self.ref_audio,
             "prompt_text": self.prompt_text, "prompt_lang": "all_zh",
-            "top_k": kwargs.get('top_k', 5),
+            "top_k": kwargs.get('top_k', 15),
             "top_p": kwargs.get('top_p', 1.0),
             "temperature": kwargs.get('temperature', 1.0),
             "text_split_method": "cut1",
             "batch_size": kwargs.get('batch_size', 4),
             "batch_threshold": 0.75,
-            "split_bucket": False, "return_fragment": False,
+            "fragment_interval": kwargs.get('fragment_interval', 0.3),
+            "split_bucket": True, "return_fragment": False,
             "speed_factor": speed, "streaming_mode": False, "seed": -1,
             "parallel_infer": True,
             "repetition_penalty": kwargs.get('repetition_penalty', 1.35),
+            "sample_steps": kwargs.get('sample_steps', 8),
             "media_type": "wav",
         }
         return await asyncio.to_thread(self._sync_post, "tts", payload)

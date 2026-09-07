@@ -38,17 +38,17 @@ async def test_auth_required(monkeypatch, fake_redis):
     """无 token / 错 token → 401"""
     app = _wire(monkeypatch, fake_redis)
     async with await _aclient(app) as ac:
-        assert (await ac.get("/api/v1/takeover/u1/status")).status_code == 401
-        assert (await ac.get("/api/v1/takeover/u1/status", headers={"X-Access-Token": "wrong"})).status_code == 401
+        assert (await ac.get("/api/v1/takeover/10001/status")).status_code == 401
+        assert (await ac.get("/api/v1/takeover/10001/status", headers={"X-Access-Token": "wrong"})).status_code == 401
 
 
 async def test_toggle_and_status(monkeypatch, fake_redis):
     """toggle 开/关 + status 反映"""
     app = _wire(monkeypatch, fake_redis)
     async with await _aclient(app) as ac:
-        r = await ac.post("/api/v1/takeover/u1/toggle", json={"enabled": True}, headers=_H)
+        r = await ac.post("/api/v1/takeover/10001/toggle", json={"enabled": True}, headers=_H)
         assert r.json()["enabled"] is True
-        r = await ac.get("/api/v1/takeover/u1/status", headers=_H)
+        r = await ac.get("/api/v1/takeover/10001/status", headers=_H)
         assert r.json()["enabled"] is True
         assert r.json()["queue_length"] == 0
 
@@ -56,9 +56,9 @@ async def test_toggle_and_status(monkeypatch, fake_redis):
 async def test_queue_listing(monkeypatch, fake_redis):
     """enqueue 后 queue 列出"""
     app = _wire(monkeypatch, fake_redis)
-    await takeover_store.enqueue(fake_redis, "u1", user_text="hi", msg_id="MID")
+    await takeover_store.enqueue(fake_redis, "10001", user_text="hi", msg_id="MID")
     async with await _aclient(app) as ac:
-        r = await ac.get("/api/v1/takeover/u1/queue", headers=_H)
+        r = await ac.get("/api/v1/takeover/10001/queue", headers=_H)
         q = r.json()["queue"]
         assert len(q) == 1
         assert q[0]["user_text"] == "hi"
@@ -68,16 +68,16 @@ async def test_answer_404_when_empty(monkeypatch, fake_redis):
     """空队列 answer → 404"""
     app = _wire(monkeypatch, fake_redis)
     async with await _aclient(app) as ac:
-        r = await ac.post("/api/v1/takeover/u1/answer", json={"answer": "答"}, headers=_H)
+        r = await ac.post("/api/v1/takeover/10001/answer", json={"answer": "答"}, headers=_H)
         assert r.status_code == 404
 
 
 async def test_answer_success(monkeypatch, fake_redis, fake_adapter):
     """enqueue + answer → 200 delivered"""
     app = _wire(monkeypatch, fake_redis)
-    await takeover_store.enqueue(fake_redis, "u1", user_text="hi", msg_id="MID")
+    await takeover_store.enqueue(fake_redis, "10001", user_text="hi", msg_id="MID")
     async with await _aclient(app) as ac:
-        r = await ac.post("/api/v1/takeover/u1/answer", json={"answer": "代答"}, headers=_H)
+        r = await ac.post("/api/v1/takeover/10001/answer", json={"answer": "代答"}, headers=_H)
         data = r.json()
         assert data["delivered"] is True
         assert data["mode"] == "passive"
@@ -87,10 +87,10 @@ async def test_answer_success(monkeypatch, fake_redis, fake_adapter):
 async def test_answer_batch(monkeypatch, fake_redis):
     """批量代答:两条 pending 一次清空"""
     app = _wire(monkeypatch, fake_redis)
-    await takeover_store.enqueue(fake_redis, "u1", user_text="m1")
-    await takeover_store.enqueue(fake_redis, "u1", user_text="m2")
+    await takeover_store.enqueue(fake_redis, "10001", user_text="m1")
+    await takeover_store.enqueue(fake_redis, "10001", user_text="m2")
     async with await _aclient(app) as ac:
-        r = await ac.post("/api/v1/takeover/u1/answer/batch",
+        r = await ac.post("/api/v1/takeover/10001/answer/batch",
                           json={"items": [{"answer": "a1"}, {"answer": "a2"}]}, headers=_H)
         data = r.json()
         assert data["success"] == 2
@@ -98,24 +98,70 @@ async def test_answer_batch(monkeypatch, fake_redis):
 
 
 async def test_skip(monkeypatch, fake_redis):
-    """跳过队首"""
+    """跳过队首(2026-09-07 起:跳过前用户消息归档到历史)"""
     app = _wire(monkeypatch, fake_redis)
-    p1 = await takeover_store.enqueue(fake_redis, "u1", user_text="跳我")
+    p1 = await takeover_store.enqueue(fake_redis, "10001", user_text="跳我")
     async with await _aclient(app) as ac:
-        r = await ac.post("/api/v1/takeover/u1/skip", json={}, headers=_H)
+        r = await ac.post("/api/v1/takeover/10001/skip", json={}, headers=_H)
         assert r.json()["skipped"] is True
-    assert await takeover_store.list_queue(fake_redis, "u1") == []
+        assert r.json()["archived"] is True
+    assert await takeover_store.list_queue(fake_redis, "10001") == []
+    from storage import chat_store
+    msgs = await chat_store.list_messages(fake_redis, "10001")
+    assert len(msgs) == 1 and msgs[0]["sender"] == "user" and msgs[0]["content"] == "跳我"
+
+
+async def test_queue_clear(monkeypatch, fake_redis):
+    """POST /queue/clear(2026-09-07):全部 pending 逐条归档到历史后清队"""
+    import asyncio
+    app = _wire(monkeypatch, fake_redis)
+    await takeover_store.enqueue(fake_redis, "10001", user_text="m1")
+    await asyncio.sleep(0.002)   # 隔 2ms:防同毫秒 ts ZSet 平局排序不稳定(老坑)
+    await takeover_store.enqueue(fake_redis, "10001", user_text="m2")
+    async with await _aclient(app) as ac:
+        r = await ac.post("/api/v1/takeover/10001/queue/clear", headers=_H)
+        assert r.json() == {"cleared": 2, "archived": 2, "failed": 0}
+        assert (await ac.get("/api/v1/takeover/10001/queue", headers=_H)).json()["queue"] == []
+    from storage import chat_store
+    msgs = await chat_store.list_messages(fake_redis, "10001")
+    assert [m["content"] for m in msgs] == ["m1", "m2"]
+    # 非 QQ 号 oid → 400(同全端点约束)
+    async with await _aclient(app) as ac:
+        assert (await ac.post("/api/v1/takeover/default/queue/clear", headers=_H)).status_code == 400
 
 
 async def test_send_endpoint(monkeypatch, fake_redis, fake_adapter):
     """POST /takeover/{oid}/send 主动发送(2026-07-05):不依赖 pending,落 proxy + 下发"""
     app = _wire(monkeypatch, fake_redis)
     async with await _aclient(app) as ac:
-        r = await ac.post("/api/v1/takeover/u1/send", json={"content": "主动"}, headers=_H)
+        r = await ac.post("/api/v1/takeover/10001/send", json={"content": "主动"}, headers=_H)
         data = r.json()
         assert data["delivered"] is True
         assert data["mode"] == "active"
         assert "proxy_mid" in data
         # 空 content → 400
-        r2 = await ac.post("/api/v1/takeover/u1/send", json={"content": "  "}, headers=_H)
+        r2 = await ac.post("/api/v1/takeover/10001/send", json={"content": "  "}, headers=_H)
         assert r2.status_code == 400
+
+
+async def test_non_qq_oid_rejected_400(monkeypatch, fake_redis, fake_adapter):
+    """2026-08-18:V3.0 oid 必须 QQ 号(纯数字)——default/字母 oid 全端点 400
+    (修线上 oid=default 主动发送 int() 崩、面板只见"下发:失败")"""
+    app = _wire(monkeypatch, fake_redis)
+    async with await _aclient(app) as ac:
+        # 出站类端点
+        for path, payload in [
+            ("/api/v1/takeover/default/send", {"content": "x"}),
+            ("/api/v1/takeover/default/answer", {"answer": "x"}),
+            ("/api/v1/takeover/default/answer/batch", {"items": [{"answer": "x"}]}),
+        ]:
+            r = await ac.post(path, json=payload, headers=_H)
+            assert r.status_code == 400, path
+            assert "QQ" in r.json()["detail"]
+        # 状态/配置类端点同样拒绝(default 无意义数据)
+        assert (await ac.get("/api/v1/takeover/default/status", headers=_H)).status_code == 400
+        assert (await ac.post("/api/v1/takeover/default/toggle",
+                             json={"enabled": True}, headers=_H)).status_code == 400
+        # 纯数字 oid 正常放行(冒烟)
+        r = await ac.get("/api/v1/takeover/10001/status", headers=_H)
+        assert r.status_code == 200 and r.json()["queue_length"] == 0

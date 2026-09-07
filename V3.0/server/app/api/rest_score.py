@@ -44,7 +44,10 @@ async def get_score(mid: str):
 @router.patch("/chat/messages/{mid}/score", dependencies=[Depends(verify_token)])
 async def manual_set_score(mid: str, body: dict):
     """手动改分:覆盖 score_base,重算 score(保留历史 mood_bias)。
-    body: {"score_base": int, "score_note"?: str}(score_note=评分批注,2026-07-07)"""
+    body: {"score_base": int, "score_note"?: str, "corrected"?: str, "corrected_score"?: int}
+    score_note=评分批注(2026-07-07);corrected=管理员纠正回复(2026-08-18,更符合人设的
+    理想回复,原内容保留;作为正样本 source=correction 进反推;""=清除;缺省=不动);
+    corrected_score(2026-08-18 #2)=纠正回复分数(纠正版"有多理想",恒正样本,缺省 100)"""
     from score import service as score_service
     if "score_base" not in body:
         raise HTTPException(status_code=400, detail="score_base required")
@@ -52,9 +55,18 @@ async def manual_set_score(mid: str, body: dict):
         score_base = int(body["score_base"])
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="score_base must be int")
+    corrected_score = body.get("corrected_score")
+    if corrected_score is not None:
+        try:
+            corrected_score = int(corrected_score)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="corrected_score must be int")
     score_note = body.get("score_note")   # 可选批注(说明为什么这个分)
+    corrected = body.get("corrected")     # 可选纠正回复(None 不动/""清除/非空设置)
     redis = await get_redis()
-    data = await score_service.manual_set_score(redis, mid, score_base, score_note=score_note)
+    data = await score_service.manual_set_score(redis, mid, score_base,
+                                                score_note=score_note, corrected=corrected,
+                                                corrected_score=corrected_score)
     if data is None:
         raise HTTPException(status_code=404, detail="message not found")
     return data

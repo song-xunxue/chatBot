@@ -25,7 +25,7 @@ const menuOptions: MenuOption[] = [
 ]
 
 const activeKey = computed(() => (route.name as string) || 'history')
-const title = computed(() => (route.meta.title as string) || 'MyChat V2.0 管理面板')
+const title = computed(() => (route.meta.title as string) || '清浔 3.0 管理面板')
 
 function onSelect(key: string) {
   router.push({ name: key })
@@ -39,7 +39,7 @@ function logout() {
 <template>
   <n-layout has-sider style="height: 100vh">
     <n-layout-sider bordered :width="200" content-style="padding:8px">
-      <div style="padding:12px;font-weight:700;font-size:16px">MyChatBot V2.0</div>
+      <div style="padding:12px;font-weight:700;font-size:16px">清浔 3.0</div>
       <n-menu :value="activeKey" :options="menuOptions" @update:value="onSelect" />
     </n-layout-sider>
     <n-layout>
