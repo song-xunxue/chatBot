@@ -85,6 +85,11 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     siliconflow_api_key: str = ""
     chat_provider: str = "glm"  # 默认聊天 provider(MessageContext 兜底;GLM 限流时 .env 设 CHAT_PROVIDER=deepseek 切换,免改代码)
+    # 本地模型(2026-09-12 前置工作 A1):OpenAI 兼容端点(Ollama/vLLM),经 frp 隧道访问;
+    # CHAT_PROVIDER=local 即切聊天(评分/反推等裁判任务留云端);api_key 占位非空(Ollama 忽略鉴权)
+    local_llm_api_base: str = ""   # 空=未启用;云部署填 http://host.docker.internal:11434/v1(frp 隧道)
+    local_llm_api_key: str = "ollama"
+    local_llm_model: str = "qwen3:8b"
 
     # 5.人设系统(M2 copy V1.0 persona 模块用)
     persona_active_id: str = "default"  # 未绑定对象时使用的默认人设 id

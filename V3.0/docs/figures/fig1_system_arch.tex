@@ -1,0 +1,79 @@
+% V3.0 系统总体架构分层图
+% 作者: 李文煜
+\documentclass[border=3mm]{standalone}
+\usepackage{ctex}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, shapes.geometric, fit, backgrounds, calc}
+\definecolor{primary}{HTML}{79C4FE}
+\definecolor{accent}{HTML}{0B6FB8}
+\definecolor{userc}{HTML}{C8E6C9}
+\definecolor{userd}{HTML}{2E7D32}
+\definecolor{protc}{HTML}{FFE0B2}
+\definecolor{protd}{HTML}{E65100}
+\definecolor{supc}{HTML}{F0F0F0}
+\definecolor{supd}{HTML}{616161}
+\begin{document}
+\begin{tikzpicture}[
+  >=Stealth,
+  box/.style={rectangle, draw=accent, fill=primary, rounded corners=3pt,
+              minimum height=0.85cm, align=center, font=\small\bfseries, inner sep=5pt},
+  ubox/.style={box, draw=userd, fill=userc},
+  pbox/.style={box, draw=protd, fill=protc},
+  sbox/.style={box, draw=supd, fill=supc, font=\small},
+  layer/.style={rectangle, rounded corners=4pt, draw=gray!60, fill=gray!6, inner sep=7pt},
+  laylabel/.style={font=\footnotesize\bfseries, text=gray!70, align=center},
+  arr/.style={->, thick, accent},
+  note/.style={font=\scriptsize, text=gray!80, align=center},
+]
+
+% ===== L1 用户层 =====
+\node[ubox, minimum width=3.6cm] (mainqq) {手机 QQ · 主号\\(浔的昳 2690468347)};
+\node[ubox, minimum width=3.6cm, right=1.2cm of mainqq] (botqq) {手机 QQ · 清浔号\\(手动回复 1145077465)};
+\begin{scope}[on background layer]
+  \node[layer, fit=(mainqq)(botqq), label={[laylabel]left:用户层}] (L1) {};
+\end{scope}
+
+% ===== L2 协议层 =====
+\node[pbox, below=0.9cm of L1, minimum width=8.6cm] (napcat) {NapCat napcat-v4 (Docker) · OneBot v11 协议端\\登录接管号 1145077465 · 反向 WS 上报(含 message\_sent 自身消息)};
+\begin{scope}[on background layer]
+  \node[layer, fit=(napcat), label={[laylabel]left:协议层}] (L2) {};
+\end{scope}
+
+% ===== L3 服务层 =====
+\node[box, below=0.9cm of L2, minimum width=3.9cm] (ws) {onebot/ws\_client\\入站事件};
+\node[box, right=0.5cm of ws, minimum width=3.9cm] (pipe) {pipeline 管线\\人设/记忆/评分/心情};
+\node[box, right=0.5cm of pipe, minimum width=3.9cm] (adp) {adapter/onebot\\出站下发};
+\node[box, below=0.45cm of ws, minimum width=3.9cm] (tk) {takeover 代答\\pending 队列};
+\node[box, right=0.5cm of tk, minimum width=3.9cm] (llm) {LLM 调用\\chat/评分/反推/记忆};
+\node[box, right=0.5cm of llm, minimum width=3.9cm] (rest) {REST API\\+ 面板静态托管};
+\begin{scope}[on background layer]
+  \node[layer, fit=(ws)(pipe)(adp)(tk)(llm)(rest), label={[laylabel]left:服务层\\mychat-server-v3\\(8091)}] (L3) {};
+\end{scope}
+
+% ===== L4 支撑层 =====
+\node[sbox, below=0.9cm of L3, minimum width=4.3cm] (redis) {mychat-redis-v3\\独立数据(与 V2.0 隔离)};
+\node[sbox, right=0.5cm of redis, minimum width=4.3cm] (providers) {LLM Providers\\GLM / DeepSeek / 硅基流动};
+\node[sbox, right=0.5cm of providers, minimum width=4.3cm] (gsv) {GPT-SoVITS TTS\\frp 隧道 $\to$ 本地 4060};
+\begin{scope}[on background layer]
+  \node[layer, fit=(redis)(providers)(gsv), label={[laylabel]left:支撑层}] (L4) {};
+\end{scope}
+
+% ===== 右侧: 面板 =====
+\node[ubox, above right=0.15cm and 0.4cm of rest, minimum width=3.3cm] (panel) {Web 面板\\PC(七页) + 移动端 /m(七页)};
+\node[note, below=0.05cm of panel] {浏览器 $\to$ http://43.140.219.99:8091};
+
+% ===== 箭头 =====
+\draw[arr] (mainqq.south) -- node[right, note] {私聊消息} (napcat.north -| mainqq.south);
+\draw[arr] (botqq.south) -- node[right, note] {message\_sent} (napcat.north -| botqq.south);
+\draw[arr] (napcat.south) -- node[right, note] {反向 WS\\ws://127.0.0.1:8091/ws} (ws.north -| napcat.south);
+\draw[arr] (ws) -- (pipe);
+\draw[arr] (pipe) -- (adp);
+\draw[arr, dashed] (adp.north) to[bend left=15] node[above, note] {send\_private\_msg} (napcat.south east);
+\draw[arr, dashed] (panel.south) -- node[right, note] {X-Access-Token} (rest.north east);
+\draw[arr] (L3.south) -- (L4.north);
+
+% 部署注记
+\node[note, below=0.25cm of L4] {云服务器 43.140.219.99 \; · \; 部署目录 \,\~{}/ChatBot-V3\, \; · \; V2.0(8000, 官方机器人)并行运行互不影响};
+
+\end{tikzpicture}
+\end{document}

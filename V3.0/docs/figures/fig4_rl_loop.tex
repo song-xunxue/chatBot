@@ -1,0 +1,95 @@
+% V3.0 评分驱动 RL 闭环(策略→行动→奖励→更新)
+% 作者: 李文煜
+\documentclass[border=3mm]{standalone}
+\usepackage{ctex}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, shapes.geometric, fit, backgrounds, calc}
+\definecolor{primary}{HTML}{79C4FE}
+\definecolor{accent}{HTML}{0B6FB8}
+\definecolor{polc}{HTML}{E1BEE7}
+\definecolor{pold}{HTML}{6A1B9A}
+\definecolor{actc}{HTML}{BBDEFB}
+\definecolor{actd}{HTML}{0277BD}
+\definecolor{rewc}{HTML}{FFF9C4}
+\definecolor{rewd}{HTML}{F57F17}
+\definecolor{updc}{HTML}{C8E6C9}
+\definecolor{updd}{HTML}{2E7D32}
+\definecolor{gpc}{HTML}{FFCDD2}
+\definecolor{gpd}{HTML}{C62828}
+\begin{document}
+\begin{tikzpicture}[
+  >=Stealth,
+  main/.style={rectangle, rounded corners=4pt, minimum width=5.6cm, minimum height=1.5cm,
+               align=center, font=\small\bfseries, inner sep=6pt},
+  pol/.style={main, draw=pold, fill=polc},
+  act/.style={main, draw=actd, fill=actc},
+  rew/.style={main, draw=rewd, fill=rewc},
+  upd/.style={main, draw=updd, fill=updc},
+  gp/.style={rectangle, rounded corners=3pt, draw=gpd, fill=gpc,
+             minimum width=4.4cm, minimum height=0.8cm, align=center, font=\scriptsize\bfseries, inner sep=4pt},
+  sub/.style={rectangle, rounded corners=2pt, draw=gray!70, fill=white,
+              minimum width=6.0cm, minimum height=0.62cm, align=center, font=\tiny, inner sep=3pt},
+  arr/.style={->, very thick, accent},
+  note/.style={font=\scriptsize, text=gray!70, align=center},
+  grp/.style={rectangle, rounded corners=4pt, draw=gray!60, fill=gray!6, inner sep=5pt},
+]
+
+% ================= π 策略 =================
+\node[pol] (pi) {$\pi$ \; 策略 Policy\\[2pt]\footnotesize 决定"清浔怎么说话"};
+\node[sub, below=0.12cm of pi] (pi1) {PersonaCard 人设卡(personality/speech\_style/catchphrase...)};
+\node[sub, below=0.08cm of pi1] (pi2) {记忆上下文 memory\_block(召回注入) + 心情 prompt\_hint};
+\node[sub, below=0.08cm of pi2] (pi3) {OUTPUT\_CONTRACT 输出契约(句号铁律/诚实约束/禁舞台指示)};
+\begin{scope}[on background layer]
+  \node[grp, fit=(pi)(pi3)] (Gpi) {};
+\end{scope}
+
+% ================= a 行动 =================
+\node[act, right=3.2cm of pi] (a) {$a$ \; 行动 Action\\[2pt]\footnotesize 一条回复的生成与表达};
+\node[sub, below=0.12cm of a] (a1) {llm\_stream / tool\_loop 生成文本};
+\node[sub, below=0.08cm of a1] (a2) {continuous\_send 分段多气泡 + 思考延迟 + TTS 语音};
+\node[sub, below=0.08cm of a2] (a3) {人工行动: 面板代答 / 手机手动回复(黄金标准)};
+\begin{scope}[on background layer]
+  \node[grp, fit=(a)(a3)] (Ga) {};
+\end{scope}
+
+% ================= r 奖励 =================
+% 定位基准=上方象限最后一个子项(a3),防主节点+子链纵向溢出与下象限重叠
+\node[rew, below=1.5cm of a3] (r) {$r$ \; 奖励 Reward\\[2pt]\footnotesize 0--100 分 + 样本归类};
+\node[sub, below=0.12cm of r] (r1) {score\_reply: LLM-as-judge 对照人设打分 + mood\_bias 补偿};
+\node[sub, below=0.08cm of r1] (r2) {人工信号: 手动改分 / 纠正回复(corrected, 金 100) / 手动回复(恒正 100)};
+\node[sub, below=0.08cm of r2] (r3) {classify: $\geq$85 正样本 / $<$60 负样本 / 中性丢弃};
+\begin{scope}[on background layer]
+  \node[grp, fit=(r)(r3)] (Gr) {};
+\end{scope}
+
+% ================= 更新 =================
+% 定位基准=π象限最后一个子项(pi3),同上防重叠
+\node[upd, below=1.5cm of pi3] (u) {$\theta$ \; 更新 Update\\[2pt]\footnotesize 奖励信号改写策略参数};
+\node[sub, below=0.12cm of u] (u1) {$\theta_1$ 人设反推: reverse\_infer 从正/负样本提炼字段, dry\_run$\to$人工确认$\to$apply};
+\node[sub, below=0.08cm of u1] (u2) {$\theta_2$ 记忆强化: 被召回记忆 useful\_score $\pm\delta$(credit assignment)$\to$三档衰减};
+\node[sub, below=0.08cm of u2] (u3) {$\theta_3$ 心情: apply\_emotion 按回复关键词迁移 mood(影响下一轮偏置)};
+\begin{scope}[on background layer]
+  \node[grp, fit=(u)(u3)] (Gu) {};
+\end{scope}
+
+% ================= 主环箭头 =================
+\draw[arr] (Gpi.east) -- node[above, note] {组装 prompt\\(人设+记忆+心情)} (Ga.west);
+\draw[arr] (Ga.south) -- node[right, note] {回复落库\\stage\_save} (Gr.north);
+\draw[arr] (Gr.west) -- node[above, note] {stage\_score\\样本+评分回流} (Gu.east);
+\draw[arr] (Gu.north) -- node[left, note] {人设字段/记忆权重/mood\\写入下一轮策略} (Gpi.south);
+
+% 缺口标注(人在环/LLM judge)
+\node[gp, left=0.9cm of Gr] (gap1) {人在环:\\反推须人工确认 apply};
+\node[gp, below=0.45cm of gap1] (gap2) {奖励为 LLM-as-judge\\非真实环境反馈};
+\node[gp, below=0.45cm of gap2] (gap3) {中性样本不采样\\(60--84 无梯度)};
+\draw[->, thick, gpd, dashed] (gap1.east) -- (Gr.west);
+
+% 训练样本旁路(从右外侧横接 Gr 东侧,避让 Ga→Gr 主环箭头)
+\node[gp, right=1.1cm of a3] (rp) {旁路: 训练样本(roleplay)\\评分同样入正/负队列};
+\draw[->, thick, gpd, dashed] (rp.south) to[bend right=22] (Gr.east);
+
+% 标题注记
+\node[note, above=0.15cm of Gpi] {整体构成 bandit 式离线策略优化环(非在线梯度); 记忆系统与人格优化经 $\theta_1$/$\theta_2$ 两条更新通路打通};
+
+\end{tikzpicture}
+\end{document}

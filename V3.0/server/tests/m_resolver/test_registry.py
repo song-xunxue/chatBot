@@ -17,10 +17,12 @@ from core.config import settings
 
 
 def _keys(monkeypatch, **on):
-    for k in ("glm", "deepseek", "siliconflow"):
-        monkeypatch.setattr(settings, f"{k}_api_key", "")
+    # 字段名映射:local 的 settings 字段是 local_llm_api_key(非 local_api_key)
+    attr = {"local": "local_llm_api_key"}
+    for k in ("glm", "deepseek", "siliconflow", "local"):
+        monkeypatch.setattr(settings, attr.get(k, f"{k}_api_key"), "")
     for k, v in on.items():
-        monkeypatch.setattr(settings, f"{k}_api_key", v)
+        monkeypatch.setattr(settings, attr.get(k, f"{k}_api_key"), v)
 
 
 def test_get_provider_by_name(monkeypatch):
@@ -45,9 +47,9 @@ def test_available_providers_reflects_keys(monkeypatch):
 
 
 def test_provider_specs_shape():
-    """单一注册表 = 三条规格,字段齐(name/cls/key_attr/display)"""
+    """单一注册表 = 四条规格(2026-09-12 增 local),字段齐(name/cls/key_attr/display)"""
     specs = provider_specs()
-    assert {s.name for s in specs} == {"glm", "deepseek", "siliconflow"}
+    assert {s.name for s in specs} == {"glm", "deepseek", "siliconflow", "local"}
     assert all(isinstance(s, ProviderSpec) for s in specs)
     assert all(s.cls and s.key_attr and s.display for s in specs)
 

@@ -1,0 +1,92 @@
+% V3.0 四级记忆子系统(数据结构 + 检索 + 写入 + 衰减闭环)
+% 作者: 李文煜
+\documentclass[border=3mm]{standalone}
+\usepackage{ctex}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, shapes.geometric, fit, backgrounds, calc}
+\definecolor{primary}{HTML}{79C4FE}
+\definecolor{accent}{HTML}{0B6FB8}
+\definecolor{wrtc}{HTML}{FFE0B2}
+\definecolor{wrtd}{HTML}{E65100}
+\definecolor{retc}{HTML}{C8E6C9}
+\definecolor{retd}{HTML}{2E7D32}
+\definecolor{decc}{HTML}{FFCDD2}
+\definecolor{decd}{HTML}{C62828}
+\begin{document}
+\begin{tikzpicture}[
+  >=Stealth,
+  layer/.style={rectangle, draw=accent, fill=primary, rounded corners=3pt,
+                minimum width=5.2cm, minimum height=1.0cm, align=center, font=\small\bfseries, inner sep=4pt},
+  act/.style={rectangle, rounded corners=3pt, minimum width=4.4cm, minimum height=0.95cm,
+              align=center, font=\scriptsize\bfseries, inner sep=4pt},
+  wact/.style={act, draw=wrtd, fill=wrtc},
+  ract/.style={act, draw=retd, fill=retc},
+  dact/.style={act, draw=decd, fill=decc},
+  key/.style={rectangle, draw=gray!70, fill=gray!10, font=\tiny\ttfamily, align=left, inner sep=4pt, rounded corners=2pt},
+  arr/.style={->, thick, accent},
+  warr/.style={->, thick, wrtd},
+  rarr/.style={->, thick, retd},
+  darr/.style={->, thick, decd},
+  note/.style={font=\scriptsize, text=gray!80, align=center},
+  grp/.style={rectangle, rounded corners=4pt, draw=gray!60, fill=gray!6, inner sep=6pt},
+]
+
+% ================= 中列: 四层存储 =================
+\node[layer] (core) {核心记忆 Core\\高重要度/关系事实 · 常驻注入};
+\node[layer, below=0.55cm of core] (work) {工作记忆 Working\\最近 N 条对话(get\_history 直读)};
+\node[layer, below=0.55cm of work] (epi) {情节记忆 Episodic\\block 情景摘要};
+\node[layer, below=0.55cm of epi] (lt) {长期记忆 Long-term\\抽取的事实(三要素)};
+% 数据结构键(右侧)
+\node[key, right=0.55cm of epi, yshift=0.85cm] (key1) {mychat:mem:\{oid\}:\{mid\} Hash\\content/category/importance\\reason/tags/source/ts};
+\node[key, below=0.18cm of key1] (key2) {useful\_score/tier/locked\\access\_count(检索命中+1)};
+\node[key, below=0.18cm of key2] (key3) {mychat:mem:\{oid\}:vec:\{mid\}\\GLM embedding-3 向量};
+\node[key, below=0.18cm of key3] (key4) {mychat:mem:\{oid\}:index ZSet\\全量索引(按 ts)};
+\node[key, below=0.18cm of key4] (key5) {mychat:episodic:\{oid\}:blocks\\情节摘要 per block};
+\draw[arr, dashed] (core.east) to[bend left=8] (key1.west);
+\draw[arr, dashed] (epi.east) to[bend left=8] (key5.west);
+\draw[arr, dashed] (lt.east) to[bend right=8] (key2.west);
+
+% ================= 左列: 写入链 =================
+\node[wact, left=1.7cm of core] (w1) {回合结束\\on\_turn\_complete};
+\node[wact, below=0.4cm of w1] (w2) {情节摘要 summarize\\(LLM 压缩 block$\to$摘要)};
+\node[wact, below=0.4cm of w2] (w3) {事实抽取 extract\_facts\_batch\\(每 6 轮批量 · 防幻觉铁律\\+角色第一人称+user\_alias)};
+\node[wact, below=0.4cm of w3] (w4) {\_parse\_facts 契约解析\\(content/reason/tags/importance)};
+\node[wact, below=0.4cm of w4] (w5) {\_upsert\_fact\_dedup\\cosine$\geq$0.85 合并:\\reason 取非空/tags 并集\\useful\_score 取 max};
+\node[wact, below=0.4cm of w5] (w6) {core 升级\\importance$\geq$0.8 或\\relationship 事实};
+\draw[warr] (w1) -- (w2);
+\draw[warr] (w2) -- (w3);
+\draw[warr] (w3) -- (w4);
+\draw[warr] (w4) -- (w5);
+\draw[warr] (w5) -- (w6);
+\draw[warr] (w2.east) to[bend left=12] node[above, note] {写} (epi.west);
+\draw[warr] (w5.east) to[bend right=12] node[below, note] {写} (lt.west);
+\draw[warr] (w6.east) to[bend right=18] (core.west);
+
+% ================= 右下: 检索链 =================
+\node[ract, below=1.0cm of key5] (r1) {检索 retrieve(user\_text)\\BM25 词频打分 + 向量 cosine 语义检索\\(懒 embed: 无向量现场补)};
+\node[ract, below=0.4cm of r1] (r2) {RRF 融合排序\\$\frac{1}{k+r_{bm25}}+\frac{1}{k+r_{vec}}$ 取 top\_k};
+\node[ract, below=0.4cm of r2] (r3) {render 记忆块注入\\system\_prompt 尾部\\+ hit\_mids 记录(供评分联动)};
+\draw[rarr] (r1) -- (r2);
+\draw[rarr] (r2) -- (r3);
+\draw[rarr] (key4.south) to[bend right=10] (r1.north);
+\draw[rarr] (key3.south) to[bend right=14] (r1.north west);
+
+% ================= 左下: 衰减闭环 =================
+\node[dact, below=1.0cm of w6] (d1) {评分联动(每回合)\\本轮评分$\geq$85: 被召回记忆 useful\_score $+\delta$\\$<$60: $-\delta$(手动档 tier$\geq$0 / locked 豁免)};
+\node[dact, below=0.4cm of d1] (d2) {三档衰减 should\_forget\\T0: retain\_score 跌破$\to$忘\\T1: useful\_score 跌破$\to$忘\\T2: 永不 · locked: 强制永不};
+\node[dact, below=0.4cm of d2] (d3) {forget\_tick(每 6h)\\软遗忘$\to$上限淘汰\\$\to$物理清理$\to$consolidate\_sleep};
+\draw[darr] (d1) -- (d2);
+\draw[darr] (d2) -- (d3);
+\draw[darr] (r3.west) to[bend left=15] node[above, note] {评分回流 hit\_mids} (d1.north east);
+\draw[darr] (d3.west) to[bend left=12] ([yshift=-0.3cm]lt.south west);
+
+% 分组
+\begin{scope}[on background layer]
+  \node[grp, fit=(w1)(w6), label={[font=\footnotesize\bfseries, text=wrtd]north:写入链(回合后)}] {};
+  \node[grp, fit=(r1)(r3), label={[font=\footnotesize\bfseries, text=retd]east:检索链(每轮回复前)}] {};
+  \node[grp, fit=(d1)(d3), label={[font=\footnotesize\bfseries, text=decd]north west:衰减闭环(用进废退)}] {};
+  \node[grp, fit=(core)(work)(epi)(lt)(key1)(key5), label={[font=\footnotesize\bfseries, text=accent]north:四级存储(Redis)}] {};
+\end{scope}
+
+\end{tikzpicture}
+\end{document}

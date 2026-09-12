@@ -56,6 +56,7 @@ from api.rest_takeover import router as takeover_router
 from api.rest_roleplay import router as roleplay_router
 from api.rest_multimodal import router as multimodal_router
 from api.rest_tts import router as tts_router
+from api.rest_training import router as training_router
 
 # 配置应用 logging(修盲区:原未配置致业务 INFO 被默认 lastResort 丢弃,仅 WARNING+ 出)
 # 必须在 create_app 前调用;dictConfig 整合 uvicorn 走同一 handler/格式(详见 core/logging_config.py)
@@ -198,6 +199,7 @@ def create_app() -> FastAPI:
     app.include_router(multimodal_router)
     # M-tts 挂载 TTS 预览 REST 路由(POST /api/v1/tts/preview 音色试听,2026-08-04)
     app.include_router(tts_router)
+    app.include_router(training_router)   # 训练前置工具(盲测基准/数据导出,2026-09-12)
     # M7e 静态托管前端构建产物 + SPA history mode 兜底(修子路由刷新 404);dist 不存在则跳过(dev 走 vite proxy)
     from fastapi.responses import FileResponse
     from fastapi import HTTPException

@@ -131,6 +131,12 @@ export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => 
 export const resetAllData = () =>
   api.post('/api/v1/system/reset', { confirm: '清空' }).then((r) => r.data)
 
+// —— 训练前置工具(2026-09-12:人设盲测基准 / 训练数据导出)——
+export const benchmarkPersona = (oid: string, body: { provider_a: string; provider_b: string; n?: number }) =>
+  api.post(`/api/v1/training/${oid}/benchmark`, body).then((r) => r.data)
+export const exportTraining = (oid: string, body: { min_score?: number } = {}) =>
+  api.post(`/api/v1/training/${oid}/export`, body).then((r) => r.data)
+
 // —— 代答 takeover(M8)——
 export const toggleTakeover = (oid: string, enabled: boolean) =>
   api.post(`/api/v1/takeover/${oid}/toggle`, { enabled }).then((r) => r.data)

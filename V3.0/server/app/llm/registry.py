@@ -7,6 +7,13 @@ get_provider / available_providers 从表查;provider_specs() 供 rest_system �
 
 作者: 李文煜
 日期: 2026-07-02
+
+2026-09-12
+变更说明：
+  1. 新增 local provider(前置工作 A1):指向本地 OpenAI 兼容推理服务(Ollama/vLLM,
+     经 frp 隧道);key_attr 用 local_llm_api_key(默认占位 "ollama" 非空,故配置了
+     api_base 即视为可用;Ollama 忽略鉴权)。仅建议 CHAT_PROVIDER 路由,评分/反推等
+     裁判任务留在云端强模型(盲测公平)。
 """
 from dataclasses import dataclass
 
@@ -14,6 +21,7 @@ from llm.base import LLMProvider
 from llm.glm import GLMProvider
 from llm.deepseek import DeepSeekProvider
 from llm.siliconflow import SiliconFlowProvider
+from llm.local import LocalLLMProvider
 from core.config import settings
 
 
@@ -31,6 +39,7 @@ _LLM_PROVIDERS: list[ProviderSpec] = [
     ProviderSpec("glm", GLMProvider, "glm_api_key", "GLM(智谱)"),
     ProviderSpec("deepseek", DeepSeekProvider, "deepseek_api_key", "DeepSeek"),
     ProviderSpec("siliconflow", SiliconFlowProvider, "siliconflow_api_key", "硅基流动"),
+    ProviderSpec("local", LocalLLMProvider, "local_llm_api_key", "本地模型(Ollama/vLLM)"),
 ]
 _BY_NAME: dict[str, ProviderSpec] = {p.name: p for p in _LLM_PROVIDERS}
 
