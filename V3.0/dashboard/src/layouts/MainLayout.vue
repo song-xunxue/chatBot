@@ -21,7 +21,7 @@ const menuOptions: MenuOption[] = [
   { label: '心情系统', key: 'mood' },
   { label: '插件管理', key: 'plugin' },
   { label: '系统配置', key: 'system' },
-  { label: '代人代答', key: 'takeover' },
+  { label: '对话控制', key: 'takeover' },
 ]
 
 const activeKey = computed(() => (route.name as string) || 'history')

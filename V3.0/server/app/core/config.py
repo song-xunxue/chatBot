@@ -173,10 +173,9 @@ class Settings(BaseSettings):
     star_enable: bool = True  # .star 兼容层总开关(加载 AstrBot 风格 .star 插件)
     star_dir: str = "server/data/star_plugins"  # .star 插件目录(相对项目根,放 *.py)
 
-    # 14.代人聊天 takeover(M8,docs/01 §11 / docs/02 §8):代答 pending 队列 + 批量连发真实下发 QQ
-    takeover_pending_ttl_sec: int = 86400  # pending 待答保留秒数(管理员可能延迟代答,V1.0 的 120s 太短)
-    takeover_batch_max: int = 20  # 批量代答/录入条数上限(防滥用,截断)
-    takeover_queue_orphan_scan_limit: int = 50  # resolve/list_queue 扫描孤儿 pid 上限(防雪崩)
+    # 14.对话控制(2026-09-13 队列删减重构):AI 静默开关 + 手动静默期 + 录入截断
+    takeover_batch_max: int = 20  # 批量录入条数上限(roleplay 连发截断沿用,防滥用)
+    takeover_manual_silence_min: int = 10  # 手动回复后 AI 静默分钟数(自动模式下;0=禁用)
 
     # 15.多模态-图像理解(M-vision,2026-07-01):QQ 收图 → GLM vision 解析成文本 → 进 pipeline
     multimodal_vision_enable: bool = True   # 图像理解总开关:收图消息时尝试解析;关则图片消息忽略/纯文本

@@ -39,8 +39,7 @@ import {
   restoreMemory, lockMemory,
   enablePlugin, reloadStar,
   getSystemConfig, reloadSystem,
-  toggleTakeover, getTakeoverStatus, listTakeoverQueue, answerTakeover, answerTakeoverBatch, skipTakeover,
-  clearTakeoverQueue,
+  toggleTakeover, getTakeoverStatus, sendTakeover,
   addRoleplay, addRoleplayBatch, listRoleplay, updateRoleplay, deleteRoleplay,
   listRoleplaySessions, newRoleplaySession, extractRoleplay,
 } from '@/api'
@@ -133,22 +132,13 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/system/reload')
   })
 
-  it('takeover: toggle/status/queue/answer/batch/skip/clear', async () => {
+  it('takeover: toggle/status/send', async () => {
     mockResolve('post', {}); await toggleTakeover('o', true)
     expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/toggle', { enabled: true })
     mockResolve('get', {}); await getTakeoverStatus('o')
     expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/takeover/o/status')
-    await listTakeoverQueue('o')
-    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/takeover/o/queue')
-    mockResolve('post', {}); await answerTakeover('o', { pid: 'p1', answer: 'a' })
-    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/answer', { pid: 'p1', answer: 'a' })
-    await answerTakeoverBatch('o', [{ answer: 'a' }])
-    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/answer/batch', { items: [{ answer: 'a' }] })
-    await skipTakeover('o', 'p1')
-    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/skip', { pid: 'p1' })
-    // 一键清空(2026-09-07:逐条归档到历史后清队)
-    mockResolve('post', { cleared: 2, archived: 2 }); await clearTakeoverQueue('o')
-    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/queue/clear')
+    mockResolve('post', {}); await sendTakeover('o', 'hi')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/send', { content: 'hi' })
   })
 
   it('roleplay: add/sessions/batch/list/update/delete', async () => {

@@ -145,29 +145,56 @@ async def test_call_action_echo_match(monkeypatch):
         ws_client._ws = None
 
 
-async def test_handle_event_takeover_intercept(monkeypatch, fake_redis):
-    """代答拦截(替代原 m8 webhook_takeover):代答模式开启时私聊消息入 pending 队列,不进 pipeline"""
+async def test_handle_event_silent_mode_direct_record(monkeypatch, fake_redis):
+    """静默模式(2026-09-13 队列删减):AI 静默开关开启时,用户消息直录历史不进 pipeline"""
     from onebot import ws_client
+    from storage import takeover_store, chat_store
     monkeypatch.setattr(settings, "onebot_self_id", "999")
-
-    enqueued = []
-
-    class _FakeStore:
-        async def is_enabled(self, redis, oid):
-            return True
-
-        async def enqueue(self, redis, oid, *, user_text, msg_id):
-            enqueued.append((oid, user_text, msg_id))
-            return f"pid-{len(enqueued)}"
-
-    monkeypatch.setattr("storage.takeover_store", _FakeStore(), raising=False)
+    _inject_redis(monkeypatch, fake_redis)
+    await takeover_store.set_enabled(fake_redis, "111", True)
 
     async def boom_schedule(*a, **k):
-        raise AssertionError("代答开启时不应进防抖/pipeline")
-
+        raise AssertionError("静默模式不应进防抖/pipeline")
     monkeypatch.setattr(ws_client, "_schedule_debounce", boom_schedule)
+
     await ws_client._handle_event(_evt_array(user_id=111, self_id=999, text="在吗"))
-    assert enqueued == [("111", "在吗", "42")]
+    msgs = await chat_store.list_messages(fake_redis, "111")
+    assert len(msgs) == 1 and msgs[0]["sender"] == "user" and msgs[0]["content"] == "在吗"
+
+
+async def test_handle_event_silence_window_direct_record(monkeypatch, fake_redis):
+    """手动静默期(自动模式下手动回复后 TTL 窗):窗口内消息同样直录,不进 pipeline"""
+    from onebot import ws_client
+    from storage import takeover_store, chat_store
+    monkeypatch.setattr(settings, "onebot_self_id", "999")
+    _inject_redis(monkeypatch, fake_redis)
+    await takeover_store.set_silence(fake_redis, "111", 10)   # 手动回复刚写过静默窗
+
+    async def boom_schedule(*a, **k):
+        raise AssertionError("静默期内不应进防抖/pipeline")
+    monkeypatch.setattr(ws_client, "_schedule_debounce", boom_schedule)
+
+    await ws_client._handle_event(_evt_array(user_id=111, self_id=999, text="继续聊"))
+    msgs = await chat_store.list_messages(fake_redis, "111")
+    assert len(msgs) == 1 and msgs[0]["content"] == "继续聊"
+
+
+async def test_handle_event_auto_mode_goes_pipeline(monkeypatch, fake_redis):
+    """自动模式(开关关+无静默窗):正常进防抖合并(pipeline 路径)"""
+    from onebot import ws_client
+    from storage import takeover_store
+    monkeypatch.setattr(settings, "onebot_self_id", "999")
+    _inject_redis(monkeypatch, fake_redis)
+    assert await takeover_store.is_enabled(fake_redis, "111") is False
+
+    scheduled = []
+
+    async def fake_schedule(uid, text, images, msg_id):
+        scheduled.append((uid, text, msg_id))
+    monkeypatch.setattr(ws_client, "_schedule_debounce", fake_schedule)
+
+    await ws_client._handle_event(_evt_array(user_id=111, self_id=999, text="你好"))
+    assert scheduled == [("111", "你好", "42")]
 
 
 # ================ message_sent 手动回复(2026-09-07)================
@@ -488,10 +515,10 @@ async def test_message_sent_string_cq_voice(monkeypatch, fake_redis):
     ws_client._sent_msg_ids.clear()
 
 
-async def test_inbound_image_enqueue_placeholder(monkeypatch, fake_redis):
-    """审查修复:代答模式下纯图片消息占位入队(原空文本,归档/合并时丢消息)"""
+async def test_inbound_image_silent_direct_record(monkeypatch, fake_redis):
+    """审查修复(队列删减后语义):静默模式下纯图片消息占位直录历史(原空文本会丢)"""
     from onebot import ws_client
-    from storage import takeover_store
+    from storage import takeover_store, chat_store
     monkeypatch.setattr(settings, "onebot_self_id", "999")
     _inject_redis(monkeypatch, fake_redis)
     await takeover_store.set_enabled(fake_redis, "111", True)
@@ -501,5 +528,5 @@ async def test_inbound_image_enqueue_placeholder(monkeypatch, fake_redis):
            "message": [{"type": "image", "data": {"url": "https://img.qq/1.jpg"}}],
            "sender": {"nickname": "测试"}}
     await ws_client._handle_event(evt)
-    q = await takeover_store.list_queue(fake_redis, "111")
-    assert len(q) == 1 and q[0]["user_text"] == "[图片]"   # 占位入队,不再空文本
+    msgs = await chat_store.list_messages(fake_redis, "111")
+    assert len(msgs) == 1 and msgs[0]["content"] == "[图片]"   # 占位直录,不再空文本

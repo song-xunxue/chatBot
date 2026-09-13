@@ -18,7 +18,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'mood', name: 'mood', component: () => import('@/views/Mood.vue'), meta: { title: '心情系统' } },
       { path: 'plugin', name: 'plugin', component: () => import('@/views/Plugin.vue'), meta: { title: '插件管理' } },
       { path: 'system', name: 'system', component: () => import('@/views/System.vue'), meta: { title: '系统配置' } },
-      { path: 'takeover', name: 'takeover', component: () => import('@/views/Takeover.vue'), meta: { title: '代人代答' } },
+      { path: 'takeover', name: 'takeover', component: () => import('@/views/Takeover.vue'), meta: { title: '对话控制' } },
     ],
   },
   // —— 移动端 /m/*(手机端管理面板,独立 MobileLayout+底部 tab 导航;走标准登录页鉴权)——
@@ -28,7 +28,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/MobileLayout.vue'),
     children: [
       { path: '', redirect: '/m/takeover' },
-      { path: 'takeover', name: 'm-takeover', component: () => import('@/views/TakeoverMobile.vue'), meta: { title: '代人代答', mobile: true } },
+      { path: 'takeover', name: 'm-takeover', component: () => import('@/views/TakeoverMobile.vue'), meta: { title: '对话控制', mobile: true } },
       { path: 'history', name: 'm-history', component: () => import('@/views/HistoryMobile.vue'), meta: { title: '对话历史', mobile: true } },
       { path: 'memory', name: 'm-memory', component: () => import('@/views/MemoryMobile.vue'), meta: { title: '记忆查看', mobile: true } },
       { path: 'persona', name: 'm-persona', component: () => import('@/views/PersonaMobile.vue'), meta: { title: '人设管理', mobile: true } },

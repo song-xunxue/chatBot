@@ -15,7 +15,7 @@ const title = computed(() => (route.meta.title as string) || '清浔 3.0 管理�
 
 // 底部导航七页(2026-09-08 全页适配):代答置首(手机最高频),与 /m/* 路由一一对应
 const tabs = [
-  { path: '/m/takeover', label: '代答' },
+  { path: '/m/takeover', label: '对话' },
   { path: '/m/history', label: '历史' },
   { path: '/m/memory', label: '记忆' },
   { path: '/m/persona', label: '人设' },

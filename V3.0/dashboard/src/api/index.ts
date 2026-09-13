@@ -137,22 +137,11 @@ export const benchmarkPersona = (oid: string, body: { provider_a: string; provid
 export const exportTraining = (oid: string, body: { min_score?: number } = {}) =>
   api.post(`/api/v1/training/${oid}/export`, body).then((r) => r.data)
 
-// —— 代答 takeover(M8)——
+// —— 对话控制 takeover(2026-09-13 队列删减:AI 静默开关+主动发送)——
 export const toggleTakeover = (oid: string, enabled: boolean) =>
   api.post(`/api/v1/takeover/${oid}/toggle`, { enabled }).then((r) => r.data)
 export const getTakeoverStatus = (oid: string) =>
   api.get(`/api/v1/takeover/${oid}/status`).then((r) => r.data)
-export const listTakeoverQueue = (oid: string) =>
-  api.get(`/api/v1/takeover/${oid}/queue`).then((r) => r.data)
-export const answerTakeover = (oid: string, body: { pid?: string; answer: string }) =>
-  api.post(`/api/v1/takeover/${oid}/answer`, body).then((r) => r.data)
-export const answerTakeoverBatch = (oid: string, items: { pid?: string; answer: string }[]) =>
-  api.post(`/api/v1/takeover/${oid}/answer/batch`, { items }).then((r) => r.data)
-export const skipTakeover = (oid: string, pid?: string) =>
-  api.post(`/api/v1/takeover/${oid}/skip`, { pid }).then((r) => r.data)
-// 一键清空待答队列(逐条归档用户消息到历史后清队,2026-09-07)
-export const clearTakeoverQueue = (oid: string) =>
-  api.post(`/api/v1/takeover/${oid}/queue/clear`).then((r) => r.data)
 export const sendTakeover = (oid: string, content: string) =>
   api.post(`/api/v1/takeover/${oid}/send`, { content }).then((r) => r.data)
 // 代答 TTS 开关(M-tts 2026-08-04:两开关 enable/send_text_also;voice 参数复用 tts_reply 插件 config)

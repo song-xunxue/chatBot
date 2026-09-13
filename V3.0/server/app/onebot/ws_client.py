@@ -273,16 +273,20 @@ async def _handle_event(data: dict) -> None:
     sender = data.get("sender", {}) or {}
     logger.info("收到私聊(onebot) user=%s(%s) msg_id=%s 文本长度=%d 图片=%d",
                 user_id, sender.get("nickname", ""), msg_id, len(text), len(image_urls))
-    # 代答拦截(同 webhook:开启则入 takeover pending 队列,不进 pipeline)
-    from storage import takeover_store
+    # AI 静默判定(2026-09-13 队列删减重构):静默模式(面板开关)或手动静默期内
+    # (手动回复后 TTL 窗口)→ 用户消息直录历史,不触发 LLM——管理员手动回复主场,
+    # 手动 message_sent 落库后与之自然相邻成对;窗口过/开关关则恢复自动回复
+    from storage import takeover_store, chat_store
     from storage.redis_client import get_redis
     redis = await get_redis()
-    if await takeover_store.is_enabled(redis, user_id):
-        # 纯媒体消息(图片/语音/表情)占位入队(审查修复:原空文本入队,归档/合并时丢消息)
-        qtext = _content_or_placeholder(data, text, image_urls)
-        pid = await takeover_store.enqueue(redis, user_id,
-                                           user_text=qtext, msg_id=msg_id)
-        logger.info("代答模式入队(onebot) user=%s pid=%s", user_id, pid)
+    if await takeover_store.is_enabled(redis, user_id) or \
+            await takeover_store.is_silenced(redis, user_id):
+        qtext = _content_or_placeholder(data, text, image_urls)   # 纯媒体占位
+        if qtext:
+            await chat_store.append_message(redis, user_id, sender="user",
+                                            content=qtext, source="live",
+                                            ts=int(time.time() * 1000))
+            logger.info("静默中:用户消息直录(不进 LLM) user=%s", user_id)
         return
     await _schedule_debounce(user_id, text, image_urls, msg_id)
 
@@ -339,11 +343,10 @@ async def _handle_manual_sent(data: dict) -> None:
         from storage.redis_client import get_redis
         redis = await get_redis()
         # 陌生人门控(审查修复):管理员用角色号私聊非用户对象时,不为陌生 oid 凭空建
-        # 会话历史(防误触发面板 ensureOid 自动绑定);有代答开启/待答/已有会话才记录
+        # 会话历史(防误触发面板 ensureOid 自动绑定);有静默开关/已有会话才记录
         if not (await takeover_store.is_enabled(redis, oid)
-                or await takeover_store.queue_length(redis, oid) > 0
                 or await chat_store.has_history(redis, oid)):
-            logger.info("message_sent 跳过(陌生对象:无会话/代答/待答) user=%s", oid)
+            logger.info("message_sent 跳过(陌生对象:无会话) user=%s", oid)
             return
         from takeover import service as takeover_svc
         r = await takeover_svc.record_manual_reply(redis, oid, content, sent_ts=sent_ts)

@@ -72,3 +72,8 @@ V2.0/server/scripts/_tmp_*
 # GPT-SoVITS 工具链(启动器exe+frp+GAG_config,不入库;源码 tts_launcher.py 入库)
 V2.0/tts-tools/
 V3.0/tts-tools/
+
+# 训练产物与运行时缓存(2026-09-13:adapter 权重在本地 outputs/ 永久存档,git 只入脚本;
+# unsloth_compiled_cache 为 unsloth 运行时自动生成的 trainer 快照)
+V3.0/training/outputs/
+V3.0/training/unsloth_compiled_cache/
