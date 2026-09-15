@@ -164,12 +164,12 @@ onMounted(async () => {
           <n-collapse>
             <n-collapse-item :title="`逐条样本(${benchResult.samples.length})`" name="s">
               <div v-for="(s, i) in benchResult.samples" :key="i" class="m-sample">
-                <div style="color:#888">用户:{{ s.user }}</div>
-                <div class="m-sample-side" style="background:#f6ffed">
+                <div style="color:var(--text-dim)">用户:{{ s.user }}</div>
+                <div class="m-sample-side" style="background:var(--accent-dim)">
                   <n-tag size="tiny" :type="s.a.score !== null ? 'success' : 'error'">{{ benchResult.a.provider }} {{ s.a.score ?? '失败' }}</n-tag>
                   <div>{{ s.a.reply }}</div>
                 </div>
-                <div class="m-sample-side" style="background:#e8f1ff">
+                <div class="m-sample-side" style="background:var(--bubble-bot)">
                   <n-tag size="tiny" :type="s.b.score !== null ? 'success' : 'error'">{{ benchResult.b.provider }} {{ s.b.score ?? '失败' }}</n-tag>
                   <div>{{ s.b.reply }}</div>
                 </div>
@@ -247,23 +247,23 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
 }
 .m-hint {
   font-size: 11px;
-  color: #999;
+  color: var(--text-dim);
 }
 .m-danger {
-  color: #d03050;
+  color: var(--danger);
 }
 .m-danger-text {
-  color: #d03050;
+  color: var(--danger);
   font-size: 13px;
 }
 .m-sample {
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
   margin: 4px 0;

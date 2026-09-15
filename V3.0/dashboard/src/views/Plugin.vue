@@ -168,14 +168,14 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
             <n-button size="small" :loading="statusLoading" @click="loadStatus({ force: true })">
               重新检测（强制探测）
             </n-button>
-            <span style="font-size:12px;color:#999" v-if="ttsStatus?.source === 'heartbeat'">心跳缓存命中（未探测隧道）</span>
-            <span style="font-size:12px;color:#999" v-else-if="ttsStatus?.source === 'probe'">主动探测</span>
+            <span style="font-size:12px;color:var(--text-dim)" v-if="ttsStatus?.source === 'heartbeat'">心跳缓存命中（未探测隧道）</span>
+            <span style="font-size:12px;color:var(--text-dim)" v-else-if="ttsStatus?.source === 'probe'">主动探测</span>
           </n-space>
           <div style="font-size:13px;line-height:1.8">
             <div>api_base：{{ ttsStatus?.api_base || '-' }}</div>
             <div>状态：{{ ttsStatus?.detail || '-' }}</div>
             <div v-if="ttsStatus?.reachable">延迟：{{ ttsStatus?.latency_ms ?? '-' }} ms</div>
-            <div v-if="ttsStatus?.missing?.length" style="color:#a08400">
+            <div v-if="ttsStatus?.missing?.length" style="color:var(--warning)">
               配置缺失：{{ ttsStatus.missing.join('、') }}
             </div>
           </div>
@@ -188,17 +188,17 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
     <n-card title="插件列表(原生 + .star)" size="small">
       <n-empty v-if="!plugins.length" description="无已加载插件" />
       <div v-for="p in plugins" :key="p.name + p.type"
-           style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f0f0f0">
+           style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bubble-sys)">
         <n-tag :type="p.type === 'star' ? 'warning' : 'info'" size="small">{{ p.type }}</n-tag>
         <span style="font-weight:600;min-width:120px">{{ p.display_name || p.name }}</span>
-        <span style="color:#999;font-size:12px;flex:1">{{ p.description || '' }}</span>
+        <span style="color:var(--text-dim);font-size:12px;flex:1">{{ p.description || '' }}</span>
         <n-switch v-if="p.type === 'native'" :value="!!p.enabled" @update:value="() => toggle(p)" />
         <n-button size="tiny" @click="reload(p)">重载</n-button>
       </div>
     </n-card>
 
     <n-card v-if="pluginsWithConfig.length" title="插件参数配置" size="small">
-      <span style="color:#999;font-size:12px">展开配置各插件参数(音色/语速/gain/开关等),改完点保存。</span>
+      <span style="color:var(--text-dim);font-size:12px">展开配置各插件参数(音色/语速/gain/开关等),改完点保存。</span>
       <n-collapse style="margin-top:8px">
         <n-collapse-item v-for="p in pluginsWithConfig" :key="p.name" :name="p.name"
                          :title="`${p.display_name || p.name} 参数`">
@@ -220,7 +220,7 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
                           :options="spec.options" style="width:220px" />
                 <n-input v-else-if="spec.type === 'string'"
                          v-model:value="paramsMap[p.name][String(key)]" style="width:220px" />
-                <span v-if="spec.description" style="font-size:11px;color:#bbb;line-height:1.3">{{ spec.description }}</span>
+                <span v-if="spec.description" style="font-size:11px;color:var(--text-faint);line-height:1.3">{{ spec.description }}</span>
               </div>
             </n-form-item>
           </n-form>

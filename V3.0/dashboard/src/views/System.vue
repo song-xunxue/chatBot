@@ -104,7 +104,7 @@ onMounted(async () => { await ensureOid(); await load() })
   <n-space vertical size="large">
     <n-space align="center">
       <n-button type="primary" :loading="reloading" @click="reload">重载配置</n-button>
-      <span style="color:#999;font-size:12px">改服务器 .env 后点击,新配置即时生效(不重启进程、不断连)</span>
+      <span style="color:var(--text-dim);font-size:12px">改服务器 .env 后点击,新配置即时生效(不重启进程、不断连)</span>
     </n-space>
     <n-spin :show="loading">
       <n-card title="LLM Provider 配置状态">
@@ -120,7 +120,7 @@ onMounted(async () => { await ensureOid(); await load() })
               {{ p.available ? '可用' : '不可用' }}
             </n-tag>
           </div>
-          <span style="color:#999;font-size:12px">共 {{ config.available.length }} 个 provider 可用(评分/反推/记忆编码会自动选用)</span>
+          <span style="color:var(--text-dim);font-size:12px">共 {{ config.available.length }} 个 provider 可用(评分/反推/记忆编码会自动选用)</span>
         </n-space>
       </n-card>
     </n-spin>
@@ -129,12 +129,12 @@ onMounted(async () => { await ensureOid(); await load() })
       <n-space vertical size="medium">
         <n-space align="center" :wrap="false">
           <n-select v-model:value="benchA" :options="providerOptions" size="small" style="width:150px" />
-          <span style="font-size:12px;color:#666">vs</span>
+          <span style="font-size:12px;color:var(--text-dim)">vs</span>
           <n-select v-model:value="benchB" :options="providerOptions" size="small" style="width:150px" />
           <n-input-number v-model:value="benchN" :min="1" :max="30" size="small" style="width:100px" />
           <n-button type="primary" size="small" :loading="benchRunning" @click="runBenchmark">开始盲测</n-button>
         </n-space>
-        <span style="color:#999;font-size:12px">
+        <span style="color:var(--text-dim);font-size:12px">
           取最近 N 条用户消息做上下文,两个 provider 各生成一遍,由固定裁判(云端评分链路)对照人设打分。
           本地 provider 经 frp 生成较慢,N=20 约需数分钟,请耐心等待。微调前后同法对比即可量化人设增益。
         </span>
@@ -149,14 +149,14 @@ onMounted(async () => { await ensureOid(); await load() })
           <n-collapse>
             <n-collapse-item :title="`逐条样本(${benchResult.samples.length})`" name="s">
               <div v-for="(s, i) in benchResult.samples" :key="i"
-                   style="border:1px solid #eee;border-radius:6px;padding:8px;margin:4px 0;font-size:12px">
-                <div style="color:#888">用户:{{ s.user }}</div>
+                   style="border:1px solid var(--border);border-radius:6px;padding:8px;margin:4px 0;font-size:12px">
+                <div style="color:var(--text-dim)">用户:{{ s.user }}</div>
                 <div style="display:flex;gap:8px;margin-top:4px">
-                  <div style="flex:1;background:#f6ffed;border-radius:4px;padding:4px 8px">
+                  <div style="flex:1;background:var(--accent-dim);border-radius:4px;padding:4px 8px">
                     <n-tag size="tiny" :type="s.a.score !== null ? 'success' : 'error'">{{ benchResult.a.provider }} {{ s.a.score ?? '失败' }}</n-tag>
                     <div style="margin-top:2px">{{ s.a.reply }}</div>
                   </div>
-                  <div style="flex:1;background:#e8f1ff;border-radius:4px;padding:4px 8px">
+                  <div style="flex:1;background:var(--bubble-bot);border-radius:4px;padding:4px 8px">
                     <n-tag size="tiny" :type="s.b.score !== null ? 'success' : 'error'">{{ benchResult.b.provider }} {{ s.b.score ?? '失败' }}</n-tag>
                     <div style="margin-top:2px">{{ s.b.reply }}</div>
                   </div>
@@ -176,7 +176,7 @@ onMounted(async () => { await ensureOid(); await load() })
           <n-input-number v-model:value="exportMinScore" :min="0" :max="100" size="small" style="width:100px" />
           <n-button type="primary" size="small" :loading="exporting" @click="doExport">导出训练数据</n-button>
         </n-space>
-        <span style="color:#999;font-size:12px">
+        <span style="color:var(--text-dim);font-size:12px">
           从评分系统导出:pos 高分回复 / 手动回复 / 纠正回复 / 高分训练剧本 → SFT 集;纠正功能天然产出 DPO 偏好对
           (chosen=纠正文本,rejected=原回复)。LLaMA-Factory 格式 JSONL,写入服务器 server/data/training/。
         </span>
@@ -185,7 +185,7 @@ onMounted(async () => { await ensureOid(); await load() })
           <n-tag type="info">DPO {{ exportResult.dpo }} 对</n-tag>
           <n-tag v-for="(v, k) in exportResult.by_source" :key="k" size="small">{{ k }}: {{ v }}</n-tag>
         </n-space>
-        <div v-if="exportResult" style="font-size:11px;color:#999;word-break:break-all">
+        <div v-if="exportResult" style="font-size:11px;color:var(--text-dim);word-break:break-all">
           {{ exportResult.files.join(' ; ') }}
         </div>
       </n-space>
@@ -193,8 +193,8 @@ onMounted(async () => { await ensureOid(); await load() })
 
     <n-card title="危险操作">
       <n-space vertical size="large">
-        <span style="color:#999;font-size:12px">
-          清空所有运行时数据(对话历史/训练样本/记忆/评分/mood值/代答队列),保留人设 + 心情档位 + 插件开关。<b style="color:#d03050">不可恢复</b>。
+        <span style="color:var(--text-dim);font-size:12px">
+          清空所有运行时数据(对话历史/训练样本/记忆/评分/mood值/代答队列),保留人设 + 心情档位 + 插件开关。<b style="color:var(--danger)">不可恢复</b>。
         </span>
         <n-button type="error" @click="openReset">清空所有数据</n-button>
       </n-space>
@@ -203,7 +203,7 @@ onMounted(async () => { await ensureOid(); await load() })
     <!-- 清空确认弹窗(输入"清空"二次确认) -->
     <n-modal v-model:show="resetShow" preset="card" title="清空所有数据(危险操作)" style="width:480px;max-width:92vw">
       <n-space vertical :size="12">
-        <div style="color:#d03050;font-size:13px">
+        <div style="color:var(--danger);font-size:13px">
           将清空:对话历史 / 训练样本 / 四级记忆 / 评分样本 / mood值+历史 / 代答队列。保留:人设 / 心情档位 / 插件开关。<b>不可恢复</b>。
         </div>
         <n-input v-model:value="resetConfirm" placeholder='输入"清空"二字确认' autofocus />

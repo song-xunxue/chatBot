@@ -363,7 +363,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
     </div>
 
     <!-- oid 未绑定提示(照 TakeoverMobile:V3.0 oid 须为 QQ 号) -->
-    <div v-if="!oid || oid === 'default'" class="m-hint" style="color:#d03050">
+    <div v-if="!oid || oid === 'default'" class="m-hint" style="color:var(--danger)">
       oid 未绑定真实会话(V3.0 须为 QQ 号):先在 QQ 上与角色对话一次即可自动绑定
     </div>
 
@@ -377,7 +377,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
         <div v-for="m in messages" :key="m.mid"
              :style="{ display:'flex', justifyContent: m.sender === 'user' ? 'flex-end' : 'flex-start', margin:'4px 0' }">
           <div class="m-bubble"
-               :style="{ background: m.sender === 'user' ? '#DCF8C6' : (m.sender === 'system' ? '#f0f0f0' : '#E8F1FF') }">
+               :style="{ background: m.sender === 'user' ? 'var(--bubble-user)' : (m.sender === 'system' ? 'var(--bubble-sys)' : 'var(--bubble-bot)') }">
             <div class="m-meta">
               <span class="m-sender">{{ senderLabel(m) }} · {{ fmtTs(m.ts) }}</span>
               <n-tag v-if="m.score !== '' && m.score !== undefined && m.score !== null" size="tiny"
@@ -409,7 +409,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
                      :type="(health.avg_score || 0) >= 70 ? 'success' : ((health.avg_score || 0) >= 50 ? 'warning' : 'error')">
                 均分 {{ health?.avg_score ?? '—' }} / {{ health?.count ?? 0 }} 条
               </n-tag>
-              <span v-if="health && (health.avg_score || 0) < 60 && health.count > 0" style="color:#d03050; font-size:12px">
+              <span v-if="health && (health.avg_score || 0) < 60 && health.count > 0" style="color:var(--danger); font-size:12px">
                 ⚠ 人设可能跑偏
               </span>
             </n-space>
@@ -459,7 +459,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
         <div v-for="m in messages" :key="m.mid"
              :style="{ display:'flex', justifyContent: m.role === 'user' ? 'flex-end' : (m.role === 'system' ? 'center' : 'flex-start'), margin:'4px 0' }">
           <div class="m-bubble"
-               :style="{ background: m.role === 'user' ? '#DCF8C6' : (m.role === 'system' ? '#f0f0f0' : '#E8F1FF') }">
+               :style="{ background: m.role === 'user' ? 'var(--bubble-user)' : (m.role === 'system' ? 'var(--bubble-sys)' : 'var(--bubble-bot)') }">
             <div class="m-meta">
               <n-tag size="tiny" :type="m.role === 'assistant' ? 'info' : (m.role === 'system' ? 'warning' : 'success')">{{ senderLabel(m) }}</n-tag>
               <n-tag v-if="m.score !== '' && m.score !== undefined && m.score !== null" size="tiny"
@@ -594,10 +594,10 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
-  background: #fafafa;
+  background: var(--card-2);
 }
 .m-stream {
   max-height: 62vh;
@@ -609,7 +609,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
   max-width: 85%;
   padding: 8px 12px;
   border-radius: 10px;
-  color: #222;
+  color: var(--text);
 }
 .m-meta {
   display: flex;
@@ -620,7 +620,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
 }
 .m-sender {
   font-size: 11px;
-  color: #888;
+  color: var(--text-dim);
 }
 .m-content {
   word-break: break-all;
@@ -628,14 +628,14 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
 }
 .m-note {
   font-size: 11px;
-  color: #888;
+  color: var(--text-dim);
   font-style: italic;
   margin-top: 2px;
 }
 .m-corrected {
   font-size: 11px;
-  color: #2a7de1;
-  background: #f0f7ff;
+  color: var(--info);
+  background: var(--info-dim);
   border-radius: 4px;
   padding: 3px 6px;
   margin-top: 3px;
@@ -644,10 +644,10 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
 .m-summary {
   cursor: pointer;
   font-size: 12px;
-  color: #666;
+  color: var(--text-dim);
 }
 .m-pre {
-  background: #f5f5f5;
+  background: var(--card-2);
   padding: 8px;
   max-height: 180px;
   overflow: auto;
@@ -664,16 +664,16 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
   word-break: break-all;
 }
 .m-sample.pos {
-  background: #f6ffed;
+  background: var(--accent-dim);
 }
 .m-sample.neg {
-  background: #fff2f0;
+  background: var(--danger-dim);
 }
 .m-inputbar {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid #efeff5;
+  border-top: 1px solid var(--border);
   padding-top: 10px;
 }
 .m-picker-list {
@@ -682,22 +682,22 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
   -webkit-overflow-scrolling: touch;
 }
 .m-block-item {
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
   margin-bottom: 6px;
   cursor: pointer;
 }
 .m-block-item.active {
-  background: #e8f1ff;
-  border-color: #b6d4ff;
+  background: var(--bubble-bot);
+  border-color: var(--accent);
 }
 .m-block-sub {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
-  color: #999;
+  color: var(--text-dim);
   margin-top: 2px;
 }
 .m-label {
@@ -705,6 +705,6 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
 }
 .m-hint {
   font-size: 11px;
-  color: #999;
+  color: var(--text-dim);
 }
 </style>

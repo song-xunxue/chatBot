@@ -21,6 +21,7 @@ import {
   listMoodKinds, upsertMoodKind, deleteMoodKind,
   getMoodParams, setMoodParams, getMood, setMood, getMoodHistory, moodCalc,
 } from '@/api'
+import { CHART, darkChartScales } from '@/styles/darkChart'
 import { useObject } from '@/composables/useObject'
 
 ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale)
@@ -39,7 +40,7 @@ async function loadKinds() {
 }
 function startEdit(k?: any) {
   editing.value = k ? { ...k } : { key: '', label: '', mood_lo: 0, mood_hi: 1, kaomoji: '',
-    prompt_hint: '', color: '#CCCCCC', score_bias: 0, bias_noise: 3, sort: 99 }
+    prompt_hint: '', color: 'var(--text-faint)', score_bias: 0, bias_noise: 3, sort: 99 }
   showEdit.value = true
 }
 function closeEdit() { showEdit.value = false; editing.value = null }
@@ -84,10 +85,10 @@ async function applySetMood() {
 }
 const lineData = computed(() => ({
   labels: moodHistory.value.map((_, i) => `${i + 1}`),
-  datasets: [{ label: 'mood', borderColor: '#36a3eb', backgroundColor: '#36a3eb33',
+  datasets: [{ label: 'mood', borderColor: CHART.accent, backgroundColor: CHART.accentFill,
                data: moodHistory.value.map((h) => h.mood), tension: 0.3 }],
 }))
-const lineOptions = { responsive: true, scales: { y: { min: 0, max: 1 } }, plugins: { legend: { display: false } } }
+const lineOptions = { responsive: true, scales: { x: darkChartScales.x, y: { ...darkChartScales.y, min: 0, max: 1 } }, plugins: { legend: { display: false } } }
 
 // —— 评分试算器 ——
 const calcBase = ref(80)
@@ -123,7 +124,7 @@ onMounted(async () => {
       <!-- 1. 实时监控(移动端置顶,最高频) -->
       <n-tab-pane name="monitor" tab="📊 监控">
         <n-space vertical size="medium">
-          <div v-if="!oid || oid === 'default'" class="m-hint" style="color:#d03050">
+          <div v-if="!oid || oid === 'default'" class="m-hint" style="color:var(--danger)">
             oid 未绑定真实会话(V3.0 须为 QQ 号):先在 QQ 上与角色对话一次即可自动绑定
           </div>
           <n-card title="当前心情">
@@ -139,7 +140,7 @@ onMounted(async () => {
               <!-- 心情值进度条(0-1,竖线为中性点 0.5):窄屏替代性可视化,与曲线互补 -->
               <div class="m-mood-bar">
                 <div class="m-mood-bar-fill"
-                     :style="{ width: (moodInfo.mood * 100) + '%', background: (moodInfo.kind && moodInfo.kind.color) || '#36a3eb' }" />
+                     :style="{ width: (moodInfo.mood * 100) + '%', background: (moodInfo.kind && moodInfo.kind.color) || 'var(--info)' }" />
                 <span class="m-mood-neutral" />
               </div>
               <div class="m-hint">会话 {{ oid }};竖线为中性点 0.5,左低落右开心</div>
@@ -281,8 +282,8 @@ onMounted(async () => {
             <n-input v-model:value="editing.prompt_hint" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" placeholder="如 语气轻快,多用感叹号" />
           </div>
           <div>
-            <div class="m-label">颜色(如 #36a3eb)</div>
-            <n-input v-model:value="editing.color" placeholder="#CCCCCC" />
+            <div class="m-label">颜色(如 var(--info))</div>
+            <n-input v-model:value="editing.color" placeholder="var(--text-faint)" />
           </div>
           <n-space>
             <n-button type="primary" size="large" style="flex:1" @click="saveKind">保存</n-button>
@@ -306,18 +307,18 @@ onMounted(async () => {
 }
 .m-label {
   font-size: 13px;
-  color: #333;
+  color: var(--text);
   margin-bottom: 4px;
 }
 .m-hint {
   font-size: 11px;
-  color: #999;
+  color: var(--text-dim);
 }
 .m-kind-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
   cursor: pointer;
@@ -338,12 +339,12 @@ onMounted(async () => {
 }
 .m-kind-key {
   font-size: 11px;
-  color: #999;
+  color: var(--text-dim);
   margin-left: 4px;
 }
 .m-kind-sub {
   font-size: 12px;
-  color: #888;
+  color: var(--text-dim);
   margin-top: 2px;
 }
 .m-mood-row {
@@ -356,7 +357,7 @@ onMounted(async () => {
   position: relative;
   height: 10px;
   border-radius: 5px;
-  background: #eee;
+  background: var(--border);
   margin: 4px 0;
 }
 .m-mood-bar-fill {
@@ -370,7 +371,7 @@ onMounted(async () => {
   top: -2px;
   height: 14px;
   width: 1px;
-  background: #999;
+  background: var(--text-dim);
 }
 .m-calc-result {
   display: flex;

@@ -90,7 +90,7 @@ onUnmounted(() => {})
             {{ enabled ? '静默中(AI 不自动回复,全手动)' : '自动回复中(AI 正常)' }}
           </n-tag>
         </n-space>
-        <span style="font-size:12px;color:#999">
+        <span style="font-size:12px;color:var(--text-dim)">
           关(默认)= AI 自动回复;你用清浔 QQ 手动回复后,AI 自动静默 10 分钟(手动聊天不打扰),过后恢复。<br />
           开 = AI 完全不自动回复,由你经 QQ 手动回复或下方「主动发送」触达。
         </span>
@@ -104,8 +104,8 @@ onUnmounted(() => {})
                    style="width:520px" @keyup.enter="sendProactive" />
           <n-button type="primary" :disabled="!oid || oid === 'default'" @click="sendProactive">发送</n-button>
         </n-space>
-        <span style="font-size:12px;color:#999">落 proxy 消息进历史 + 下发 QQ。静默与否均可使用。</span>
-        <div v-if="!oid || oid === 'default'" style="font-size:12px;color:#d03050">
+        <span style="font-size:12px;color:var(--text-dim)">落 proxy 消息进历史 + 下发 QQ。静默与否均可使用。</span>
+        <div v-if="!oid || oid === 'default'" style="font-size:12px;color:var(--danger)">
           oid 未绑定真实会话(V3.0 须为 QQ 号):先在 QQ 上与角色对话一次,或头部 oid 框手填用户 QQ 号后回车
         </div>
       </n-space>
@@ -120,9 +120,9 @@ onUnmounted(() => {})
         </n-space>
         <n-space align="center">
           <n-switch :value="ttsSendTextAlso" :disabled="!ttsEnable" @update:value="onTtsSendText" />
-          <span style="font-size:13px;color:#666">同时发文本(关=只发语音;开=先文本后语音)</span>
+          <span style="font-size:13px;color:var(--text-dim)">同时发文本(关=只发语音;开=先文本后语音)</span>
         </n-space>
-        <div style="font-size:12px;color:#999">音色/语速等取自「插件 → 语音回复」配置(同一 bot 音色)。语音发送失败自动降级文本。</div>
+        <div style="font-size:12px;color:var(--text-dim)">音色/语速等取自「插件 → 语音回复」配置(同一 bot 音色)。语音发送失败自动降级文本。</div>
       </n-space>
     </n-card>
   </n-space>

@@ -205,7 +205,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
 <template>
   <div style="display:flex; height:calc(100vh - 92px)">
     <!-- 左栏:训练会话列表 -->
-    <div style="width:220px; border-right:1px solid #efeff5; overflow:auto; padding:8px; flex-shrink:0">
+    <div style="width:220px; border-right:1px solid var(--border); overflow:auto; padding:8px; flex-shrink:0">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
         <span style="font-weight:600; font-size:13px">训练会话</span>
         <n-button size="tiny" type="primary" ghost @click="newSession">+新建</n-button>
@@ -214,12 +214,12 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <div v-for="s in sessions" :key="s.block_id"
            @click="selectSession(s)"
            :style="{ padding:'8px 10px', borderRadius:'8px', cursor:'pointer', marginBottom:'4px',
-             background: s.block_id === activeBlockId ? '#e8f1ff' : 'transparent' }">
+             background: s.block_id === activeBlockId ? 'var(--bubble-bot)' : 'transparent' }">
         <div style="display:flex; align-items:center; justify-content:space-between">
           <span style="font-weight:600; font-size:13px">{{ fmtTs(s.start_ts) }}</span>
           <n-tag size="tiny" :type="s.status === 'open' ? 'success' : 'default'">{{ s.status === 'open' ? '进行中' : '已结束' }}</n-tag>
         </div>
-        <div style="font-size:11px; color:#999; margin-top:2px; display:flex; justify-content:space-between; align-items:center">
+        <div style="font-size:11px; color:var(--text-dim); margin-top:2px; display:flex; justify-content:space-between; align-items:center">
           <span>{{ relTs(s.start_ts) }} · {{ s.msg_count }} 条</span>
           <n-popconfirm @positive-click="delSession(s)">
             <template #trigger>
@@ -234,9 +234,9 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
     <!-- 主区:对话流 + 录入 -->
     <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; padding-left:16px; min-width:0">
       <!-- 抽取为记忆工具栏(2026-07-07):roleplay → long_term,绕过 QQ 对话直接造记忆 -->
-      <div style="flex-shrink:0; padding:6px 8px; border-bottom:1px solid #efeff5; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+      <div style="flex-shrink:0; padding:6px 8px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-wrap:wrap">
         <n-button size="small" type="warning" ghost :loading="extracting" :disabled="!activeBlockId" @click="extract()">抽取当前会话为记忆</n-button>
-        <span style="font-size:11px; color:#999">把本会话训练样本抽成长期记忆(过滤 system 旁白 + 防幻觉铁律),不经过 QQ 对话直接造记忆。重复点靠语义去重兜底。</span>
+        <span style="font-size:11px; color:var(--text-dim)">把本会话训练样本抽成长期记忆(过滤 system 旁白 + 防幻觉铁律),不经过 QQ 对话直接造记忆。重复点靠语义去重兜底。</span>
       </div>
       <!-- 对话流 -->
       <div ref="streamEl" style="flex:1; overflow:auto; padding:8px; min-height:0">
@@ -244,8 +244,8 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
         <div v-for="m in messages" :key="m.mid"
              :style="{ display:'flex', justifyContent: m.role === 'user' ? 'flex-end' : (m.role === 'system' ? 'center' : 'flex-start'), margin:'4px 0' }">
           <div :style="{ maxWidth:'72%', padding:'6px 10px', borderRadius:'10px',
-            background: m.role === 'user' ? '#DCF8C6' : (m.role === 'system' ? '#f0f0f0' : '#E8F1FF'), color:'#222' }">
-            <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:6px; flex-wrap:wrap">
+            background: m.role === 'user' ? 'var(--bubble-user)' : (m.role === 'system' ? 'var(--bubble-sys)' : 'var(--bubble-bot)'), color:'var(--text)' }">
+            <div style="font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:6px; flex-wrap:wrap">
               <n-tag size="tiny" :type="m.role === 'assistant' ? 'info' : (m.role === 'system' ? 'warning' : 'success')">{{ m.role }}</n-tag>
               <n-tag v-if="m.score !== '' && m.score !== undefined && m.score !== null" size="tiny"
                      :type="Number(m.score) >= 85 ? 'success' : (Number(m.score) < 60 ? 'error' : 'default')">分 {{ m.score }}</n-tag>
@@ -263,7 +263,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       </div>
 
       <!-- 录入区 -->
-      <div style="flex-shrink:0; border-top:1px solid #efeff5; padding-top:8px">
+      <div style="flex-shrink:0; border-top:1px solid var(--border); padding-top:8px">
         <n-space align="center" :wrap="false">
           <n-select v-model:value="role" :options="roleOptions" style="width:200px" />
           <n-input v-model:value="content" placeholder="输入内容,回车追加到对话流..." style="flex:1" @keyup.enter="add" />
@@ -271,7 +271,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
                           placeholder="角色回复分数(可空)" style="width:150px" clearable />
           <n-button type="primary" @click="add">追加</n-button>
         </n-space>
-        <div style="font-size:11px; color:#999; margin-top:4px">
+        <div style="font-size:11px; color:var(--text-dim); margin-top:4px">
           选"角色"时可填分数(0-100):≥85 作反推正样本(加强人设),&lt;60 作负样本(纠正人设),留空则不评分。
         </div>
       </div>
@@ -280,7 +280,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
     <!-- 改分弹窗 -->
     <n-modal v-model:show="scoreShow" preset="dialog" title="改 roleplay 评分">
       <n-space vertical>
-        <span style="font-size:12px; color:#999">覆盖该角色回复的分数(联动反推样本队列:高分正样本/低分负样本)</span>
+        <span style="font-size:12px; color:var(--text-dim)">覆盖该角色回复的分数(联动反推样本队列:高分正样本/低分负样本)</span>
         <n-input-number v-model:value="scoreVal" :min="0" :max="100" />
       </n-space>
       <template #action>

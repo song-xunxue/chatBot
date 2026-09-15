@@ -16,6 +16,7 @@ import {
   listMoodKinds, upsertMoodKind, deleteMoodKind,
   getMoodParams, setMoodParams, getMood, setMood, getMoodHistory, moodCalc,
 } from '@/api'
+import { CHART, darkChartScales } from '@/styles/darkChart'
 
 ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale)
 
@@ -29,7 +30,7 @@ const editing = ref<any | null>(null)
 async function loadKinds() { kinds.value = await listMoodKinds() }
 function startEdit(k?: any) {
   editing.value = k ? { ...k } : { key: '', label: '', mood_lo: 0, mood_hi: 1, kaomoji: '',
-    prompt_hint: '', color: '#CCCCCC', score_bias: 0, bias_noise: 3, sort: 99 }
+    prompt_hint: '', color: 'var(--text-faint)', score_bias: 0, bias_noise: 3, sort: 99 }
 }
 async function saveKind() {
   try { await upsertMoodKind(editing.value); message.success('档位已保存'); editing.value = null; await loadKinds() }
@@ -72,10 +73,10 @@ async function applySetMood() {
 }
 const lineData = computed(() => ({
   labels: moodHistory.value.map((_, i) => `${i + 1}`),
-  datasets: [{ label: 'mood', borderColor: '#36a3eb', backgroundColor: '#36a3eb33',
+  datasets: [{ label: 'mood', borderColor: CHART.accent, backgroundColor: CHART.accentFill,
                data: moodHistory.value.map((h) => h.mood), tension: 0.3 }],
 }))
-const lineOptions = { responsive: true, scales: { y: { min: 0, max: 1 } }, plugins: { legend: { display: false } } }
+const lineOptions = { responsive: true, scales: { x: darkChartScales.x, y: { ...darkChartScales.y, min: 0, max: 1 } }, plugins: { legend: { display: false } } }
 
 // —— 评分试算器 ——
 const calcBase = ref(80)
@@ -209,7 +210,7 @@ loadKinds(); loadParams()
               {{ calcResult.score }}
             </n-tag>
           </n-space>
-          <span style="color:#999;font-size:12px">试算 = score_base + mood_bias(档位 score_bias 多次采样均值),调档位参数前可预演</span>
+          <span style="color:var(--text-dim);font-size:12px">试算 = score_base + mood_bias(档位 score_bias 多次采样均值),调档位参数前可预演</span>
         </n-space>
       </n-card>
     </n-tab-pane>

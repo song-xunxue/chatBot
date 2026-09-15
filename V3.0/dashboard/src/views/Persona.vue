@@ -172,7 +172,7 @@ onMounted(() => { load(); loadProviders() })
     <n-space vertical size="large">
       <n-space align="center">
         <span style="font-weight:600">编辑人设</span>
-        <span style="color:#999;font-size:12px">单人设模式</span>
+        <span style="color:var(--text-dim);font-size:12px">单人设模式</span>
         <n-button @click="load" :loading="loading">刷新</n-button>
       </n-space>
       <n-form v-if="persona" label-placement="top" style="max-width:720px">
@@ -183,7 +183,7 @@ onMounted(() => { load(); loadProviders() })
         <!-- 长文本字段:大预览(只读整宽 rows=3) + 展开编辑按钮 -->
         <n-form-item v-for="lf in LONG_FIELDS" :key="lf.field" :label="lf.label">
           <div style="width:100%">
-            <div style="font-size:12px;color:#999;margin-bottom:6px">{{ lf.hint }}</div>
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">{{ lf.hint }}</div>
             <n-input :value="(form as any)[lf.field]" type="textarea" :rows="3" readonly
                      placeholder="(空)" style="width:100%" />
             <div style="text-align:right;margin-top:6px">
@@ -208,7 +208,7 @@ onMounted(() => { load(); loadProviders() })
           <n-button type="primary" :loading="saving" @click="save">保存</n-button>
           <!-- B-5b 人设反推入口 -->
           <n-button :loading="reverseLoading" @click="doReverseDryRun">人设反推(基于评分样本)</n-button>
-          <span style="color:#999;font-size:12px">会话: {{ oid }}</span>
+          <span style="color:var(--text-dim);font-size:12px">会话: {{ oid }}</span>
         </n-space>
       </n-form>
       <n-empty v-else description="无人设" />
@@ -229,28 +229,28 @@ onMounted(() => { load(); loadProviders() })
   <!-- B-5b 反推 diff 预览弹窗 -->
   <n-modal v-model:show="reverseShow" preset="card" title="人设反推预览(评分样本驱动)" style="width:820px;max-width:94vw">
     <n-space vertical :size="12" v-if="reverseResult">
-      <div style="font-size:13px;color:#666">
+      <div style="font-size:13px;color:var(--text-dim)">
         正样本 {{ reverseResult.positive_count || 0 }} 条 / 负样本 {{ reverseResult.negative_count || 0 }} 条
-        <span style="color:#999;margin-left:8px">(token 10 分钟内有效,应用后即消费)</span>
+        <span style="color:var(--text-dim);margin-left:8px">(token 10 分钟内有效,应用后即消费)</span>
       </div>
       <n-empty v-if="!reverseResult.diff || !Object.keys(reverseResult.diff).length"
                description="无字段需要变更(字段已填或样本不足)" />
       <div v-else>
         <div v-for="(d, field) in reverseResult.diff" :key="field"
-             style="margin-bottom:14px;padding:10px;border:1px solid #eee;border-radius:6px">
+             style="margin-bottom:14px;padding:10px;border:1px solid var(--border);border-radius:6px">
           <n-space align="center" :size="8">
             <n-tag type="info">{{ fieldLabels[field as string] || (field as string) }}</n-tag>
-            <span style="font-size:12px;color:#999">{{ field }}</span>
+            <span style="font-size:12px;color:var(--text-dim)">{{ field }}</span>
           </n-space>
           <div style="margin-top:8px;display:flex;gap:12px;font-size:13px">
             <div style="flex:1">
-              <div style="color:#999;margin-bottom:4px">旧值</div>
-              <div style="background:#fafafa;padding:6px 8px;border-radius:4px;white-space:pre-wrap;min-height:24px">{{ d.old || '(空)' }}</div>
+              <div style="color:var(--text-dim);margin-bottom:4px">旧值</div>
+              <div style="background:var(--card-2);padding:6px 8px;border-radius:4px;white-space:pre-wrap;min-height:24px">{{ d.old || '(空)' }}</div>
             </div>
-            <div style="display:flex;align-items:center;color:#999">→</div>
+            <div style="display:flex;align-items:center;color:var(--text-dim)">→</div>
             <div style="flex:1">
-              <div style="color:#999;margin-bottom:4px">新值</div>
-              <div style="background:#f0f9eb;padding:6px 8px;border-radius:4px;white-space:pre-wrap">{{ d.new }}</div>
+              <div style="color:var(--text-dim);margin-bottom:4px">新值</div>
+              <div style="background:var(--accent-dim);padding:6px 8px;border-radius:4px;white-space:pre-wrap">{{ d.new }}</div>
             </div>
           </div>
         </div>

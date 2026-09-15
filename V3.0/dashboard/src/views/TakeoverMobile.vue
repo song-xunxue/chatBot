@@ -104,7 +104,7 @@ onUnmounted(() => {})
           :autosize="{ minRows: 2, maxRows: 6 }"
         />
         <n-button type="primary" size="large" block :disabled="!oid || oid === 'default'" @click="sendProactive">发送</n-button>
-        <div v-if="!oid || oid === 'default'" class="m-hint" style="color:#d03050">
+        <div v-if="!oid || oid === 'default'" class="m-hint" style="color:var(--danger)">
           oid 未绑定真实会话:先在 QQ 上与角色对话一次即可自动绑定
         </div>
       </n-space>
@@ -119,7 +119,7 @@ onUnmounted(() => {})
           </n-space>
           <n-space align="center">
             <n-switch :value="ttsSendTextAlso" :disabled="!ttsEnable" @update:value="onTtsSendText" />
-            <span class="m-label" style="color:#666">同时发文本(关=只发语音;开=先文本后语音)</span>
+            <span class="m-label" style="color:var(--text-dim)">同时发文本(关=只发语音;开=先文本后语音)</span>
           </n-space>
           <div class="m-hint">音色/语速等取自「插件 → 语音回复」配置。语音失败自动降级文本。</div>
         </n-space>
@@ -143,6 +143,6 @@ onUnmounted(() => {})
 }
 .m-hint {
   font-size: 11px;
-  color: #999;
+  color: var(--text-dim);
 }
 </style>

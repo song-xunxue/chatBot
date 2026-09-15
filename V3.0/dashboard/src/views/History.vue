@@ -20,6 +20,7 @@ import {
   newRoleplaySession, deleteRoleplaySession, listPersonas,
 } from '@/api'
 import { useObject } from '@/composables/useObject'
+import { CHART, darkChartScales } from '@/styles/darkChart'
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 
@@ -78,11 +79,11 @@ const chartData = computed(() => ({
   labels: ['正样本', '中性', '负样本'],
   datasets: [{
     label: '计数',
-    backgroundColor: ['#18a058', '#909399', '#d03050'],
+    backgroundColor: [CHART.accent, CHART.neutral, CHART.danger],
     data: [health.value?.positive || 0, health.value?.neutral || 0, health.value?.negative || 0],
   }],
 }))
-const chartOptions = { responsive: true, plugins: { legend: { display: false } } }
+const chartOptions = { responsive: true, plugins: { legend: { display: false } }, scales: darkChartScales }
 
 function fmtTs(ts: any): string {
   const n = Number(ts)
@@ -343,7 +344,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
 <template>
   <div style="display:flex; height:calc(100vh - 92px)">
     <!-- 左栏:混合 block 列表(real+training) -->
-    <div style="width:230px; border-right:1px solid #efeff5; overflow:auto; padding:8px; flex-shrink:0">
+    <div style="width:230px; border-right:1px solid var(--border); overflow:auto; padding:8px; flex-shrink:0">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
         <span style="font-weight:600; font-size:13px">会话(混合)</span>
         <n-space :size="4">
@@ -355,7 +356,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <div v-for="b in recentBlocks" :key="b.source + ':' + b.block_id"
            @click="selectBlock(b)"
            :style="{ padding:'8px 10px', borderRadius:'8px', cursor:'pointer', marginBottom:'4px',
-             background: b.block_id === activeBlockId ? '#e8f1ff' : 'transparent' }">
+             background: b.block_id === activeBlockId ? 'var(--bubble-bot)' : 'transparent' }">
         <div style="display:flex; align-items:center; justify-content:space-between">
           <span style="font-weight:600; font-size:13px">{{ fmtTs(b.start_ts) }}</span>
           <n-space :size="4" align="center">
@@ -365,7 +366,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
             <n-tag v-if="b.status === 'open'" size="tiny" type="success">进行中</n-tag>
           </n-space>
         </div>
-        <div style="font-size:11px; color:#999; display:flex; justify-content:space-between; align-items:center; margin-top:2px">
+        <div style="font-size:11px; color:var(--text-dim); display:flex; justify-content:space-between; align-items:center; margin-top:2px">
           <span>{{ relTs(b.start_ts) }} · {{ b.msg_count }} 条</span>
           <n-popconfirm v-if="b.source === 'training'" @positive-click="delRpSession(b)">
             <template #trigger><n-button size="tiny" text type="error" @click.stop>删除</n-button></template>
@@ -408,20 +409,20 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
                   <template #trigger><n-button size="small" type="warning">确认落库</n-button></template>
                   确认应用反推 diff 到人设?
                 </n-popconfirm>
-                <span v-if="health && (health.avg_score || 0) < 60 && health.count > 0" style="color:#d03050; font-size:12px">
+                <span v-if="health && (health.avg_score || 0) < 60 && health.count > 0" style="color:var(--danger); font-size:12px">
                   ⚠ 人设可能跑偏
                 </span>
               </n-space>
               <details v-if="inferDiff">
-                <summary style="cursor:pointer; font-size:12px; color:#666">反推 diff 预览</summary>
-                <pre style="background:#f5f5f5; padding:8px; max-height:160px; overflow:auto; font-size:11px; margin:4px 0">{{ JSON.stringify(inferDiff, null, 2) }}</pre>
+                <summary style="cursor:pointer; font-size:12px; color:var(--text-dim)">反推 diff 预览</summary>
+                <pre style="background:var(--card-2); padding:8px; max-height:160px; overflow:auto; font-size:11px; margin:4px 0">{{ JSON.stringify(inferDiff, null, 2) }}</pre>
               </details>
             </n-space>
           </n-space>
         </n-card>
 
         <!-- 当前 block 信息条 -->
-        <div v-if="currentBlock" style="font-size:12px; color:#888; margin-bottom:6px; flex-shrink:0">
+        <div v-if="currentBlock" style="font-size:12px; color:var(--text-dim); margin-bottom:6px; flex-shrink:0">
           当前段落:{{ fmtTs(currentBlock.start_ts) }} → {{ fmtTs(currentBlock.end_ts) }} · {{ currentBlock.msg_count }} 条 ·
           <n-tag size="tiny" :type="currentBlock.status === 'open' ? 'success' : 'default'">{{ currentBlock.status }}</n-tag>
           <n-button v-if="currentBlock.status === 'open'" size="tiny" text @click="closeBlk(currentBlock.block_id)">关 block</n-button>
@@ -433,16 +434,16 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
           <div v-for="m in messages" :key="m.mid"
                :style="{ display:'flex', justifyContent: m.sender === 'user' ? 'flex-end' : 'flex-start', margin:'4px 0' }">
             <div :style="{ maxWidth:'72%', padding:'6px 10px', borderRadius:'10px',
-              background: m.sender === 'user' ? '#DCF8C6' : (m.sender === 'system' ? '#f0f0f0' : '#E8F1FF'), color:'#222' }">
-              <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:6px">
+              background: m.sender === 'user' ? 'var(--bubble-user)' : (m.sender === 'system' ? 'var(--bubble-sys)' : 'var(--bubble-bot)'), color:'var(--text)' }">
+              <div style="font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:6px">
                 <span>{{ senderLabel(m) }} · {{ fmtTs(m.ts) }}</span>
                 <n-tag v-if="m.score !== '' && m.score !== undefined && m.score !== null" size="tiny"
                        :type="Number(m.score) >= 85 ? 'success' : (Number(m.score) < 60 ? 'error' : 'default')">分 {{ m.score }}</n-tag>
                 <n-tag v-if="m.status && m.status !== 'active'" size="tiny">{{ m.status }}</n-tag>
               </div>
               <div style="word-break:break-all; white-space:pre-wrap">{{ m.content }}</div>
-              <div v-if="m.score_note" style="font-size:11px; color:#888; margin-top:2px; font-style:italic">批注:{{ m.score_note }}</div>
-              <div v-if="m.corrected" style="font-size:11px; color:#2a7de1; background:#f0f7ff; border-radius:4px; padding:3px 6px; margin-top:3px">
+              <div v-if="m.score_note" style="font-size:11px; color:var(--text-dim); margin-top:2px; font-style:italic">批注:{{ m.score_note }}</div>
+              <div v-if="m.corrected" style="font-size:11px; color:var(--info); background:var(--info-dim); border-radius:4px; padding:3px 6px; margin-top:3px">
                 纠正回复(正样本 {{ m.corrected_score ?? 100 }}分):{{ m.corrected }}
               </div>
               <n-space v-if="m.status !== 'deleted'" style="margin-top:2px" align="center" :size="4">
@@ -465,12 +466,12 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
               <div>
                 <n-tag type="success" size="small">正样本({{ posSamples.length }})</n-tag>
                 <div v-for="s in posSamples" :key="s.mid + s.source"
-                     style="margin:2px 0; padding:3px 8px; background:#f6ffed; border-radius:4px; font-size:12px">[{{ s.score }}]{{ sourceTag(s) }} {{ s.text }}</div>
+                     style="margin:2px 0; padding:3px 8px; background:var(--accent-dim); border-radius:4px; font-size:12px">[{{ s.score }}]{{ sourceTag(s) }} {{ s.text }}</div>
               </div>
               <div>
                 <n-tag type="error" size="small">负样本({{ negSamples.length }})</n-tag>
                 <div v-for="s in negSamples" :key="s.mid + s.source"
-                     style="margin:2px 0; padding:3px 8px; background:#fff2f0; border-radius:4px; font-size:12px">[{{ s.score }}]{{ sourceTag(s) }} {{ s.text }}</div>
+                     style="margin:2px 0; padding:3px 8px; background:var(--danger-dim); border-radius:4px; font-size:12px">[{{ s.score }}]{{ sourceTag(s) }} {{ s.text }}</div>
               </div>
             </n-space>
           </n-collapse-item>
@@ -480,9 +481,9 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <!-- ===== training 训练样本模式 ===== -->
       <template v-else-if="activeSource === 'training' && activeBlockId">
         <!-- 抽取为记忆工具栏 -->
-        <div style="flex-shrink:0; padding:6px 8px; border-bottom:1px solid #efeff5; display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px">
+        <div style="flex-shrink:0; padding:6px 8px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px">
           <n-button size="small" type="warning" ghost :loading="extracting" @click="extractRp">抽取当前会话为记忆</n-button>
-          <span style="font-size:11px; color:#999">把本会话训练样本抽成长期记忆(过滤 system + 防幻觉,用"{{ userAlias || '用户' }}"称呼)</span>
+          <span style="font-size:11px; color:var(--text-dim)">把本会话训练样本抽成长期记忆(过滤 system + 防幻觉,用"{{ userAlias || '用户' }}"称呼)</span>
         </div>
         <!-- 训练样本流 -->
         <div ref="streamEl" style="flex:1; overflow:auto; padding-right:8px; min-height:0">
@@ -490,8 +491,8 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
           <div v-for="m in messages" :key="m.mid"
                :style="{ display:'flex', justifyContent: m.role === 'user' ? 'flex-end' : (m.role === 'system' ? 'center' : 'flex-start'), margin:'4px 0' }">
             <div :style="{ maxWidth:'72%', padding:'6px 10px', borderRadius:'10px',
-              background: m.role === 'user' ? '#DCF8C6' : (m.role === 'system' ? '#f0f0f0' : '#E8F1FF'), color:'#222' }">
-              <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:6px; flex-wrap:wrap">
+              background: m.role === 'user' ? 'var(--bubble-user)' : (m.role === 'system' ? 'var(--bubble-sys)' : 'var(--bubble-bot)'), color:'var(--text)' }">
+              <div style="font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:6px; flex-wrap:wrap">
                 <n-tag size="tiny" :type="m.role === 'assistant' ? 'info' : (m.role === 'system' ? 'warning' : 'success')">{{ senderLabel(m) }}</n-tag>
                 <n-tag v-if="m.score !== '' && m.score !== undefined && m.score !== null" size="tiny"
                        :type="Number(m.score) >= 85 ? 'success' : (Number(m.score) < 60 ? 'error' : 'default')">分 {{ m.score }}</n-tag>
@@ -506,7 +507,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
           </div>
         </div>
         <!-- 录入区 -->
-        <div style="flex-shrink:0; border-top:1px solid #efeff5; padding-top:8px">
+        <div style="flex-shrink:0; border-top:1px solid var(--border); padding-top:8px">
           <n-space align="center" :wrap="false">
             <n-select v-model:value="role" :options="roleOptions" style="width:200px" />
             <n-input v-model:value="rpContent" placeholder="输入内容,回车追加到训练对话流..." style="flex:1" @keyup.enter="addRp" />
@@ -514,7 +515,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
                             placeholder="角色回复分数(可空)" style="width:150px" clearable />
             <n-button type="primary" @click="addRp">追加</n-button>
           </n-space>
-          <div style="font-size:11px; color:#999; margin-top:4px">
+          <div style="font-size:11px; color:var(--text-dim); margin-top:4px">
             选"角色"时可填分数:≥85 作反推正样本(加强人设),&lt;60 作负样本(纠正人设)。录入铁律:user 行只写真用户会说的话(防幻觉)。
           </div>
         </div>
@@ -526,19 +527,19 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <!-- real 改分弹窗(含 note + 纠正回复) -->
       <n-modal v-model:show="scoreModalShow" preset="dialog" title="改分">
         <n-space vertical>
-          <span style="font-size:12px; color:#999">覆盖 score_base,保留历史 mood_bias 重算 score</span>
+          <span style="font-size:12px; color:var(--text-dim)">覆盖 score_base,保留历史 mood_bias 重算 score</span>
           <n-input-number v-model:value="scoreModalBase" :min="0" :max="100" />
-          <span style="font-size:12px; color:#999">批注(为什么这个分 + 这句话的暗含意思/习惯用语,可选)</span>
+          <span style="font-size:12px; color:var(--text-dim)">批注(为什么这个分 + 这句话的暗含意思/习惯用语,可选)</span>
           <n-input v-model:value="scoreModalNote" type="textarea" :rows="2"
                    placeholder="例:语气自然但稍跑题;『夫君你可真行』其实是撒娇不是夸奖" />
-          <span style="font-size:12px; color:#999">纠正回复(更符合人设的理想回复,可选)</span>
+          <span style="font-size:12px; color:var(--text-dim)">纠正回复(更符合人设的理想回复,可选)</span>
           <n-input v-model:value="scoreModalCorrected" type="textarea" :rows="3"
                    placeholder="例:换成角色口吻的理想说法。将作为正样本(最高权威)进人设反推;原回复保留不动" />
           <n-space align="center">
-            <span style="font-size:12px; color:#999">纠正分数(纠正版有多理想,默认 100)</span>
+            <span style="font-size:12px; color:var(--text-dim)">纠正分数(纠正版有多理想,默认 100)</span>
             <n-input-number v-model:value="scoreModalCorrectedScore" :min="0" :max="100" size="small" style="width:120px" />
           </n-space>
-          <span style="font-size:11px; color:#999">
+          <span style="font-size:11px; color:var(--text-dim)">
             用法:原回复打低分(负样本,应避免)+ 填纠正回复(正样本,应学习),双样本驱动反推;QQ 已发的消息不重发
           </span>
         </n-space>
@@ -551,12 +552,12 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <!-- 批注弹窗(2026-09-15:任意消息含 user 侧;评分理由+暗含意思/习惯用语) -->
       <n-modal v-model:show="noteModalShow" preset="dialog" title="批注">
         <n-space vertical>
-          <span style="font-size:12px; color:#999">
+          <span style="font-size:12px; color:var(--text-dim)">
             多方面解答:为什么给这个评分 + 这句话的暗含意思/特殊习惯用语(用户消息与角色回复均可批注)
           </span>
           <n-input v-model:value="noteVal" type="textarea" :rows="4"
                    placeholder="例:这句其实是在撒娇;『行吧』=勉强同意;评分理由:语气贴合人设" />
-          <span style="font-size:11px; color:#999">批注会作为 [批注: ...] 进入人设反推上下文(管理员解读优先采信)</span>
+          <span style="font-size:11px; color:var(--text-dim)">批注会作为 [批注: ...] 进入人设反推上下文(管理员解读优先采信)</span>
         </n-space>
         <template #action>
           <n-button @click="noteModalShow = false">取消</n-button>
@@ -567,7 +568,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       <!-- training 改分弹窗 -->
       <n-modal v-model:show="rpScoreShow" preset="dialog" title="改 roleplay 评分">
         <n-space vertical>
-          <span style="font-size:12px; color:#999">覆盖该角色回复分数(联动反推样本队列:高分正样本/低分负样本)</span>
+          <span style="font-size:12px; color:var(--text-dim)">覆盖该角色回复分数(联动反推样本队列:高分正样本/低分负样本)</span>
           <n-input-number v-model:value="rpScoreVal" :min="0" :max="100" />
         </n-space>
         <template #action>

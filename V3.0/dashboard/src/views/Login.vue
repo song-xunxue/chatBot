@@ -26,12 +26,12 @@ function login() {
 </script>
 
 <template>
-  <div style="height:100vh;display:flex;align-items:center;justify-content:center;background:#faf7f2">
+  <div style="height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)">
     <n-card title="清浔 3.0 管理面板" style="width:90%;max-width:360px" :bordered="true">
       <n-space vertical>
         <n-input v-model:value="token" placeholder="访问令牌 access_token" type="password" show-password-on="click" @keyup.enter="login" />
         <n-button type="primary" block @click="login">进入</n-button>
-        <div style="color:#999;font-size:12px">令牌需与服务端 .env 的 ACCESS_TOKEN 一致</div>
+        <div style="color:var(--text-dim);font-size:12px">令牌需与服务端 .env 的 ACCESS_TOKEN 一致</div>
       </n-space>
     </n-card>
   </div>

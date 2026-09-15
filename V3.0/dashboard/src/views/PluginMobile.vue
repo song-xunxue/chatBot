@@ -212,7 +212,7 @@ onUnmounted(() => {
     <!-- ② 插件参数配置(config_schema 泛化表单,逐插件折叠) -->
     <n-card v-if="pluginsWithConfig.length" title="插件参数配置">
       <span class="m-hint">展开配置各插件参数(音色/语速/gain/开关等),改完点保存。</span>
-      <div v-if="!oid || oid === 'default'" class="m-hint" style="color:#d03050;margin-top:4px">
+      <div v-if="!oid || oid === 'default'" class="m-hint" style="color:var(--danger);margin-top:4px">
         oid 未绑定真实会话(V3.0 须为 QQ 号),参数暂未拉取:先在 QQ 上与角色对话一次即可自动绑定
       </div>
       <n-collapse style="margin-top:8px">
@@ -266,7 +266,7 @@ onUnmounted(() => {
             <div>api_base：{{ ttsStatus?.api_base || '-' }}</div>
             <div>状态：{{ ttsStatus?.detail || '-' }}</div>
             <div v-if="ttsStatus?.reachable">延迟：{{ ttsStatus?.latency_ms ?? '-' }} ms</div>
-            <div v-if="ttsStatus?.missing?.length" style="color:#a08400">
+            <div v-if="ttsStatus?.missing?.length" style="color:var(--warning)">
               配置缺失：{{ ttsStatus.missing.join('、') }}
             </div>
           </div>
@@ -287,7 +287,7 @@ onUnmounted(() => {
   font-size: 16px;
 }
 .m-plugin-card {
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
 }
@@ -302,7 +302,7 @@ onUnmounted(() => {
 }
 .m-plugin-desc {
   font-size: 12px;
-  color: #999;
+  color: var(--text-dim);
   margin-top: 4px;
 }
 .m-plugin-ops {
@@ -337,6 +337,6 @@ onUnmounted(() => {
 }
 .m-hint {
   font-size: 11px;
-  color: #999;
+  color: var(--text-dim);
 }
 </style>

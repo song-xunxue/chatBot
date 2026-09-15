@@ -306,25 +306,25 @@ onMounted(async () => {
 }
 .m-hint {
   font-size: 11px;
-  color: #999;
+  color: var(--text-dim);
 }
 .m-field-name {
   font-size: 12px;
-  color: #999;
+  color: var(--text-dim);
 }
 .m-diff-card {
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
   margin-bottom: 14px;
 }
 .m-diff-label {
   font-size: 12px;
-  color: #999;
+  color: var(--text-dim);
   margin-bottom: 4px;
 }
 .m-old-val {
-  background: #fafafa;
+  background: var(--card-2);
   padding: 6px 8px;
   border-radius: 4px;
   white-space: pre-wrap;
@@ -333,7 +333,7 @@ onMounted(async () => {
   font-size: 13px;
 }
 .m-new-val {
-  background: #f0f9eb;
+  background: var(--accent-dim);
   padding: 6px 8px;
   border-radius: 4px;
   white-space: pre-wrap;
@@ -342,7 +342,7 @@ onMounted(async () => {
 }
 .m-arrow {
   text-align: center;
-  color: #999;
+  color: var(--text-dim);
   font-size: 12px;
   margin: 6px 0;
 }

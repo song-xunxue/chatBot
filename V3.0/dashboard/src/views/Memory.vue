@@ -160,7 +160,7 @@ onMounted(async () => { await ensureOid(); await load() })
 
     <n-card title="长期记忆 Long-term" size="small">
       <n-space align="center" style="margin-bottom:10px">
-        <span style="font-size:13px;color:#666">筛选类别：</span>
+        <span style="font-size:13px;color:var(--text-dim)">筛选类别：</span>
         <n-select v-model:value="catFilter" :options="catOptions" placeholder="全部类别" style="width:180px" clearable />
       </n-space>
       <n-empty v-if="!ltFiltered.length" description="无" />
@@ -176,14 +176,14 @@ onMounted(async () => { await ensureOid(); await load() })
             <n-tag v-if="m.source === 'manual'" size="small" type="info">手动</n-tag>
           </n-space>
           <n-space>
-            <span style="font-size:11px;color:#aaa">{{ fmtTs(m.created_ts) }}</span>
+            <span style="font-size:11px;color:var(--text-dim)">{{ fmtTs(m.created_ts) }}</span>
             <n-button size="tiny" @click="openEdit(m)">编辑</n-button>
             <n-button size="tiny" @click="toggleLock(m)">{{ m.locked ? '解锁' : '锁定' }}</n-button>
             <n-popconfirm @positive-click="forget(m.id)"><template #trigger><n-button size="tiny" type="error" ghost>遗忘</n-button></template>确认遗忘这条？</n-popconfirm>
           </n-space>
         </n-space>
         <div style="margin-top:6px;white-space:pre-wrap">{{ m.content }}</div>
-        <div v-if="m.reason" style="margin-top:4px;font-size:12px;color:#888;font-style:italic">理由:{{ m.reason }}</div>
+        <div v-if="m.reason" style="margin-top:4px;font-size:12px;color:var(--text-dim);font-style:italic">理由:{{ m.reason }}</div>
         <n-space v-if="m.tags && m.tags.length" :size="4" style="margin-top:6px">
           <n-tag v-for="t in m.tags" :key="t" size="tiny" round>#{{ t }}</n-tag>
         </n-space>
@@ -194,7 +194,7 @@ onMounted(async () => { await ensureOid(); await load() })
       <n-empty v-if="!(data.episodic || []).length" description="无" />
       <n-card v-for="(e, i) in (data.episodic || [])" :key="i" size="small" style="margin-bottom:8px">
         <div>{{ e.summary }}</div>
-        <div style="font-size:11px;color:#aaa;margin-top:4px">{{ fmtTs(e.created_ts) }}</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">{{ fmtTs(e.created_ts) }}</div>
       </n-card>
     </n-card>
 
@@ -215,20 +215,20 @@ onMounted(async () => { await ensureOid(); await load() })
         <n-space align="center" :wrap="false">
           <n-select v-model:value="editCategory" :options="catEditOptions" style="width:180px" />
           <n-space align="center" :size="6">
-            <span style="font-size:12px;color:#999">重要度</span>
+            <span style="font-size:12px;color:var(--text-dim)">重要度</span>
             <n-input-number v-model:value="editImportance" :min="0" :max="1" :step="0.1" style="width:110px" />
           </n-space>
         </n-space>
         <n-space align="center" :wrap="false">
           <n-space align="center" :size="6">
-            <span style="font-size:12px;color:#999">用进退分</span>
+            <span style="font-size:12px;color:var(--text-dim)">用进退分</span>
             <n-slider v-model:value="editUsefulScore" :min="0" :max="1" :step="0.05" style="width:160px" />
             <span style="font-size:12px;width:32px">{{ editUsefulScore.toFixed(2) }}</span>
           </n-space>
           <n-select v-model:value="editTier" :options="tierOptions" style="width:200px" />
         </n-space>
         <div>
-          <div style="font-size:12px;color:#999;margin-bottom:4px">标签</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">标签</div>
           <n-dynamic-tags v-model:value="editTags" :max="5" />
         </div>
         <n-space justify="end">
@@ -248,20 +248,20 @@ onMounted(async () => { await ensureOid(); await load() })
         <n-space align="center" :wrap="false">
           <n-select v-model:value="cCategory" :options="catEditOptions" style="width:180px" />
           <n-space align="center" :size="6">
-            <span style="font-size:12px;color:#999">重要度</span>
+            <span style="font-size:12px;color:var(--text-dim)">重要度</span>
             <n-input-number v-model:value="cImportance" :min="0" :max="1" :step="0.1" style="width:110px" />
           </n-space>
         </n-space>
         <n-space align="center" :wrap="false">
           <n-space align="center" :size="6">
-            <span style="font-size:12px;color:#999">用进退分</span>
+            <span style="font-size:12px;color:var(--text-dim)">用进退分</span>
             <n-slider v-model:value="cUsefulScore" :min="0" :max="1" :step="0.05" style="width:160px" />
             <span style="font-size:12px;width:32px">{{ cUsefulScore.toFixed(2) }}</span>
           </n-space>
           <n-select v-model:value="cTier" :options="tierOptions" style="width:200px" />
         </n-space>
         <div>
-          <div style="font-size:12px;color:#999;margin-bottom:4px">标签</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">标签</div>
           <n-dynamic-tags v-model:value="cTags" :max="5" />
         </div>
         <n-space align="center">

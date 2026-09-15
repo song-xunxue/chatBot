@@ -319,7 +319,7 @@ onMounted(async () => { await ensureOid(); await load() })
   font-size: 16px;
 }
 .m-card {
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
   margin-bottom: 8px;
@@ -338,12 +338,12 @@ onMounted(async () => { await ensureOid(); await load() })
 .m-reason {
   margin-top: 4px;
   font-size: 12px;
-  color: #888;
+  color: var(--text-dim);
   font-style: italic;
 }
 .m-ts {
   font-size: 11px;
-  color: #aaa;
+  color: var(--text-dim);
   margin-top: 6px;
 }
 .m-actions {
@@ -353,7 +353,7 @@ onMounted(async () => { await ensureOid(); await load() })
 }
 .m-label {
   font-size: 12px;
-  color: #999;
+  color: var(--text-dim);
   margin-bottom: 4px;
 }
 .m-modal-body {
