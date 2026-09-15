@@ -118,6 +118,14 @@ async def lifespan(app: FastAPI):
     # 后台维护循环(审查#1 双栈去重:V3.0 与 V2.0 共用 Redis,衰减/遗忘只允许一栈跑。
     # BACKGROUND_MAINTENANCE 默认 False——V2.0 已在跑;V2.0 停转 V3.0 单栈时置 True)
     _bg_tasks: list[asyncio.Task] = []
+    # NapCat 掉线监控(2026-09-15:QQ 登录态失效静默丢 8 天数据的教训;独立于后台维护开关。
+    # 两级探测=WS 连接态 + WebUI QQ 登录态,offline 时 WARNING 日志 + 面板红色横幅)
+    if settings.napcat_watch_enabled:
+        from onebot.watch import start_watch_loop
+        _bg_tasks.append(start_watch_loop(redis))
+        logger.info("NapCat 掉线监控已启动(interval=%ss,webui_probe=%s)",
+                    settings.napcat_watch_interval_sec,
+                    bool(settings.napcat_webui_base and settings.napcat_webui_token))
     if settings.background_maintenance_enable:
         from mood.decay import start_decay_loop
         _bg_tasks.append(start_decay_loop(redis))

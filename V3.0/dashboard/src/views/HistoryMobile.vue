@@ -16,7 +16,7 @@ import {
 } from 'naive-ui'
 import {
   listRecentBlocks, listMessages, deleteMessage, closeBlock, deleteBlock, clearHistory,
-  getHealth, getSamples, reverseInferDryRun, reverseInferApply, setScore,
+  getHealth, getSamples, reverseInferDryRun, reverseInferApply, setScore, setMessageNote,
   listRoleplay, addRoleplay, setRoleplayScore, deleteRoleplay, extractRoleplay,
   newRoleplaySession, deleteRoleplaySession, listPersonas,
 } from '@/api'
@@ -230,6 +230,24 @@ async function applyScore() {
     await loadMessages(); await loadScore()
   } catch (e: any) { message.error('' + e) }
 }
+// —— 批注弹窗(2026-09-15:评分理由+暗含意思/习惯用语;任意 sender 含 user 消息)——
+const noteModalShow = ref(false)
+const noteModalMid = ref('')
+const noteVal = ref('')
+function openNote(mid: string, note: any) {
+  noteModalMid.value = mid
+  noteVal.value = note || ''
+  noteModalShow.value = true
+}
+async function applyNote() {
+  if (!noteModalMid.value) return
+  try {
+    await setMessageNote(noteModalMid.value, noteVal.value)
+    message.success('批注已保存(进入人设反推)')
+    noteModalShow.value = false; noteModalMid.value = ''
+    await loadMessages()
+  } catch (e: any) { message.error('' + e) }
+}
 async function dryRun() {
   if (!activeOid.value) return
   inferring.value = true
@@ -370,6 +388,7 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
             <div v-if="m.score_note" class="m-note">批注:{{ m.score_note }}</div>
             <div v-if="m.corrected" class="m-corrected">纠正回复(正样本 {{ m.corrected_score ?? 100 }}分):{{ m.corrected }}</div>
             <n-space v-if="m.status !== 'deleted'" :size="6" align="center" style="margin-top:4px">
+              <n-button size="small" type="info" ghost @click="openNote(m.mid, m.score_note)">批注</n-button>
               <n-button v-if="m.sender === 'ai' || m.sender === 'proxy'" size="small" type="primary" ghost
                         @click="openScore(m.mid, m.score_base, m.score_note, m.corrected, m.corrected_score)">改分</n-button>
               <n-popconfirm @positive-click="del(m.mid)">
@@ -508,14 +527,28 @@ onUnmounted(() => { stopPoll(); window.removeEventListener('visibilitychange', o
       </n-space>
     </n-modal>
 
+    <!-- 批注弹窗(2026-09-15:任意消息含 user 侧;评分理由+暗含意思/习惯用语) -->
+    <n-modal v-model:show="noteModalShow" preset="dialog" title="批注">
+      <n-space vertical size="small">
+        <span class="m-hint">多方面解答:为什么给这个评分 + 这句话的暗含意思/特殊习惯用语(用户消息与角色回复均可批注)</span>
+        <n-input v-model:value="noteVal" type="textarea" :autosize="{ minRows: 4, maxRows: 8 }"
+                 placeholder="例:这句其实是在撒娇;『行吧』=勉强同意;评分理由:语气贴合人设" />
+        <span class="m-hint">批注会作为 [批注: ...] 进入人设反推上下文(管理员解读优先采信)</span>
+      </n-space>
+      <template #action>
+        <n-button size="large" @click="noteModalShow = false">取消</n-button>
+        <n-button size="large" type="primary" @click="applyNote">确定</n-button>
+      </template>
+    </n-modal>
+
     <!-- real 改分弹窗(含 note + 纠正回复) -->
     <n-modal v-model:show="scoreModalShow" preset="dialog" title="改分">
       <n-space vertical size="small">
         <span class="m-hint">覆盖 score_base,保留历史 mood_bias 重算 score</span>
         <n-input-number v-model:value="scoreModalBase" :min="0" :max="100" size="large" style="width:100%" />
-        <span class="m-hint">批注(说明为什么这个分,可选)</span>
+        <span class="m-hint">批注(为什么这个分 + 这句话的暗含意思/习惯用语,可选)</span>
         <n-input v-model:value="scoreModalNote" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }"
-                 placeholder="例:语气自然但稍微跑题" />
+                 placeholder="例:语气自然但稍跑题;『夫君你可真行』其实是撒娇不是夸奖" />
         <span class="m-hint">纠正回复(更符合人设的理想回复,可选)</span>
         <n-input v-model:value="scoreModalCorrected" type="textarea" :autosize="{ minRows: 3, maxRows: 6 }"
                  placeholder="例:换成角色口吻的理想说法。将作为正样本(最高权威)进人设反推;原回复保留不动" />

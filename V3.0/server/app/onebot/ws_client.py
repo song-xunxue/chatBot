@@ -35,13 +35,19 @@ self_id 过滤:仅处理 settings.onebot_self_id 的事件(接管对话的号;�
      ⑤ 占位扩展(face/文件/转发/视频)+ string 格式 CQ 码识别 + 入队图片占位
   3. 线上实测修复:message_sent 接收方改从 target_id 解析(NapCat 的 user_id=senderUin=
      自己,接收方在 target_id=peerUin;原按 user_id 取致手动回复被陌生人门控误拦)
+
+2026-09-15
+变更说明：
+  1. 表情包真入库(用户诉求:[图片]占位致训练上下文不齐):image/mface 段提取 url+summary →
+     sticker_store.ingest(下载存库+vision 描述)→ content 记语义 token "[表情包: 描述]"
+     (照片 "[图片: 描述]";失败回退占位)。自动模式纯表情包消息不再丢弃(原 combined 空直接
+     return);静默直录/手动 message_sent 同款 token。_extract_content 返回 (text, media[{url,summary}])。
 """
 import asyncio
 import json
 import logging
 import time
 
-import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from core.config import settings
@@ -221,6 +227,11 @@ async def onebot_ws(ws: WebSocket):
                     if not settings.onebot_self_id or sid == settings.onebot_self_id:
                         _ws, _ws_self_id = ws, sid      # 接管号绑定(覆盖任何当前占用)
                         logger.info("接管号 %s 绑定出站通道", sid)
+                        try:
+                            from onebot.watch import request_recheck   # WS 恢复即时刷新监控状态
+                            request_recheck()
+                        except Exception:
+                            pass
                     else:
                         logger.info("连接 self_id=%s 非接管号(%s),仅收事件不绑定",
                                     sid, settings.onebot_self_id)
@@ -244,6 +255,11 @@ async def onebot_ws(ws: WebSocket):
     finally:
         if _ws is ws:
             _ws, _ws_self_id = None, ""
+            try:
+                from onebot.watch import request_recheck       # WS 断开即时刷新监控状态
+                request_recheck()
+            except Exception:
+                pass
         logger.info("NapCat 反向WS断开 self_id=%s 出站占用=%s", sid, _ws is ws)
 
 
@@ -268,11 +284,11 @@ async def _handle_event(data: dict) -> None:
     user_id = str(data.get("user_id", ""))
     if not user_id:
         return
-    text, image_urls = _extract_content(data)
+    text, media = _extract_content(data)
     msg_id = str(data.get("message_id", ""))
     sender = data.get("sender", {}) or {}
-    logger.info("收到私聊(onebot) user=%s(%s) msg_id=%s 文本长度=%d 图片=%d",
-                user_id, sender.get("nickname", ""), msg_id, len(text), len(image_urls))
+    logger.info("收到私聊(onebot) user=%s(%s) msg_id=%s 文本长度=%d 媒体=%d",
+                user_id, sender.get("nickname", ""), msg_id, len(text), len(media))
     # AI 静默判定(2026-09-13 队列删减重构):静默模式(面板开关)或手动静默期内
     # (手动回复后 TTL 窗口)→ 用户消息直录历史,不触发 LLM——管理员手动回复主场,
     # 手动 message_sent 落库后与之自然相邻成对;窗口过/开关关则恢复自动回复
@@ -281,14 +297,15 @@ async def _handle_event(data: dict) -> None:
     redis = await get_redis()
     if await takeover_store.is_enabled(redis, user_id) or \
             await takeover_store.is_silenced(redis, user_id):
-        qtext = _content_or_placeholder(data, text, image_urls)   # 纯媒体占位
+        # 表情包/图片走真描述 token(下载+vision+入库,训练上下文语义完整);失败回退占位
+        qtext = await _content_or_media_token(data, text, media)
         if qtext:
             await chat_store.append_message(redis, user_id, sender="user",
                                             content=qtext, source="live",
                                             ts=int(time.time() * 1000))
             logger.info("静默中:用户消息直录(不进 LLM) user=%s", user_id)
         return
-    await _schedule_debounce(user_id, text, image_urls, msg_id)
+    await _schedule_debounce(user_id, text, media, msg_id)
 
 
 async def _confirm_own_send(msg_id: str) -> bool:
@@ -326,7 +343,7 @@ async def _handle_manual_sent(data: dict) -> None:
         logger.info("message_sent 无法定位接收方(target_id/user_id 均无效) self=%s 跳过",
                     data.get("self_id", ""))
         return
-    content = _content_or_placeholder(data, *_extract_content(data))
+    content = await _content_or_media_token(data, *_extract_content(data))
     if not oid or not content:
         logger.info("message_sent 无法记录(缺接收方/无有效内容) user=%s 内容长度=%d",
                     oid, len(content))
@@ -356,31 +373,48 @@ async def _handle_manual_sent(data: dict) -> None:
         logger.exception("手动回复记录失败(onebot) user=%s", oid)
 
 
-def _content_or_placeholder(data: dict, text: str, image_urls: list[str]) -> str:
-    """文本优先;纯媒体消息给占位(出站手动记录/入站代答入队共用,防空文本丢消息)。
+def _string_placeholder(data: dict) -> str:
+    """非图片类媒体占位(face/转发/文件/视频;图片/表情包走 _content_or_media_token 真描述)。
     兼容 array(segment)与 string(CQ 码)两种上报格式。"""
-    if text:
-        return text
-    if image_urls:
-        return "[图片]"
     message = data.get("message")
     if isinstance(message, list):
         for seg in message:
             if isinstance(seg, dict):
                 ph = _MEDIA_PLACEHOLDERS.get(str(seg.get("type", "")))
-                if ph:
+                if ph and ph != "[图片]":      # 图片类不走占位(见上)
                     return ph
         return "[非文本消息]" if message else ""
     raw = message if isinstance(message, str) else str(data.get("raw_message", "") or "")
     for key, ph in _MEDIA_PLACEHOLDERS.items():
+        if key in ("image", "mface"):
+            continue
         if f"[CQ:{key}" in raw:
             return ph
     return ""
 
 
-def _extract_content(data: dict) -> tuple[str, list[str]]:
-    """提取消息文本与图片 url。兼容 array(segment 数组,NapCat messagePostFormat=array)
-    与 string(CQ 码)两种上报格式。文本段拼接;image 段收 url。
+async def _content_or_media_token(data: dict, text: str, media: list[dict]) -> str:
+    """文本优先;图片/表情包 → sticker_store.ingest 语义 token(下载+vision 描述+入库,
+    训练上下文完整);vision 关/失败回退 "[图片]";非图片媒体走占位。静默直录与
+    message_sent 手动回复共用。"""
+    if text:
+        return text
+    if media:
+        from storage import sticker_store
+        from storage.redis_client import get_redis
+        redis = await get_redis()
+        tokens = []
+        for m in media[:3]:                     # 单条最多 3 图(防刷)
+            tokens.append(await sticker_store.ingest(
+                redis, m.get("url", ""), summary=m.get("summary", "")))
+        return "\n".join(t for t in tokens if t) or "[图片]"
+    return _string_placeholder(data)
+
+
+def _extract_content(data: dict) -> tuple[str, list[dict]]:
+    """提取消息文本与媒体列表。兼容 array(segment 数组,NapCat messagePostFormat=array)
+    与 string(CQ 码)两种上报格式。文本段拼接;image/mface 段收 {url, summary}
+    (mface 自带 summary 时 vision 短路,2026-09-15 表情包入库)。
     审查#6:所有 fallback 路径统一去 CQ 码(防残留码进 pipeline)。"""
     import re
     message = data.get("message")
@@ -389,8 +423,12 @@ def _extract_content(data: dict) -> tuple[str, list[str]]:
     def _strip_cq(s: str) -> str:
         return re.sub(r"\[CQ:[^\]]+\]", "", s).strip()
 
+    def _img_urls(s: str) -> list[str]:
+        return [m.group(1) for m in
+                re.finditer(r"\[CQ:image,[^\]]*url=([^,\]]+)[^\]]*\]", s)]
+
     texts: list[str] = []
-    images: list[str] = []
+    media: list[dict] = []
     if isinstance(message, list):
         for seg in message:
             if not isinstance(seg, dict):
@@ -399,23 +437,21 @@ def _extract_content(data: dict) -> tuple[str, list[str]]:
             sdata = seg.get("data", {}) or {}
             if stype == "text" and sdata.get("text"):
                 texts.append(str(sdata["text"]))
-            elif stype == "image":
+            elif stype in ("image", "mface"):
                 url = str(sdata.get("url", "") or "")
                 if url:
-                    images.append(url)
-        # fallback:无 text/image 段时用 raw_message(去 CQ 码;图片 url 从 CQ 码抽)
-        if not texts and not images and raw_message:
-            for m in re.finditer(r"\[CQ:image,[^\]]*url=([^,\]]+)[^\]]*\]", raw_message):
-                images.append(m.group(1))
+                    media.append({"url": url,
+                                  "summary": str(sdata.get("summary", "") or "")})
+        # fallback:无文本/媒体段时用 raw_message(去 CQ 码;图片 url 从 CQ 码抽)
+        if not texts and not media and raw_message:
+            media.extend({"url": u, "summary": ""} for u in _img_urls(raw_message))
             t = _strip_cq(raw_message)
             if t:
                 texts.append(t)
-        return "\n".join(texts).strip(), images
+        return "\n".join(texts).strip(), media
     # string 格式:raw_message 即 CQ 码文本;图片 url 正则抽 + 去码留纯文本
-    text_part = raw_message
-    for m in re.finditer(r"\[CQ:image,[^\]]*url=([^,\]]+)[^\]]*\]", raw_message):
-        images.append(m.group(1))
-    return _strip_cq(text_part), images
+    media.extend({"url": u, "summary": ""} for u in _img_urls(raw_message))
+    return _strip_cq(raw_message), media
 
 
 # —— 连发防抖(per-user 输入缓冲 + 计时器;搬 V2.0 qq/webhook 同构逻辑)——
@@ -423,18 +459,18 @@ _debounce: dict[str, dict] = {}
 _debounce_lock = asyncio.Lock()
 
 
-async def _schedule_debounce(user_id: str, text: str, image_urls: list[str], msg_id: str) -> None:
+async def _schedule_debounce(user_id: str, text: str, media: list[dict], msg_id: str) -> None:
     """连发防抖:首条启动计时器,期间连发追加缓冲并重置计时器,超时合并走 pipeline(同 webhook)。"""
     async with _debounce_lock:
         state = _debounce.get(user_id)
         if state is None:
-            state = {"texts": [text] if text else [], "images": list(image_urls),
+            state = {"texts": [text] if text else [], "media": list(media),
                      "msg_id": msg_id, "task": None}
             _debounce[user_id] = state
         else:
             if text:
                 state["texts"].append(text)
-            state["images"].extend(image_urls)
+            state["media"].extend(media)
             state["msg_id"] = msg_id   # 用最新 msg_id
             if state["task"] is not None:
                 state["task"].cancel()
@@ -442,7 +478,7 @@ async def _schedule_debounce(user_id: str, text: str, image_urls: list[str], msg
 
 
 async def _flush(user_id: str) -> None:
-    """防抖超时:合并连发输入(文本+图片 vision)→ pipeline → 经 adapter 下发(同 webhook._flush)。"""
+    """防抖超时:合并连发输入(文本+表情包/图片语义 token)→ pipeline → 经 adapter 下发。"""
     try:
         await asyncio.sleep(settings.input_debounce_sec)
     except asyncio.CancelledError:
@@ -452,10 +488,18 @@ async def _flush(user_id: str) -> None:
     if not state:
         return
     parts: list[str] = [t for t in state["texts"] if t]
-    if settings.multimodal_vision_enable:   # 审查#6:对齐 webhook(总开关关时跳过 vision)
-        for url in state["images"]:
-            desc = await _describe_image(url)
-            parts.append(f"[用户发了一张图片: {desc}]" if desc else "[用户发了一张图片,但解析失败]")
+    if state["media"]:
+        # 2026-09-15 表情包入库:image/mface → ingest(下载+vision 描述+存库)→ 语义 token;
+        # vision 总开关关时不描述,给 [图片] 占位(消息不丢)。纯表情包消息由此不再被丢弃。
+        if settings.multimodal_vision_enable:
+            from storage import sticker_store
+            from storage.redis_client import get_redis
+            redis = await get_redis()
+            for m in state["media"][:3]:
+                parts.append(await sticker_store.ingest(
+                    redis, m.get("url", ""), summary=m.get("summary", "")))
+        else:
+            parts.extend("[图片]" for _ in state["media"])
     combined = "\n".join(parts)
     if not combined:
         return
@@ -478,18 +522,3 @@ async def _flush(user_id: str) -> None:
             logger.info("回复已发送(onebot) user=%s 长度=%d", user_id, len(reply))
     except Exception:
         logger.exception("pipeline 处理失败(onebot) user=%s", user_id)
-
-
-async def _describe_image(url: str) -> str:
-    """图片 vision 描述(NapCat image url 免鉴权直接 GET,软失败返空串)。"""
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as c:
-            resp = await c.get(url, follow_redirects=True)
-            resp.raise_for_status()
-            img_bytes = resp.content
-        from modality import get_vision
-        vision = get_vision()
-        return await vision.understand(img_bytes, settings.multimodal_vision_prompt, "image/jpeg")
-    except Exception as e:
-        logger.warning("图片 vision 解析失败(onebot,软失败): %s", e)
-        return ""

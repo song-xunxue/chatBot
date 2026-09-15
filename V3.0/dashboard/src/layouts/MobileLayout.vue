@@ -3,13 +3,16 @@
  * 移动端顶层布局(手机端管理面板):顶栏(标题)+ 内容区 + 底部 tab 导航,无侧栏/oid 输入/登出。
  * 为 /m/* 路由(代人代答/历史/记忆/人设/心情/插件/系统)提供共性外壳。
  * 鉴权由 router 守卫处理(登录后回跳原页面);oid 由各页 useObject.ensureOid 自动取。
+ * 2026-09-15:NapCat 掉线红色横幅(60s 轮询;与 PC MainLayout 同源)。
  * 作者: 李文煜
  */
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { NLayout, NLayoutHeader, NLayoutContent } from 'naive-ui'
+import { NLayout, NLayoutHeader, NLayoutContent, NAlert } from 'naive-ui'
+import { useNapcatWatch } from '@/composables/useNapcatWatch'
 
 const route = useRoute()
+const { offline, detail } = useNapcatWatch() // NapCat 掉线横幅(60s 轮询,offline 常驻红条)
 // 顶栏标题取路由 meta.title(与 PC MainLayout 一致),默认回退
 const title = computed(() => (route.meta.title as string) || '清浔 3.0 管理面板')
 
@@ -35,6 +38,10 @@ const activePath = computed(() => {
     <n-layout-header bordered style="height:48px;padding:0 12px;display:flex;align-items:center;flex-shrink:0">
       <span style="font-weight:600;font-size:16px">{{ title }}</span>
     </n-layout-header>
+    <n-alert v-if="offline" type="error" :show-icon="true" style="border-radius:0;font-size:12px"
+             title="清浔 QQ 已掉线,消息正在丢失!">
+      {{ detail }} —— 请在电脑上打开 NapCat WebUI 扫码重登。
+    </n-alert>
     <n-layout-content content-style="padding:12px;flex:1;min-height:0" :native-scrollbar="false" style="flex:1">
       <router-view />
     </n-layout-content>

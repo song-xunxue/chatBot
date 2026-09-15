@@ -21,6 +21,11 @@
 2026-08-17
 变更说明：
   1. V3.0 精简:删 qq-credentials 端点与 _apply_credential_overrides(V3.0 纯 OneBot 无官方凭证)
+
+2026-09-15
+变更说明：
+  1. 新增 GET /system/napcat-status:NapCat 掉线监控状态(面板横幅 60s 轮询数据源;
+     WS 连接态 + QQ 登录态两级探测,offline=消息正在丢失)
 """
 import logging
 
@@ -89,3 +94,15 @@ async def reset_all_data(body: dict = Body(default={})):
         deleted += 1
     logger.warning("系统重置:删除 %d 键,保留 %d 键(人设+配置白名单)", deleted, kept)
     return {"deleted": deleted, "kept": kept}
+
+
+@router.get("/system/napcat-status", dependencies=[Depends(verify_token)])
+async def napcat_status():
+    """NapCat 掉线监控状态(onebot/watch 内存单例直读;探测循环每 napcat_watch_interval_sec 刷新)。
+    面板布局层 60s 轮询,state=offline 时红色横幅常驻(消息正在丢失,须 WebUI 扫码重登)。"""
+    from onebot.watch import get_status
+    st = get_status()
+    return {"state": st["state"], "detail": st["detail"],
+            "ws_ok": st["ws_ok"], "login_ok": st["login_ok"],
+            "last_check_ts": st["last_check_ts"],
+            "offline_since_ts": st["offline_since_ts"]}

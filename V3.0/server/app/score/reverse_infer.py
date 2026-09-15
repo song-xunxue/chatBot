@@ -166,12 +166,26 @@ def _make_token() -> str:
 
 # —— LLM 提炼(评分样本 → 人设字段 JSON)——
 
-async def _llm_extract(samples_pos: list[dict], samples_neg: list[dict], llm) -> dict:
+async def _llm_extract(samples_pos: list[dict], samples_neg: list[dict], llm,
+                       redis=None) -> dict:
     """调 LLM 从评分样本提炼人设字段 JSON。samples_* 为 list_samples 返回的 dict 列表
     (含 text/source/mid/score)。prompt 按来源标注(2026-07-07):真实对话(dialog)权威,
     训练剧本(roleplay)参考——修 score 队列 roleplay/live 共池无 source 区分的已存在污染。
     2026-09-07:新增 [管理员亲手回复](source=manual,角色 QQ 号手动回复,黄金标准同 correction)。
+    2026-09-15:批注嵌入——样本消息带 score_note(统一批注:评分理由+暗含意思/习惯用语)时
+    以 [批注: ...] 附在样本后(读 mychat:msg:{mid};redis 缺省跳过),管理员对用户话语
+    隐含意思的解读由此进入反推上下文。
     失败返回 {}。"""
+    async def _note_of(s: dict) -> str:
+        if redis is None or not s.get("mid"):
+            return ""
+        try:
+            n = await redis.hget(f"mychat:msg:{s['mid']}", "score_note")
+            n = (n or "").strip()
+            return f" [批注: {n}]" if n else ""
+        except Exception:
+            return ""
+
     def _label(s: dict) -> str:
         # 标注样本来源:[管理员纠正]/[管理员亲手回复] 黄金标准 / [真实对话] 权威 / [训练剧本] 参考
         src = s.get("source")
@@ -181,13 +195,22 @@ async def _llm_extract(samples_pos: list[dict], samples_neg: list[dict], llm) ->
             return "[管理员亲手回复]"
         return "[训练剧本]" if src == "roleplay" else "[真实对话]"
 
-    pos_txt = "\n".join(f"{_label(s)} {s.get('text', '')}"
-                        for s in samples_pos[:20] if s.get("text")) or "(无)"
-    neg_txt = "\n".join(f"{_label(s)} {s.get('text', '')}"
-                        for s in samples_neg[:10] if s.get("text")) or "(无)"
+    # 显式循环拼接(不能在 join 的生成器表达式里 await——PEP 530 会变成 async 生成器,join 拿不到同步可迭代)
+    pos_lines: list[str] = []
+    for s in samples_pos[:20]:
+        if s.get("text"):
+            pos_lines.append(f"{_label(s)} {s.get('text', '')}{await _note_of(s)}")
+    neg_lines: list[str] = []
+    for s in samples_neg[:10]:
+        if s.get("text"):
+            neg_lines.append(f"{_label(s)} {s.get('text', '')}{await _note_of(s)}")
+    pos_txt = "\n".join(pos_lines) or "(无)"
+    neg_txt = "\n".join(neg_lines) or "(无)"
     prompt = (
         "你是人设分析师。以下是某角色在与用户对话中获得高分的优秀回复(正样本,契合人设应保持的风格),"
         "以及获得低分的偏离回复(负样本,应避免的风格)。请据此提炼该角色的人设字段。\n"
+        "部分样本后附 [批注: ...]——管理员批注,含该回复为何得此评分的理由与这句话/上一句用户话"
+        "的暗含意思或习惯用语解读,是理解双方交流方式的权威线索,提炼时优先采信。\n"
         "只输出一个 JSON 对象,键为人设字段名,值为提炼结果。\n"
         "可选字段:personality, speech_style, catchphrase, age, gender, occupation, appearance, race, "
         "likes(字符串数组), dislikes(字符串数组), relationship, greeting, scenario, description。\n"
@@ -241,7 +264,7 @@ async def infer_and_merge(redis, object_id: str, *,
         llm = resolve_provider("reverse_infer", provider_name)
         if llm is None:
             return {"aborted_reason": "no_llm_provider", "diff": {}}
-        extracted = await _llm_extract(positives, negatives, llm)
+        extracted = await _llm_extract(positives, negatives, llm, redis=redis)
         if not extracted:
             return {"aborted_reason": "llm_empty_or_failed", "diff": {}}
         diff = _build_diff(card, extracted, mode)

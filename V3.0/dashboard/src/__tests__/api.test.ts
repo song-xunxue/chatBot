@@ -34,7 +34,7 @@ const apiMethods = hoisted.apiMethods
 import {
   listPersonas, bindPersonaModel,
   listBlocks, listMessages, deleteMessage,
-  getSamples, reverseInferDryRun, reverseInferApply, setScore,
+  getSamples, reverseInferDryRun, reverseInferApply, setScore, setMessageNote,
   getMoodParams, setMoodParams, moodCalc,
   restoreMemory, lockMemory,
   enablePlugin, reloadStar,
@@ -100,6 +100,13 @@ describe('api endpoint mapping + wrapper unwrapping', () => {
     await setScore('m1', 40, '太生硬', '换成角色口吻的说法', 95)
     expect(apiMethods.patch).toHaveBeenCalledWith('/api/v1/chat/messages/m1/score',
       { score_base: 40, score_note: '太生硬', corrected: '换成角色口吻的说法', corrected_score: 95 })
+  })
+
+  it('chat: setMessageNote 消息批注(评分理由+暗含意思,V3.0 2026-09-15)', async () => {
+    mockResolve('patch', {})
+    await setMessageNote('m2', '这句其实是撒娇;评分理由:语气贴合')
+    expect(apiMethods.patch).toHaveBeenCalledWith('/api/v1/chat/messages/m2/note',
+      { note: '这句其实是撒娇;评分理由:语气贴合' })
   })
 
   it('mood: params/calc', async () => {

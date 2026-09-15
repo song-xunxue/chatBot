@@ -198,6 +198,14 @@ class Settings(BaseSettings):
     gptsovits_ref_audio: str = ""       # 参考音频绝对路径(GPT-SoVITS 服务端机器可访问)
     gptsovits_prompt_text: str = ""     # 参考音频对应文本(逐字准确,质量关键)
 
+    # 18.NapCat 掉线监控(2026-09-15):09-08~15 QQ 登录态失效静默丢 8 天数据的教训。
+    #    两级信号:①反向WS连接态 ②QQ 登录态(NapCat WebUI 探测;WS 活着但 QQ 离线
+    #    = 事故形态,隧道在消息不到,最隐蔽)。状态供面板横幅轮询(/system/napcat-status)。
+    napcat_watch_enabled: bool = True   # 总开关:周期探活 + 状态记录(关=纯被动,无告警)
+    napcat_watch_interval_sec: int = 300  # 探活周期(秒;默认 5min,面板横幅 60s 轮询读缓存)
+    napcat_webui_base: str = ""         # NapCat WebUI 地址(如 http://host.docker.internal:6080)
+    napcat_webui_token: str = ""        # WebUI token(空=跳过 QQ 登录态探测,仅监控 WS 连接态)
+
 
 # 全局配置单例
 settings = Settings()

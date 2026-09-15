@@ -68,6 +68,18 @@ async def get_message(mid: str):
     return msg
 
 
+@router.patch("/chat/messages/{mid}/note", dependencies=[Depends(verify_token)])
+async def set_message_note(mid: str, body: dict = Body(default={})):
+    """写消息批注(2026-09-15):任意 sender 均可(含 user 消息)。批注 = 为什么是这个评分 +
+    这句话的暗含意思/特殊习惯用语(多方面解答),存 score_note 字段(与改分弹窗批注同一元素)。
+    body {note};空串=清空。批注会进入人设反推上下文([批注: ...],管理员解读优先采信)。"""
+    redis = await get_redis()
+    note = await chat_store.set_note(redis, mid, str(body.get("note", "") or ""))
+    if note is None:
+        raise HTTPException(status_code=404, detail="message not found")
+    return {"mid": mid, "note": note}
+
+
 @router.delete("/chat/messages/{mid}", dependencies=[Depends(verify_token)])
 async def delete_message(mid: str):
     """物理删单条消息(2026-08-18 真删除:msg Hash + block msgs 索引移除,会话不再出现)。

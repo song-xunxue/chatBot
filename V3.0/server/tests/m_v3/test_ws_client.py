@@ -34,11 +34,22 @@ def _evt_array(user_id=111, self_id=999, text="你好", img=None):
 
 
 def test_extract_content_array():
-    """array 格式:文本段拼接 + image url 提取"""
+    """array 格式:文本段拼接 + image url 提取(2026-09-15 起 media 为 {url,summary} 字典)"""
     from onebot.ws_client import _extract_content
-    text, images = _extract_content(_evt_array(text="看这张", img="https://img.qq/1.jpg"))
+    text, media = _extract_content(_evt_array(text="看这张", img="https://img.qq/1.jpg"))
     assert text == "看这张"
-    assert images == ["https://img.qq/1.jpg"]
+    assert media == [{"url": "https://img.qq/1.jpg", "summary": ""}]
+
+
+def test_extract_content_mface_summary():
+    """array 格式 mface 段:收 url+summary(表情包入库 vision 短路用)"""
+    from onebot.ws_client import _extract_content
+    data = _evt_array(text="")
+    data["message"] = [{"type": "mface",
+                        "data": {"url": "https://img.qq/m.gif", "summary": "[开心]"}}]
+    text, media = _extract_content(data)
+    assert text == ""
+    assert media == [{"url": "https://img.qq/m.gif", "summary": "[开心]"}]
 
 
 def test_extract_content_string_cq():
@@ -48,9 +59,31 @@ def test_extract_content_string_cq():
             "self_id": 999, "user_id": 111,
             "raw_message": "看图 [CQ:image,file=x.jpg,url=https://g.chat/2.png] 好看吗",
             "message": "看图 [CQ:image,file=x.jpg,url=https://g.chat/2.png] 好看吗"}
-    text, images = _extract_content(data)
+    text, media = _extract_content(data)
     assert text == "看图  好看吗"
-    assert images == ["https://g.chat/2.png"]
+    assert media == [{"url": "https://g.chat/2.png", "summary": ""}]
+
+
+async def test_content_or_media_token_sticker(monkeypatch, fake_redis, tmp_path):
+    """纯表情包消息 → ingest 语义 token(下载+描述+入库,mock);文本消息原样;非图片占位"""
+    from onebot import ws_client
+    import storage.sticker_store as ss
+    monkeypatch.setattr(ss, "STICKER_DIR", tmp_path)
+
+    async def fake_ingest(redis, url, *, summary=""):
+        return f"[表情包: 摸鱼猫]"
+
+    monkeypatch.setattr(ss, "ingest", fake_ingest)
+    # 纯表情包(image)
+    data = _evt_array(text="", img="https://img.qq/a1.gif")
+    token = await ws_client._content_or_media_token(data, "", [{"url": "https://img.qq/a1.gif", "summary": ""}])
+    assert token == "[表情包: 摸鱼猫]"
+    # 文本优先
+    assert await ws_client._content_or_media_token(data, "你好", []) == "你好"
+    # 非图片媒体占位(face)
+    data2 = _evt_array(text="")
+    data2["message"] = [{"type": "face", "data": {"id": 349}}]
+    assert await ws_client._content_or_media_token(data2, "", []) == "[表情]"
 
 
 async def test_handle_event_filters_other_self_id(monkeypatch):

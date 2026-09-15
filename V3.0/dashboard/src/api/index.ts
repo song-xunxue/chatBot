@@ -31,6 +31,9 @@ export const deleteMessage = (mid: string) =>
   api.delete(`/api/v1/chat/messages/${mid}`).then((r) => r.data)
 export const closeBlock = (bid: string, reason = 'manual') =>
   api.post(`/api/v1/chat/blocks/${bid}/close`, { reason }).then((r) => r.data)
+// 消息批注(2026-09-15:评分理由+暗含意思/习惯用语;任意 sender 含 user 消息;存 score_note)
+export const setMessageNote = (mid: string, note: string) =>
+  api.patch(`/api/v1/chat/messages/${mid}/note`, { note }).then((r) => r.data)
 export const deleteBlock = (bid: string) =>
   api.delete(`/api/v1/chat/blocks/${bid}`).then((r) => r.data)
 export const clearHistory = (oid: string) =>
@@ -130,6 +133,8 @@ export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) =
 export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => r.data)
 export const resetAllData = () =>
   api.post('/api/v1/system/reset', { confirm: '清空' }).then((r) => r.data)
+// NapCat 掉线监控状态(2026-09-15:布局层 60s 轮询,offline 红色横幅"消息正在丢失")
+export const getNapcatStatus = () => api.get('/api/v1/system/napcat-status').then((r) => r.data)
 
 // —— 训练前置工具(2026-09-12:人设盲测基准 / 训练数据导出)——
 export const benchmarkPersona = (oid: string, body: { provider_a: string; provider_b: string; n?: number }) =>

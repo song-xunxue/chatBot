@@ -556,6 +556,17 @@ async def set_score(redis: Redis, mid: str, *,
     return quad
 
 
+async def set_note(redis: Redis, mid: str, note: str) -> str | None:
+    """写消息批注(2026-09-15):score_note 字段语义升级为统一批注——为什么是这个评分 +
+    这句话的暗含意思/习惯用语(多方面解答)。支持任意 sender(含 user 消息:用户的隐含
+    意思/特殊习惯用语由管理员批注,反推与训练侧理解用户话语的权威线索)。
+    空串=清空。返回写入的 note;消息不存在返 None。"""
+    if not await redis.exists(_msg_key(mid)):
+        return None
+    await redis.hset(_msg_key(mid), "score_note", note or "")
+    return note or ""
+
+
 # ================ roleplay 物理隔离(block 三层,M8 升级自简化 List)=================
 # 训练样本离散录入,不按静默超时关 block:单一持续 open block 追加,close_roleplay_block 手动分段。
 # 键前缀 mychat:block_roleplay:* / mychat:msg_roleplay:* 独立于 live,get_history 只读 live 键 → 天然隔离。

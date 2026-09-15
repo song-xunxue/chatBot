@@ -142,6 +142,78 @@ async def test_export_training_data(tmp_path, fake_redis, monkeypatch):
     assert dpo[0]["conversations"][-1]["value"] == "陪我聊会"
 
 
+# ================ B1-export 2026-09-15:连发合并(burst merge) ================
+
+async def _seed_burst_chat(fake_redis):
+    """连发场景:user + manual 三连发 + user + manual 单条 + user + 占位-only manual"""
+    import asyncio
+    from storage import chat_store as cs
+    await cs.append_message(fake_redis, "10001", sender="user", content="在忙吗")
+    await asyncio.sleep(0.002)
+    await cs.append_message(fake_redis, "10001", sender="proxy", content="在呀", source="manual")
+    await asyncio.sleep(0.002)
+    await cs.append_message(fake_redis, "10001", sender="proxy", content="刚下课", source="manual")
+    await asyncio.sleep(0.002)
+    await cs.append_message(fake_redis, "10001", sender="proxy", content="夫君吃饭了没", source="manual")
+    await asyncio.sleep(0.002)
+    await cs.append_message(fake_redis, "10001", sender="user", content="那我先写作业啦")
+    await asyncio.sleep(0.002)
+    await cs.append_message(fake_redis, "10001", sender="proxy", content="好呀~", source="manual")
+    await asyncio.sleep(0.002)
+    await cs.append_message(fake_redis, "10001", sender="user", content="看看这个")
+    await asyncio.sleep(0.002)
+    await cs.append_message(fake_redis, "10001", sender="proxy", content="[图片]", source="manual")
+
+
+async def test_export_burst_merge(tmp_path, fake_redis, monkeypatch):
+    """连发合并:三连发 manual 合并成 1 条 '\n' 样本;后续样本 history 携带合并版回合"""
+    from training import export as export_mod
+    monkeypatch.setattr(export_mod, "_training_dir", lambda: tmp_path)
+    await _seed_burst_chat(fake_redis)
+
+    r = await export_mod.export_training_data(fake_redis, "10001", min_score=85)
+    # 三连发=1 条 + 单条=1 条;占位-only 的回复单元不成样本
+    assert r["by_source"]["manual"] == 2
+
+    sft_file = [p for p in tmp_path.iterdir() if "sft" in p.name][0]
+    sft = [json.loads(x) for x in sft_file.read_text(encoding="utf-8").splitlines()]
+    by_inst = {it["instruction"]: it for it in sft}
+    # 三连发合并成一条,保持顺序
+    assert by_inst["在忙吗"]["output"] == "在呀\n刚下课\n夫君吃饭了没"
+    # 后续样本的前文携带合并版回合(多气泡=一条多行 assistant 回合)
+    assert by_inst["那我先写作业啦"]["history"] == [["在忙吗", "在呀\n刚下课\n夫君吃饭了没"]]
+    # 占位-only 手动回复不入集([图片] 对风格学习无价值)
+    assert "看看这个" not in by_inst
+
+
+async def test_export_burst_correction(tmp_path, fake_redis, monkeypatch):
+    """correction 混入连发:merged 用纠正文本;DPO chosen/rejected 均为合并版(同上下文整回复对比)"""
+    import asyncio
+    from storage import chat_store as cs
+    from training import export as export_mod
+    monkeypatch.setattr(export_mod, "_training_dir", lambda: tmp_path)
+    await cs.append_message(fake_redis, "10001", sender="user", content="说点什么")
+    await asyncio.sleep(0.002)
+    await cs.append_message(fake_redis, "10001", sender="proxy", content="嗯?", source="manual")
+    await asyncio.sleep(0.002)
+    mid_bad = await cs.append_message(fake_redis, "10001", sender="ai", content="请问有什么可以帮您?")
+    await cs.set_score(fake_redis, mid_bad, score_base=40, mood_value=0.5, mood_bias=0)
+    await fake_redis.hset(f"mychat:msg:{mid_bad}", "corrected", "夫君想我了吗~")
+
+    r = await export_mod.export_training_data(fake_redis, "10001", min_score=85)
+    assert r["by_source"]["correction"] == 1
+    assert r["by_source"]["manual"] == 0            # burst 整单元归 correction(manual 部分并入)
+    assert r["dpo"] == 1
+    dpo_file = [p for p in tmp_path.iterdir() if "dpo" in p.name][0]
+    dpo = [json.loads(x) for x in dpo_file.read_text(encoding="utf-8").splitlines()]
+    # chosen=合并纠正版 / rejected=合并原版
+    assert dpo[0]["chosen"]["value"] == "嗯?\n夫君想我了吗~"
+    assert dpo[0]["rejected"]["value"] == "嗯?\n请问有什么可以帮您?"
+    sft_file = [p for p in tmp_path.iterdir() if "sft" in p.name][0]
+    sft = [json.loads(x) for x in sft_file.read_text(encoding="utf-8").splitlines()]
+    assert sft[0]["output"] == "嗯?\n夫君想我了吗~"
+
+
 # ================ A2: benchmark ================
 
 async def test_benchmark_persona(fake_redis, monkeypatch):

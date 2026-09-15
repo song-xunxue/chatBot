@@ -14,3 +14,4 @@ pynacl>=1.5              # Ed25519 签名/验签(QQ Webhook 回调签名校验�
 pyyaml>=6.0              # 插件 manifest 解析(plugins/manifest.py;M2 manager import 链需要,M6 加载 .star)
 mcp>=1.28                # MCP client(M5,连外部 MCP server,tool-loop 接外部工具:搜索/浏览/fetch)
 silk-python>=0.2.6       # Tencent SILK 编码(M-tts:TTS mp3/wav → silk QQ 语音条;pysilk 模块,tencent=True 出 0x02 前缀)
+pillow>=10.0             # 表情包 vision 归一化(2026-09-15:gif 取首帧/webp 转 png——GLM vision 只收 jpg/png)
