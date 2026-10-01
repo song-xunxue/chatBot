@@ -12,10 +12,16 @@ CosyVoice2 情感指令:input 形如 "{情感描述}<|endofprompt|>{实际文本
   支持自然语言情感/语气/方言描述 + 韵律标记([laughter]/[breath])。
 
 音色(4 女声,面板下拉):anna 沉稳 / bella 激情 / claire 温柔 / diana 欢快。
-产出 mp3 经 modality/silk.to_tencent_silk 转 silk 后发 QQ 语音条。
+产出音频(mp3/wav)直发 adapter.send_voice,由 NapCat 内置 ffmpeg 自转 silk(2026-10-01,
+勿再走 modality/silk 自编——NapCat 对自编 silk 时长解析为 0,QQ 只显 1s 截断)。
 
 作者: 李文煜
 日期: 2026-08-04
+
+2026-10-01
+变更说明：
+    1. 修语音 1s 截断:send_voice_reply 去掉 to_tencent_silk,合成音频直传
+       (线上对照实验:NapCat 自转 12.7s 完整,自编 silk 0s)。silk.py 模块保留不再被调用。
 """
 import asyncio
 import json
@@ -101,7 +107,7 @@ class GPTSoVitsProvider(TTSProvider):
     """GPT-SoVITS(本地 GAG 启动的 api_v2 服务)TTS provider。
     音色由 gpt_model + sovits_model + ref_audio_path + prompt_text 决定(config 配置,首版固定单音色)。
     voice/emotion 参数本版忽略(GPT-SoVITS 无音色名/情感指令;多情感档位后续扩多条参考音频)。
-    合成返 wav bytes,直接喂 to_tencent_silk(ffmpeg 按内容探测格式,文件名 in.mp3 仅变量名不影响)。"""
+    合成返 wav bytes,直发 adapter.send_voice(NapCat 自转 silk)。"""
     name = "gptsovits"
 
     def __init__(self, api_base: str = "", gpt_model: str = "", sovits_model: str = "",
@@ -297,31 +303,29 @@ async def send_voice_reply(oid: str, text: str, *, msg_id: str, msg_seq: int,
                            voice: str, speed: float, gain: float,
                            emotion_enable: bool, send_text_also: bool,
                            human_authored: bool = False, **tts_params) -> dict | None:
-    """共享:TTS 合成 + 转 silk + 上传 + 发语音(可选先文本)。插件 on_message_out 与 takeover _deliver 复用。
+    """共享:TTS 合成 + 发语音(可选先文本)。插件 on_message_out 与 takeover _deliver 复用。
 
     成功返 {delivered:True, mode},失败/空产出返 None(调用方降级文本下发,不阻塞主流程)。
+    音频不做本地转码直传(NapCat 内置 ffmpeg 自转 silk;自编 silk 其时长解析 0s,2026-10-01)。
     msg_seq:起始序号——send_text_also 时 text 用 msg_seq、voice 用 msg_seq+1;否则 voice 用 msg_seq。
     human_authored:可选同发文本是否过出站守卫(代答 admin 文本 True 跳守卫;机器回复 False 过守卫)。
         语音本身是音频,无错误文本泄漏风险,send_c2c_voice 不过守卫。
     """
-    import base64
-    from modality.silk import to_tencent_silk
-    from adapter import get_current_adapter   # V3.0:平台适配器(official=上传+富媒体;onebot=CQ record)
+    from adapter import get_current_adapter   # V3.0:平台适配器(onebot=record 段 base64)
     adapter = await get_current_adapter()
     try:
         emotion = await infer_tts_emotion(text) if emotion_enable else ""
-        mp3 = await get_tts().synthesize(text, voice, speed, gain, emotion, **tts_params)
-        if not mp3:
+        audio = await get_tts().synthesize(text, voice, speed, gain, emotion, **tts_params)
+        if not audio:
             logger.info("TTS 空产出(stub/无 key),跳过语音 oid=%s", oid)
             return None
-        silk = await to_tencent_silk(mp3)
         seq = msg_seq
         mode = "voice"
         if send_text_also:
             await adapter.send_text(oid, text, msg_id=msg_id, msg_seq=seq, human_authored=human_authored)
             seq += 1
             mode = "text+voice"
-        await adapter.send_voice(oid, silk, msg_id=msg_id, msg_seq=seq)
+        await adapter.send_voice(oid, audio, msg_id=msg_id, msg_seq=seq)
         logger.info("TTS 语音已发送 oid=%s voice=%s emotion=%s mode=%s",
                     oid, voice, emotion or "无", mode)
         return {"delivered": True, "mode": mode}

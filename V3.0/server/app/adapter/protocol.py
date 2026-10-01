@@ -23,9 +23,10 @@ class PlatformAdapter(Protocol):
         返回 dict(official=QQ 响应 {id,timestamp};onebot={delivered,mode})。"""
         ...
 
-    async def send_voice(self, oid: str, silk_bytes: bytes, *, msg_id: str = "",
+    async def send_voice(self, oid: str, audio_bytes: bytes, *, msg_id: str = "",
                          msg_seq: int = 1, content: str = "") -> dict:
-        """发语音(silk bytes;QQ 语音统一格式)。失败抛异常,调用方降级文本。"""
+        """发语音(通用音频 bytes:wav/mp3;onebot=NapCat 内置 ffmpeg 自转 silk)。
+        失败抛异常,调用方降级文本。"""
         ...
 
     async def init(self) -> None:

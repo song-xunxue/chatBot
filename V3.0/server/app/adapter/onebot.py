@@ -3,7 +3,7 @@ onebot 适配器(V3.0 M-V3-1):经 NapCat 反向 WS 发 OneBot v11 Action。
 出站通道由 onebot/ws_client 维护(NapCat 主动连入的 WS 连接);本适配器只发 Action + 等响应。
 
 - 文本:send_private_msg;出站守卫与 official 同构(human_authored=False 过 sanitize_reply,架构 #3)。
-- 语音:CQ record 码 + base64(silk;QQ 语音统一格式,NapCat 直接下发音 Voice 条)。
+- 语音:record 段 + base64(通用音频 wav/mp3;NapCat 内置 ffmpeg 自转 silk,勿自转——见 2026-10-01 变更)。
 - msg_id/msg_seq 忽略(OneBot 个人号无被动回复窗口/月配额概念,主动直发)。
 - 失败抛 RuntimeError(未连接/retcode 非 0),调用方(webhook 式降级/插件兜底)逻辑同 official。
 - 表情包(2026-09-15):文本中 [表情包: 描述] token → sticker_store.find_sticker 库匹配 →
@@ -20,6 +20,12 @@ onebot 适配器(V3.0 M-V3-1):经 NapCat 反向 WS 发 OneBot v11 Action。
 变更说明：
     1. send_text 表情包 token 翻译(收发功能;segment array 天然支持 image 段)
     2. 表情包独立成条:文本与表情包拆成多次独立 send(聊天习惯),条间随机小延迟
+
+2026-10-01
+变更说明：
+    1. 修语音 1s 截断:send_voice 收通用音频 bytes(wav/mp3)直发 record 段,由 NapCat
+       内置 ffmpeg 自转 silk。此前自编 silk(pysilk tencent=True)NapCat 算出时长 0s,
+       QQ 侧只显 1s(线上对照实验:NapCat 自转 12.7s 完整,自编 silk 0s)。
 """
 import asyncio
 import base64
@@ -97,9 +103,10 @@ class OnebotAdapter:
             logger.exception("表情包消息构建失败(回退纯文本)")
             return [[{"type": "text", "data": {"text": text}}]]
 
-    async def send_voice(self, oid: str, silk_bytes: bytes, *, msg_id: str = "",
+    async def send_voice(self, oid: str, audio_bytes: bytes, *, msg_id: str = "",
                          msg_seq: int = 1, content: str = "") -> dict:
-        b64 = base64.b64encode(silk_bytes).decode()
+        # 音频原样直传(wav/mp3 由 NapCat 自转 silk——自编 silk 其时长解析为 0,见头部 2026-10-01)
+        b64 = base64.b64encode(audio_bytes).decode()
         # array 格式:record 段(base64)+ 可选 text 附文段;text 段免 CQ 解析(同上)
         segs = []
         if content:

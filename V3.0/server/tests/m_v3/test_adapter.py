@@ -70,7 +70,7 @@ async def test_onebot_text_guard_and_failure(monkeypatch):
 
 
 async def test_onebot_voice_segments(monkeypatch):
-    """onebot 语音:array record 段 + base64;可选 text 附文段(免 CQ 解析)"""
+    """onebot 语音:array record 段 + base64(通用音频,NapCat 自转 silk);可选 text 附文段(免 CQ 解析)"""
     from adapter.onebot import OnebotAdapter
     sent = []
 
@@ -81,12 +81,12 @@ async def test_onebot_voice_segments(monkeypatch):
     monkeypatch.setattr("onebot.ws_client.call_action", fake_call)
     a = OnebotAdapter()
     import base64
-    silk = b"\x01\x02silk-bytes"
-    await a.send_voice("12345", silk, content="看这个")
+    audio = b"RIFFfake-wav-bytes"
+    await a.send_voice("12345", audio, content="看这个")
     segs = sent[-1][1]["message"]
     assert segs[0] == {"type": "text", "data": {"text": "看这个"}}
     assert segs[1]["type"] == "record"
-    assert segs[1]["data"]["file"] == f"base64://{base64.b64encode(silk).decode()}"
+    assert segs[1]["data"]["file"] == f"base64://{base64.b64encode(audio).decode()}"
     # 无附文:纯 record 段
-    await a.send_voice("12345", silk)
+    await a.send_voice("12345", audio)
     assert sent[-1][1]["message"][0]["type"] == "record"

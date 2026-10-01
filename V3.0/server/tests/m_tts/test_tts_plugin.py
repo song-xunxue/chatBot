@@ -1,8 +1,10 @@
 """
 tts_reply 插件 + 插件参数端点单测(M-tts,2026-08-04)
-覆盖:on_message_out 端到端(情感→TTS→silk→上传→发语音,mock 各步)+ send_text_also 两分支
-+ 情感开关 + 软失败(reply_sent 保持 False)+ 无 msg_id/stub 空产出 跳过 + 上传 base64_silk/file_type=3
+覆盖:on_message_out 端到端(情感→TTS→发语音,音频直传,mock 各步)+ send_text_also 两分支
++ 情感开关 + 软失败(reply_sent 保持 False)+ 无 msg_id/stub 空产出 跳过
 + REST params GET/PUT(get_plugin_params/set_plugin_params 薄包装)。
+
+2026-10-01 变更:silk 自编环节移除(音频直传 NapCat 自转),mock 链同步去掉 to_tencent_silk。
 
 作者: 李文煜
 日期: 2026-08-04
@@ -47,8 +49,8 @@ def _make_plugin(params):
     return p
 
 
-def _mock_chain(monkeypatch, *, mp3=b"MP3", silk=b"\x02SILK", file_info="FI-xxx", synth_exc=None):
-    """mock 整条链(get_tts/infer/silk/upload/send_voice/send_msg),返回 captured"""
+def _mock_chain(monkeypatch, *, mp3=b"MP3", file_info="FI-xxx", synth_exc=None):
+    """mock 整条链(get_tts/infer/send_voice/send_msg),返回 captured。音频直传(2026-10-01 无 silk 环节)"""
     captured = {"send_msg": [], "send_voice": [], "upload": []}
 
     class FakeProvider:
@@ -65,19 +67,14 @@ def _mock_chain(monkeypatch, *, mp3=b"MP3", silk=b"\x02SILK", file_info="FI-xxx"
         return "温柔撒娇"
     monkeypatch.setattr(tts_mod, "infer_tts_emotion", fake_emotion)
 
-    async def fake_silk(audio, *, ffmpeg=""):
-        captured["silk_in"] = audio
-        return silk
-    monkeypatch.setattr(silk_mod, "to_tencent_silk", fake_silk)
-
-    # V3.0:出站走 adapter(send_voice 直接收 silk;send_text 文本)——2026-08-17 精简
+    # V3.0:出站走 adapter(send_voice 直接收音频;send_text 文本)——2026-08-17 精简
     class _CapAdapter:
         async def send_text(self, oid, content, *, msg_id="", msg_seq=1, human_authored=False):
             captured["send_msg"].append(dict(oid=oid, content=content, msg_id=msg_id, msg_seq=msg_seq))
             return {"delivered": True, "mode": "fake_text"}
 
-        async def send_voice(self, oid, silk_bytes, *, msg_id="", msg_seq=1, content=""):
-            captured["send_voice"].append(dict(oid=oid, silk=silk_bytes, msg_id=msg_id, msg_seq=msg_seq))
+        async def send_voice(self, oid, audio_bytes, *, msg_id="", msg_seq=1, content=""):
+            captured["send_voice"].append(dict(oid=oid, audio=audio_bytes, msg_id=msg_id, msg_seq=msg_seq))
             return {"delivered": True, "mode": "fake_voice"}
 
         async def init(self):
@@ -95,7 +92,7 @@ async def test_voice_only_sets_reply_sent(monkeypatch):
     ctx = _Ctx()
     await _make_plugin(DEFAULT_PARAMS).on_message_out(ctx)
     assert ctx.reply_sent is True
-    assert cap["send_voice"] == [dict(oid="oid1", silk=b"SILK", msg_id="MID", msg_seq=1)]
+    assert cap["send_voice"] == [dict(oid="oid1", audio=b"MP3", msg_id="MID", msg_seq=1)]
     assert cap["send_msg"] == []
     assert cap["synth"]["emotion"] == "温柔撒娇"
 
@@ -107,7 +104,7 @@ async def test_text_also_sends_both(monkeypatch):
     await _make_plugin({**DEFAULT_PARAMS, "send_text_also": True}).on_message_out(ctx)
     assert ctx.reply_sent is True
     assert cap["send_msg"] == [dict(oid="oid1", content="夫君辛苦啦", msg_id="MID", msg_seq=1)]
-    assert cap["send_voice"] == [dict(oid="oid1", silk=b"SILK", msg_id="MID", msg_seq=2)]
+    assert cap["send_voice"] == [dict(oid="oid1", audio=b"MP3", msg_id="MID", msg_seq=2)]
 
 
 async def test_emotion_disabled(monkeypatch):
@@ -144,12 +141,12 @@ async def test_no_msg_id_skips(monkeypatch):
     assert cap["send_voice"] == []
 
 
-async def test_silk_bytes_reach_adapter(monkeypatch):
-    """silk bytes 直达 adapter.send_voice(V3.0 无官方 upload;base64 编码在 adapter 内)"""
-    silk = b"\x02SILKDATA"
-    cap = _mock_chain(monkeypatch, silk=silk)
+async def test_audio_bytes_reach_adapter(monkeypatch):
+    """合成音频 bytes 直达 adapter.send_voice(2026-10-01 起 wav/mp3 直传,NapCat 自转 silk)"""
+    audio = b"RIFFwav-data"
+    cap = _mock_chain(monkeypatch, mp3=audio)
     await _make_plugin(DEFAULT_PARAMS).on_message_out(_Ctx())
-    assert cap["send_voice"][0]["silk"] == silk
+    assert cap["send_voice"][0]["audio"] == audio
 
 
 # —— REST params 端点(薄包装,get_plugin_manager mock)——

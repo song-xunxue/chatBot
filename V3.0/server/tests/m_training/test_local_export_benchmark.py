@@ -85,24 +85,25 @@ async def _seed_chat(fake_redis):
     """造对话:user+ai(90=pos) / user+proxy(manual) / user+ai(低分+corrected=correction+DPO)"""
     import asyncio
     from storage import chat_store as cs
-    # 每条隔 2ms:防同毫秒 ts ZSet 平局排序抖动(老坑)
+    # 每条隔 30ms:防同毫秒 ts ZSet 平局(mid 字典序)排序抖动(老坑,Windows 时钟粒度 ~15ms)
     await cs.append_message(fake_redis, "10001", sender="user", content="早上好")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     mid_pos = await cs.append_message(fake_redis, "10001", sender="ai", content="早上好呀~今天也要元气满满")
     await cs.set_score(fake_redis, mid_pos, score_base=90, mood_value=0.5, mood_bias=0)
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="user", content="晚上吃什么")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="proxy", content="想吃火锅~",
                             source="manual")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="user", content="陪我聊会")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     mid_bad = await cs.append_message(fake_redis, "10001", sender="ai", content="好的。请问有什么可以帮您?")
     await cs.set_score(fake_redis, mid_bad, score_base=40, mood_value=0.5, mood_bias=0)
     await fake_redis.hset(f"mychat:msg:{mid_bad}", "corrected", "嗯嗯~夫君想聊什么呀")
-    # roleplay 高分剧本
+    # roleplay 高分剧本(两条间隔 30ms:同毫秒 ts 时 ZSet 按 mid 字典序排,顺序随机翻转)
     await cs.append_roleplay_message(fake_redis, "10001", role="user", content="剧本问句")
+    await asyncio.sleep(0.03)
     await cs.append_roleplay_message(fake_redis, "10001", role="assistant",
                                      content="剧本高分回复~", score_base=90)
 
@@ -149,19 +150,19 @@ async def _seed_burst_chat(fake_redis):
     import asyncio
     from storage import chat_store as cs
     await cs.append_message(fake_redis, "10001", sender="user", content="在忙吗")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="proxy", content="在呀", source="manual")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="proxy", content="刚下课", source="manual")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="proxy", content="夫君吃饭了没", source="manual")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="user", content="那我先写作业啦")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="proxy", content="好呀~", source="manual")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="user", content="看看这个")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="proxy", content="[图片]", source="manual")
 
 
@@ -193,9 +194,9 @@ async def test_export_burst_correction(tmp_path, fake_redis, monkeypatch):
     from training import export as export_mod
     monkeypatch.setattr(export_mod, "_training_dir", lambda: tmp_path)
     await cs.append_message(fake_redis, "10001", sender="user", content="说点什么")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     await cs.append_message(fake_redis, "10001", sender="proxy", content="嗯?", source="manual")
-    await asyncio.sleep(0.002)
+    await asyncio.sleep(0.03)
     mid_bad = await cs.append_message(fake_redis, "10001", sender="ai", content="请问有什么可以帮您?")
     await cs.set_score(fake_redis, mid_bad, score_base=40, mood_value=0.5, mood_bias=0)
     await fake_redis.hset(f"mychat:msg:{mid_bad}", "corrected", "夫君想我了吗~")
@@ -235,8 +236,11 @@ async def test_benchmark_persona(fake_redis, monkeypatch):
     import score.service as score_service
     monkeypatch.setattr(score_service, "_llm_score", _fake_score)
 
+    import asyncio as _aio
     await chat_store.append_message(fake_redis, "10001", sender="user", content="第一条")
+    await _aio.sleep(0.03)
     await chat_store.append_message(fake_redis, "10001", sender="ai", content="回一")
+    await _aio.sleep(0.03)
     await chat_store.append_message(fake_redis, "10001", sender="user", content="第二条")
 
     r = await bm.benchmark_persona(fake_redis, "10001",

@@ -84,9 +84,9 @@ class _RecordingAdapter:
         self.sent.append(("text", oid, content, msg_id, msg_seq, human_authored))
         return {"delivered": True, "mode": "fake_text"}
 
-    async def send_voice(self, oid, silk_bytes, *, msg_id="", msg_seq=1, content=""):
+    async def send_voice(self, oid, audio_bytes, *, msg_id="", msg_seq=1, content=""):
         self._maybe_raise("voice")
-        self.sent.append(("voice", oid, silk_bytes, msg_id, msg_seq, content))
+        self.sent.append(("voice", oid, audio_bytes, msg_id, msg_seq, content))
         return {"delivered": True, "mode": "fake_voice"}
 
     async def init(self):

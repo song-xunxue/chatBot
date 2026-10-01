@@ -1,5 +1,9 @@
 """
 音频 → Tencent SILK 转码(M-tts,2026-08-04)
+⚠️ 2026-10-01 起 TTS 链路不再使用本模块:NapCat 对自编 silk(tencent=True)时长解析为 0s,
+QQ 只显 1s 截断;现 send_voice_reply 直传 wav/mp3 由 NapCat 内置 ffmpeg 自转 silk(时长正确)。
+模块保留:find_ffmpeg 仍被 rest_tts 引用;转换逻辑存档备查(若官方机器人 API 回归可用)。
+
 QQ 官方机器人语音消息必须 SILK 格式(0x02 前缀);TTS 产出 mp3 经本模块转 silk 才能发。
 
 链路(对照 AstrBot tencent_record_helper.py + 本项目 gating 验证):
@@ -11,6 +15,11 @@ ffmpeg 定位:优先 PATH,回退 conda env Library/bin[Win] / bin[Linux](开发+
 
 作者: 李文煜
 日期: 2026-08-04
+
+2026-10-01
+变更说明：
+    1. TTS 链路弃用(自编 silk NapCat 时长解析 0s → QQ 1s 截断,线上对照实验证实);
+       保留 find_ffmpeg 供 rest_tts 使用,转码逻辑存档
 """
 import asyncio
 import io
