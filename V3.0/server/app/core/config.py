@@ -43,6 +43,11 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
 2026-08-08
 变更说明：
   1. 加 GPT-SoVITS(GAG/api_v2 本地服务)作为主力 TTS provider:api_base/gpt_model/sovits_model/ref_audio/prompt_text
+
+2026-10-25
+变更说明：
+  1. 新增 local_llm_disable_think(默认 True):真正关闭 Qwen3 思考模式——优先 Ollama 原生
+     /api/chat(think:false),失败回退 OpenAI 兼容路径 + 末条 user 消息注入 " /no_think"
 """
 from pathlib import Path
 
@@ -90,6 +95,12 @@ class Settings(BaseSettings):
     local_llm_api_base: str = ""   # 空=未启用;云部署填 http://host.docker.internal:11434/v1(frp 隧道)
     local_llm_api_key: str = "ollama"
     local_llm_model: str = "qwen3:8b"
+    # 关闭 Qwen3 思考模式(2026-10-25):Ollama 的 OpenAI 兼容端点忽略 payload 里的 think 字段,
+    # qwen3 默认思考、max_tokens 小时 token 全花在 <think> 段致 content 为空。
+    # 开=True(默认):优先走 Ollama 原生 /api/chat(真正生效的 think:false),
+    # 原生端点不可用(如 vLLM)时回退 OpenAI 兼容路径并在末条 user 消息注入 " /no_think" 软关思考;
+    # 关=False:纯 OpenAI 兼容路径(思考开,出口 _strip_think 兜底剥除)
+    local_llm_disable_think: bool = True
 
     # 5.人设系统(M2 copy V1.0 persona 模块用)
     persona_active_id: str = "default"  # 未绑定对象时使用的默认人设 id

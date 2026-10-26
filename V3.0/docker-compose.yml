@@ -25,6 +25,9 @@ services:
     environment:
       # 容器内经服务名 redis 访问本栈独立实例(数据隔离;覆盖 .env 里可能的 V2 地址)
       - REDIS_URL=redis://redis:6379/0
+      # 容器时区固定北京时间(2026-10-25:原 UTC 下 datetime.now() 全错 8 小时——
+      # proactive_reply 静默时段门控与 time_aware 时辰标签都按本地时区解释)
+      - TZ=Asia/Shanghai
     depends_on:
       - redis
     ports:

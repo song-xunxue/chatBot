@@ -36,6 +36,18 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
 变更说明：
   1. 修应用 logging 盲区:import 后调 setup_logging(settings.log_level)(core/logging_config dictConfig)
      原未配置致业务 INFO 被 Python 默认 lastResort 丢弃,docker logs 只有 uvicorn access log
+
+2026-10-25
+变更说明：
+  1. 接线 TickScheduler(此前 scheduler.py 写好但从未实例化,on_tick 钩子线上不触发):
+     每 plugin_tick_interval 秒对活跃 oid 触发 on_tick,
+     驱动 time_aware 时辰缓存/proactive_reply 主动搭话;随 lifespan 关闭而 stop
+  2. 修活跃源集成 bug(实测 22:21 真发暴露):原只取 mychat:mood:oids,真实私聊未命中
+     mood 情感词的会话永不进 tick;且 seed 的 demo 等非数字 oid 会让 onebot int(oid) 报错。
+     活跃源改为 最近会话(chat_store.list_recent_sessions) ∪ mood oids 并集(模块级
+     tick_object_ids),仅保留可转 QQ 号的数字 oid,非数字跳过并 debug 日志
+  3. 挂载表情包库管理/渲染 REST 路由(sticker_router,/api/v1/sticker/list|upload|
+     {name}/describe|render,sticker_plus 插件配套)
 """
 import asyncio
 import logging
@@ -57,12 +69,44 @@ from api.rest_roleplay import router as roleplay_router
 from api.rest_multimodal import router as multimodal_router
 from api.rest_tts import router as tts_router
 from api.rest_training import router as training_router
+from api.rest_sticker import router as sticker_router
 
 # 配置应用 logging(修盲区:原未配置致业务 INFO 被默认 lastResort 丢弃,仅 WARNING+ 出)
 # 必须在 create_app 前调用;dictConfig 整合 uvicorn 走同一 handler/格式(详见 core/logging_config.py)
 setup_logging(settings.log_level)
 
 logger = logging.getLogger(__name__)
+
+
+async def tick_object_ids(redis) -> list[str]:
+    """on_tick 调度器的活跃对象源(2026-10-25 修集成 bug,单测见 tests/test_tick_object_ids.py)。
+
+    活跃口径 = 最近有消息的会话(chat_store.list_recent_sessions,SCAN mychat:chat:*:blocks)
+    ∪ mood 记录对象(list_mood_objects,与衰减循环同源)。
+    只保留可转 QQ 号下发的数字 oid:非数字 oid(seed 的 demo/demo2_alice 等)跳过并 debug
+    日志——否则下游 onebot.send_text 内 int(oid) 抛 "invalid literal for int()"(虽被
+    _deliver 捕获,但主动搭话静默失败)。任一源读取异常降级用另一源,调度器不停摆。"""
+    from storage import chat_store
+    from mood.service import list_mood_objects
+    oids: set[str] = set()
+    try:
+        # 活跃源 1:最近会话——真实私聊即使从未命中 mood 情感词(apply_emotion delta=0 不写)
+        # 也能被 tick 覆盖,不再依赖手动 sadd mychat:mood:oids
+        sessions = await chat_store.list_recent_sessions(redis, limit=50)
+        oids.update(s.get("object_id", "") for s in sessions)
+    except Exception:
+        logger.exception("tick 活跃源读取最近会话失败(降级:仅用 mood oids)")
+    try:
+        # 活跃源 2:mood 记录对象——聊过但近期无 block 的对象仍可被 tick(与衰减口径一致)
+        oids.update(await list_mood_objects(redis))
+    except Exception:
+        logger.exception("tick 活跃源读取 mood oids 失败(降级:仅用最近会话)")
+    # isascii+isdigit 双卡:Unicode 上标/全角数字(如 ²/２)能过 isdigit 却过不了 int(),一并排除
+    numeric = sorted(o for o in oids if o.isascii() and o.isdigit())
+    skipped = sorted(o for o in oids if o and not (o.isascii() and o.isdigit()))
+    if skipped:
+        logger.debug("tick 跳过非数字 oid(无法作为 QQ 号下发): %s", skipped)
+    return numeric
 
 
 @asynccontextmanager
@@ -87,6 +131,24 @@ async def lifespan(app: FastAPI):
     # 插件系统(M2 空载:plugin_dir 无业务插件,仅建 EventBus 供 pipeline 钩子链路;M6 加载 .star)
     from plugins import init_plugins
     await init_plugins(redis)
+
+    # on_tick 调度器(2026-10-25 接线):对活跃 oid 周期触发 on_tick(时辰缓存/主动搭话)。
+    # 活跃源见模块级 tick_object_ids(最近会话 ∪ mood oids,仅数字 oid);provider 须为
+    # 具名 async 函数,lambda 返回协程不会被 iscoroutinefunction 识别
+    from plugins import get_event_bus
+    from plugins.scheduler import TickScheduler
+
+    async def _tick_object_ids() -> list[str]:
+        return await tick_object_ids(redis)
+
+    _tick_bus = get_event_bus()
+    _tick_scheduler = None
+    if _tick_bus is not None:   # PLUGIN_ENABLED=false 时 init_plugins 不建 bus(为 None),跳过防空转报错
+        _tick_scheduler = TickScheduler(_tick_bus, object_ids_provider=_tick_object_ids,
+                                        interval=settings.plugin_tick_interval)
+        _tick_scheduler.start()
+        logger.info("TickScheduler 已启动(interval=%ss,驱动 on_tick:时辰缓存/主动搭话)",
+                    settings.plugin_tick_interval)
 
     # M6 .star 兼容层:加载 .star 插件(适配到 EventBus/ToolRegistry;无 .star 则空载)
     star_loader = None
@@ -137,7 +199,9 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # 关闭:后台循环 → MCP client → 插件 → 适配器
+    # 关闭:tick 调度器 → 后台循环 → MCP client → 插件 → 适配器
+    if _tick_scheduler is not None:
+        await _tick_scheduler.stop()
     for t in _bg_tasks:
         t.cancel()
     for t in _bg_tasks:
@@ -208,6 +272,7 @@ def create_app() -> FastAPI:
     # M-tts 挂载 TTS 预览 REST 路由(POST /api/v1/tts/preview 音色试听,2026-08-04)
     app.include_router(tts_router)
     app.include_router(training_router)   # 训练前置工具(盲测基准/数据导出,2026-09-12)
+    app.include_router(sticker_router)   # sticker_plus 配套:表情包库管理/文字表情渲染(2026-10-25)
     # M7e 静态托管前端构建产物 + SPA history mode 兜底(修子路由刷新 404);dist 不存在则跳过(dev 走 vite proxy)
     from fastapi.responses import FileResponse
     from fastapi import HTTPException

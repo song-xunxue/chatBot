@@ -5,6 +5,11 @@ TTS provider 单测(M-tts,2026-08-04)
 
 作者: 李文煜
 日期: 2026-08-04
+
+2026-10-25
+变更说明：
+  1. test_get_tts_stub_when_no_key 钉住 settings.tts_provider=""(测试隔离:
+     本机 .env 配 TTS_PROVIDER=gptsovits 时 get_tts("") 回退读到它而翻车)
 """
 import httpx
 
@@ -53,8 +58,11 @@ def test_full_voice_compose():
 
 
 def test_get_tts_stub_when_no_key(monkeypatch):
-    """未配 siliconflow_api_key → stub(语音跳过,链路不断)"""
+    """未配 siliconflow_api_key → stub(语音跳过,链路不断)。
+    get_tts("") 回退读 settings.tts_provider,须一并钉住空值做测试隔离——
+    否则本机 .env 配了 TTS_PROVIDER=gptsovits 时会渗入,返回 GPTSoVitsProvider(环境敏感翻车)"""
     monkeypatch.setattr(tts_mod.settings, "siliconflow_api_key", "")
+    monkeypatch.setattr(tts_mod.settings, "tts_provider", "")
     assert isinstance(get_tts("siliconflow"), StubTTSProvider)
     assert isinstance(get_tts(""), StubTTSProvider)
 

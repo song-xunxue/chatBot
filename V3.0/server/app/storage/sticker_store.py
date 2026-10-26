@@ -17,6 +17,18 @@ mface summary 短路:QQ 商城表情自带 summary(如"[开心]")时免 vision �
 
 作者: 李文煜
 日期: 2026-09-15
+
+2026-10-25
+变更说明：
+  1. 追加库管理函数(REST /api/v1/sticker/* 配套,sticker_plus 插件面板用):
+     _safe_name 文件名白名单 + list_library(全库列表含 size/last_used/exists)+
+     save_upload(上传写盘+desc 空走 vision 自动描述+注册;照片/失败只存文件不注册)+
+     remove_sticker(删库注册+删物理文件)+ describe_sticker(重跑 vision 更新描述);
+     新增 _K_LAST_USED 最近使用时间键(render.py 导入复用,单源定义)
+  2. 审查加固:save_upload 增图片魔数校验(_looks_like_image,防非图片二进制入库破坏出站)、
+     显式 desc 长度/字符校验(≤40 字且无 ] 与换行,防 token 出站不被解析)、显式 name 同名
+     冲突拒绝(防静默覆盖既有库文件);describe_sticker 对 vision 新描述同款校验;
+     _safe_name 增全点名与 Windows 保留设备名(CON/NUL/COM1 等)拒绝
 """
 import hashlib
 import logging
@@ -243,3 +255,153 @@ async def register_existing(redis: Redis, limit: int = 200) -> dict:
 def read_bytes(path: Path) -> bytes:
     """读库文件字节(出站 base64 用;小文件同步读)"""
     return path.read_bytes()
+
+
+# ================ 库管理(2026-10-25 追加,REST /api/v1/sticker/* 配套) ================
+
+# 每文件最近使用时间(Hash: 文件名 → iso 时间)。与 plugins/sticker_plus/render.py 的
+# _K_LAST_USED 同款字面量契约(两侧注释互相指认);自动配图/渲染写入,list 读取展示
+_K_LAST_USED = "mychat:sticker:last_used"
+
+
+def _safe_name(name: str) -> str:
+    """库文件名白名单校验:仅 [A-Za-z0-9_.-],长 1~80,禁路径分隔/".."前后缀/全点名/
+    Windows 保留设备名;违例抛 ValueError"""
+    name = (name or "").strip()
+    if not 1 <= len(name) <= 80:
+        raise ValueError("文件名长度须在 1~80 之间")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+        raise ValueError("文件名仅允许字母/数字/下划线/点/连字符(禁路径分隔符)")
+    if name.startswith("..") or name.endswith(".."):
+        raise ValueError("文件名不能以 .. 开头或结尾")
+    if name.strip(".") == "":
+        raise ValueError("文件名不能全为点")
+    # Windows 保留设备名(大小写不敏感;本地 Windows 直跑时 "CON" 等会写到控制台设备)
+    if re.fullmatch(r"(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?", name):
+        raise ValueError("文件名不能是 Windows 保留设备名")
+    return name
+
+
+def _looks_like_image(data: bytes) -> bool:
+    """最小魔数校验:gif/png/jpg/webp 四类(QQ 表情包实际格式)。
+    防显式 name+desc 上传任意二进制入库——出站时 NapCat 解不出图导致该条回复发送中断。"""
+    return (data[:3] == b"GIF"
+            or data[:8] == bytes.fromhex("89504e470d0a1a0a")     # PNG 魔数
+            or data[:3] == bytes.fromhex("ffd8ff")              # JPEG 魔数
+            or (data[:4] == b"RIFF" and data[8:12] == b"WEBP"))  # webp(RIFF 容器)
+
+
+def _valid_desc(desc: str) -> bool:
+    """描述合法性:≤40 字且不含 ] 与换行——出站 token 正则限 [^\]]{1,40},
+    违例描述配的 token 不被 onebot 解析,QQ 里会直出字面 "[表情包: ...]" 文本。"""
+    return bool(desc) and len(desc) <= 40 and "]" not in desc and "\n" not in desc
+
+
+async def list_library(redis: Redis) -> list[dict]:
+    """列全库:[{file, desc, size, last_used, exists}] 按 file 名排序;size=文件 stat 字节(缺文件 0),
+    last_used 取 _K_LAST_USED hash(缺 "")"""
+    lib = await redis.hgetall(_K_LIB)
+    last_used = await redis.hgetall(_K_LAST_USED)
+    items = []
+    for fname in sorted(lib):
+        try:
+            size = (STICKER_DIR / fname).stat().st_size
+            exists = True
+        except OSError:
+            size, exists = 0, False
+        items.append({
+            "file": fname,
+            "desc": lib[fname] or "",
+            "size": size,
+            "last_used": last_used.get(fname, ""),
+            "exists": exists,
+        })
+    return items
+
+
+async def save_upload(redis: Redis, data: bytes, name: str = "", desc: str = "") -> dict:
+    """上传入库:写盘(STICKER_DIR mkdir)+注册。name 空 → f"{md5(data)[:16]}.{_ext_of(data,'')}"(与 ingest 同款)。
+    desc 空时尝试 _vision_token;token 非 '[表情包' 开头(照片/失败) → 只存文件不注册,
+    返回 {"file", "desc": "", "registered": False, "warning": "vision 未识别为表情包,未注册描述"}。
+    成功注册(含 desc 直接给)返回 {"file", "desc", "registered": True}。len(data) > _MAX_DOWNLOAD 抛 ValueError。
+    写盘/注册异常按本文件软失败风格 logger.exception 后返回 registered False 带 warning。"""
+    if len(data) > _MAX_DOWNLOAD:
+        raise ValueError(f"文件超过 {_MAX_DOWNLOAD // (1024 * 1024)}MB 上限")
+    if not _looks_like_image(data):
+        raise ValueError("仅支持 gif/png/jpg/webp 图片(魔数校验未通过)")
+    ch = hashlib.md5(data).hexdigest()[:16]              # 内容 md5:与 ingest/register_existing 同款键源
+    if (name or "").strip():
+        fname = _safe_name(name)
+        if (STICKER_DIR / fname).exists():
+            # 同名静默覆盖会带来"token 描述 A、实发图 B"错位,一律拒绝(要替换先删)
+            raise ValueError(f"同名文件已存在: {fname}(如需替换请先删除)")
+    else:
+        fname = f"{ch}.{_ext_of(data, '')}"              # 内容 md5 命名:同图重传自然幂等覆盖
+    d = (desc or "").strip()
+    if d and not _valid_desc(d):
+        raise ValueError("描述须不超过 40 字且不含 ] 与换行(出站 token 解析限制)")
+    # 1. 写盘(无论后续是否注册,文件都先落库目录)
+    try:
+        STICKER_DIR.mkdir(parents=True, exist_ok=True)
+        (STICKER_DIR / fname).write_bytes(data)
+    except Exception:
+        logger.exception("表情包上传写盘失败 file=%s", fname)
+        return {"file": fname, "desc": "", "registered": False, "warning": "写盘失败(详见日志)"}
+    # 2. 描述:显式 desc 直接用;空则 vision 自动识别(照片/失败 → 只存文件不注册)
+    if not d:
+        token = await _vision_token(data, "")
+        if not token or not token.startswith("[表情包"):
+            return {"file": fname, "desc": "", "registered": False,
+                    "warning": "vision 未识别为表情包,未注册描述"}
+        d = token[token.find(":") + 1:token.find("]")].strip()
+    # 3. 注册:hset lib(文件名 → 描述)+ set 描述缓存(照 ingest/register_existing 写法)
+    try:
+        await redis.hset(_K_LIB, fname, d)
+        await redis.set(_K_DESC.format(ch=ch), f"[表情包: {d}]")
+    except Exception:
+        logger.exception("表情包上传注册失败 file=%s", fname)
+        return {"file": fname, "desc": "", "registered": False, "warning": "注册失败(详见日志)"}
+    return {"file": fname, "desc": d, "registered": True}
+
+
+async def remove_sticker(redis: Redis, name: str) -> bool:
+    """删库:hdel _K_LIB + hdel _K_LAST_USED + 删文件(missing_ok);name 未经 _safe_name 或库与磁盘都不存在 → False"""
+    try:
+        fname = _safe_name(name)
+    except ValueError:
+        return False
+    in_lib = await redis.hexists(_K_LIB, fname)
+    path = STICKER_DIR / fname
+    if not in_lib and not path.exists():
+        return False
+    await redis.hdel(_K_LIB, fname)
+    await redis.hdel(_K_LAST_USED, fname)
+    try:
+        path.unlink(missing_ok=True)         # missing_ok:文件已缺(仅注册残留)也视为删除成功
+    except OSError:
+        logger.warning("表情包库文件删除失败(注册已清,文件残留): %s", fname, exc_info=True)
+    return True
+
+
+async def describe_sticker(redis: Redis, name: str) -> str | None:
+    """对已有文件重跑 vision 描述并更新注册:文件必须存在;_vision_token 返回 None 或非 '[表情包' 开头 → None;
+    成功 → hset _K_LIB 新描述 + set _K_DESC 缓存(照 register_existing 写法)并返回新描述"""
+    try:
+        fname = _safe_name(name)
+    except ValueError:
+        return None
+    path = STICKER_DIR / fname
+    if not path.is_file():
+        return None
+    data = path.read_bytes()
+    token = await _vision_token(data, "")
+    if not token or not token.startswith("[表情包"):
+        return None
+    desc = token[token.find(":") + 1:token.find("]")].strip()
+    if not _valid_desc(desc):
+        # vision 偶发超长/带 ] 的描述:入库会造出不被解析的 token,放弃本次更新
+        logger.warning("vision 描述不合法(超 40 字或含 ]/换行),放弃更新 file=%s desc=%r", fname, desc)
+        return None
+    await redis.hset(_K_LIB, fname, desc)
+    await redis.set(_K_DESC.format(ch=hashlib.md5(data).hexdigest()[:16]), token)
+    return desc

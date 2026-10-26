@@ -6,6 +6,11 @@
 
 作者: 李文煜
 日期: 2026-09-12
+
+2026-10-25
+变更说明：
+  1. 关思考改造测试:原生 /api/chat 分支(payload+响应归一化+tool_calls dict→str)、
+     原生失败回退 OpenAI 兼容路径+/no_think 注入、开关关闭走原路径
 """
 import json
 
@@ -48,12 +53,14 @@ class _FakeSyncClient:
 
 
 async def test_local_provider_chat_strips_think(monkeypatch):
-    """local provider:chat 走同步 client(mock),<think> 段剥除,payload 带 think=False"""
+    """local provider:关思考开关关(disable_think=False)走 OpenAI 兼容原路径,
+    <think> 段剥除,payload 带 think=False(被 Ollama 忽略,故须开关配合)"""
     import httpx
     import llm.local as local_mod
     from llm.local import LocalLLMProvider, _strip_think
     monkeypatch.setattr(settings, "local_llm_api_base", "http://127.0.0.1:11434/v1")
     monkeypatch.setattr(settings, "local_llm_model", "qwen3:8b")
+    monkeypatch.setattr(settings, "local_llm_disable_think", False)
     _FakeSyncClient.calls.clear()
     monkeypatch.setattr(local_mod.httpx, "Client", _FakeSyncClient)
 
@@ -63,11 +70,174 @@ async def test_local_provider_chat_strips_think(monkeypatch):
     resp = await p.chat([Message(role="user", content="在吗")])
     assert resp.text == "嗯嗯在的~"                       # think 段已剥
     call = _FakeSyncClient.calls[0]
-    assert call["url"].endswith("/chat/completions")
+    assert call["url"].endswith("/chat/completions")      # 原路径(未走原生 /api/chat)
     assert call["json"]["model"] == "qwen3:8b"
-    assert call["json"]["think"] is False                 # 关思考参数
+    assert call["json"]["think"] is False                 # 关思考参数(兼容路径带,旧版忽略)
+    assert call["json"]["messages"][0]["content"] == "在吗"  # 开关关:不注入 /no_think
     # 未闭合 think 容错
     assert "思考" not in _strip_think("<think>abc</think>正文")
+
+
+# ================ A1-2026-10-25: 关思考改造(原生 /api/chat + 回退注入) ================
+
+class _NativeClient:
+    """mock httpx.Client:Ollama 原生 /api/chat 形状响应(顶层 message/done_reason)"""
+
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def post(self, url, headers=None, json=None):
+        _NativeClient.last_url = url
+        _NativeClient.last_json = json
+        return _FakeResp({"model": "qwen3:8b",
+                          "message": {"role": "assistant",
+                                     "content": "<think>想想</think>嗯嗯我在本机运行~"},
+                          "done_reason": "stop", "eval_count": 20})
+
+
+async def test_local_provider_native_chat(monkeypatch):
+    """开关开(默认):走原生 /api/chat,payload think=False 生效,响应归一化+剥 think 段"""
+    import llm.local as local_mod
+    from llm.local import LocalLLMProvider
+    monkeypatch.setattr(settings, "local_llm_api_base", "http://127.0.0.1:11434/v1")
+    monkeypatch.setattr(settings, "local_llm_model", "qwen3:8b")
+    monkeypatch.setattr(settings, "local_llm_disable_think", True)
+    monkeypatch.setattr(local_mod.httpx, "Client", _NativeClient)
+
+    p = LocalLLMProvider(api_key="")
+    from llm.base import Message
+    resp = await p.chat([Message(role="user", content="用一句中文说你在本机运行")])
+    # base_url 去掉末尾 /v1 拼 <root>/api/chat
+    assert _NativeClient.last_url == "http://127.0.0.1:11434/api/chat"
+    assert _NativeClient.last_json["think"] is False       # 原生端点真正生效的关思考参数
+    assert _NativeClient.last_json["stream"] is False
+    assert _NativeClient.last_json["model"] == "qwen3:8b"
+    # 原生路径不注入 /no_think
+    assert _NativeClient.last_json["messages"][0]["content"] == "用一句中文说你在本机运行"
+    # done_reason 归一化到 finish_reason;content 归一化并剥 think 段
+    assert resp.text == "嗯嗯我在本机运行~"
+    assert resp.finish_reason == "stop"
+
+
+async def test_local_provider_native_tool_calls_dict_args(monkeypatch):
+    """原生 tool_calls:arguments 为 dict 时 json.dumps 成 str(JSON),与 OpenAI 路径一致"""
+    import json as json_mod    # 仅避免与 post(json=...) 参数名混淆的本地别名(顶部已有 import json)
+    import llm.local as local_mod
+    from llm.local import LocalLLMProvider
+
+    class _ToolClient(_NativeClient):
+        def post(self, url, headers=None, json=None):
+            _ToolClient.last_url = url
+            _ToolClient.last_json = json
+            return _FakeResp({"message": {"role": "assistant", "content": "",
+                                          "tool_calls": [
+                                              {"function": {"name": "get_weather",
+                                                            "arguments": {"city": "北京"}}}]},
+                              "done_reason": "tool_calls", "eval_count": 15})
+
+    monkeypatch.setattr(settings, "local_llm_api_base", "http://127.0.0.1:11434/v1")
+    monkeypatch.setattr(settings, "local_llm_disable_think", True)
+    monkeypatch.setattr(local_mod.httpx, "Client", _ToolClient)
+
+    p = LocalLLMProvider(api_key="")
+    resp = await p.chat_with_tools(
+        [{"role": "user", "content": "北京天气"}], tools=[{"type": "function"}])
+    # tools/tool_choice 透传给原生端点
+    assert _ToolClient.last_json["tools"] == [{"type": "function"}]
+    assert _ToolClient.last_json["tool_choice"] == "auto"
+    assert len(resp.tool_calls) == 1
+    tc = resp.tool_calls[0]
+    assert tc["name"] == "get_weather"
+    assert isinstance(tc["arguments"], str)                # dict 已转 str
+    assert json_mod.loads(tc["arguments"]) == {"city": "北京"}
+    assert resp.finish_reason == "tool_calls"
+
+
+class _FallbackClient:
+    """mock httpx.Client:/api/chat 抛 ConnectError → 回退 /chat/completions 成功"""
+    calls: list[dict] = []
+
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def post(self, url, headers=None, json=None):
+        import httpx
+        _FallbackClient.calls.append({"url": url, "json": json})
+        if url.endswith("/api/chat"):
+            raise httpx.ConnectError("vLLM 无原生端点")    # 触发回退
+        return _FakeResp({"choices": [{"message": {"content": "在的~"}, "finish_reason": "stop"}]})
+
+
+async def test_local_provider_fallback_injects_no_think(monkeypatch):
+    """回退:原生端点 ConnectError → OpenAI 兼容路径,末条 user 消息注入 " /no_think" """
+    import llm.local as local_mod
+    from llm.local import LocalLLMProvider
+    monkeypatch.setattr(settings, "local_llm_api_base", "http://127.0.0.1:11434/v1")
+    monkeypatch.setattr(settings, "local_llm_disable_think", True)
+    _FallbackClient.calls.clear()
+    monkeypatch.setattr(local_mod.httpx, "Client", _FallbackClient)
+
+    p = LocalLLMProvider(api_key="")
+    from llm.base import Message
+    resp = await p.chat([Message(role="system", content="你是清浔"),
+                         Message(role="user", content="在吗"),
+                         Message(role="assistant", content="嗯"),
+                         Message(role="user", content="在忙什么")])
+    assert len(_FallbackClient.calls) == 2                 # 先原生失败,再回退
+    assert _FallbackClient.calls[0]["url"].endswith("/api/chat")
+    fb = _FallbackClient.calls[1]
+    assert fb["url"].endswith("/chat/completions")
+    msgs = fb["json"]["messages"]
+    # 注入到"最后一条"user(在忙什么),不是第一条 user(在吗);system 不动
+    assert msgs[1]["content"] == "在吗"
+    assert msgs[3]["content"] == "在忙什么 /no_think"
+    assert msgs[0]["content"] == "你是清浔"
+    assert resp.text == "在的~"
+
+
+async def test_local_provider_fallback_http_status_and_system_inject(monkeypatch):
+    """回退二连:① /api/chat 404(HTTPStatusError)同样触发回退;
+    ② 无 user 消息时 /no_think 注入到末条 system 末尾"""
+    import httpx
+    import llm.local as local_mod
+    from llm.local import LocalLLMProvider
+
+    class _NotFoundClient(_FallbackClient):
+        calls: list[dict] = []   # 独立记录(不复用父类共享列表)
+
+        def post(self, url, headers=None, json=None):
+            _NotFoundClient.calls.append({"url": url, "json": json})
+            if url.endswith("/api/chat"):
+                req = httpx.Request("POST", url)           # raise_for_status 构造错误所需
+                resp = httpx.Response(404, request=req)    # vLLM 对未知路径返 404
+                resp.raise_for_status()
+            return _FakeResp({"choices": [{"message": {"content": "好的"}, "finish_reason": "stop"}]})
+
+    monkeypatch.setattr(settings, "local_llm_api_base", "http://127.0.0.1:11434/v1")
+    monkeypatch.setattr(settings, "local_llm_disable_think", True)
+    _NotFoundClient.calls.clear()
+    monkeypatch.setattr(local_mod.httpx, "Client", _NotFoundClient)
+
+    p = LocalLLMProvider(api_key="")
+    from llm.base import Message
+    resp = await p.chat([Message(role="system", content="你是清浔")])
+    assert len(_NotFoundClient.calls) == 2                 # 404 也回退
+    assert _NotFoundClient.calls[1]["url"].endswith("/chat/completions")
+    # 无 user:注入 system 末尾
+    assert _NotFoundClient.calls[1]["json"]["messages"][0]["content"] == "你是清浔 /no_think"
+    assert resp.text == "好的"
 
 
 async def test_local_provider_in_registry():

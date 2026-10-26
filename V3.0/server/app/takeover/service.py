@@ -31,6 +31,11 @@ V2.0 时代的待答队列代答链(resolve_and_deliver/batch/skip/clear)已随�
      直接落库(静默期/静默模式下用户消息已由 ws_client 直录入库,无需配对合并)——
      append proxy(manual) + score_reply(force_positive 恒正 source='manual') + apply_emotion
      + set_silence(手动静默期,自动模式下 AI 暂闭嘴 takeover_manual_silence_min 分钟)
+
+2026-10-25
+变更说明：
+  1. send_proactive/_deliver 新增可选参 use_tts(None=沿用 Redis 代答 TTS 配置原行为,
+     True/False 显式覆盖)——供 proactive_reply 插件按面板参数决定主动消息走不走语音
 """
 import logging
 import time
@@ -68,12 +73,15 @@ async def _read_tts_voice_params(oid: str):
     return "claire", 1.0, 0.0, True
 
 
-async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, pid: str) -> dict:
+async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, pid: str,
+                   use_tts: bool | None = None) -> dict:
     """下发 QQ:代答 TTS 开启则语音优先(可选先文本);否则被动回复优先(带 msg_id)降级主动(msg_id="")。
+    use_tts=None 沿用 Redis 代答 TTS 配置(原行为);True/False 显式覆盖(主动搭话插件按参数指定)。
     都失败返回 {delivered:False}(消息已落库不回滚)。返回 {delivered, mode}。"""
     # 代答 TTS 开关(M-tts):启用则合成语音发(复用 tts_reply 插件音色);失败/空产出降级文本
     tts_cfg = await takeover_store.get_tts_config(redis, oid)
-    if tts_cfg.get("enable"):
+    tts_on = bool(tts_cfg.get("enable")) if use_tts is None else bool(use_tts)
+    if tts_on:
         voice, speed, gain, emo = await _read_tts_voice_params(oid)
         from modality.tts import resolve_voice, send_voice_reply
         voice = await resolve_voice(redis, oid, voice)   # 优先克隆 uri(面板「设为当前」),回退预设
@@ -106,16 +114,18 @@ async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, 
     return {"delivered": delivered, "mode": mode}
 
 
-async def send_proactive(redis, oid: str, content: str) -> dict:
-    """主动发送(管理员经面板以清浔身份推消息给用户)。
+async def send_proactive(redis, oid: str, content: str, *, use_tts: bool | None = None) -> dict:
+    """主动发送(管理员经面板/主动搭话插件以清浔身份推消息给用户)。
     落 proxy 消息(进 live 历史,供后续 LLM 上下文引用)+ 下发 QQ。
     不走评分/记忆编码副作用链(无 user 回合,评分无意义);proxy 消息本身进 chat history 已够记忆引用。
+    use_tts=None 沿用 Redis 代答 TTS 配置;True/False 显式指定是否走语音(失败降级文本)。
     返回 {proxy_mid, delivered, mode}。"""
     base_ts = int(time.time() * 1000)
     proxy_mid = await chat_store.append_message(
         redis, oid, sender="proxy", content=content, source="proxy", ts=base_ts)
     msg_seq = await takeover_store.next_msg_seq(redis, oid)
-    deliver = await _deliver(redis, oid, content, msg_id="", msg_seq=msg_seq, pid="proactive")
+    deliver = await _deliver(redis, oid, content, msg_id="", msg_seq=msg_seq, pid="proactive",
+                             use_tts=use_tts)
     return {"proxy_mid": proxy_mid, "delivered": deliver["delivered"], "mode": deliver["mode"]}
 
 

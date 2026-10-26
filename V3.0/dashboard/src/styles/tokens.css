@@ -1,0 +1,231 @@
+/**
+ * 面板统一视觉层(2026-10-25 面板美化 · 阶段1:设计令牌 + 通用组件类)
+ *
+ * 目标：把"每个页面各自写样式"收敛到一套令牌与通用类，页面只写结构。
+ * 只做增量：不覆盖 theme.css 的 --bg/--card/--accent 等既有变量，
+ * 而是在其上补间距/圆角/字号/阴影/动效令牌 + 卡片/空态/标签/按钮等通用类。
+ *
+ * 作者: 李文煜
+ * 日期: 2026-10-25
+ */
+
+:root {
+  /* 1.间距刻度(4 的倍数,页面优先用这些值) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* 2.圆角刻度 */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* 3.字号刻度(1.25 比例,正文 13-14px) */
+  --f-xs: 11px;
+  --f-sm: 12px;
+  --f-md: 13px;
+  --f-lg: 15px;
+  --f-xl: 18px;
+  --f-2xl: 24px;
+  --f-3xl: 32px;
+
+  /* 4.补色：暖色点缀(清浔的"人味",用于强调/日记/心情页) */
+  --warm: #f2a3b3;
+  --warm-dim: rgba(242, 163, 179, 0.14);
+  --warm-glow: rgba(242, 163, 179, 0.22);
+
+  /* 5.层级阴影(比 theme.css 更细的三档) */
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --elev-3: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* 6.动效曲线(统一手感) */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-1: 0.12s;
+  --dur-2: 0.2s;
+}
+
+/* 页面底：轻微径向光晕,让纯黑底不那么死 */
+body {
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(63, 198, 138, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(242, 163, 179, 0.05), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* 滚动条：细、暗、hover 才明显(桌面端) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-pill);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- 通用卡片 ---- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-1);
+  padding: var(--sp-4);
+}
+.card-glow {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.03), transparent 40%),
+    var(--card);
+}
+.card-hover {
+  transition: transform var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--elev-3);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* ---- 页头 ---- */
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.page-title {
+  font-size: var(--f-xl);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  margin: 0;
+}
+.page-subtitle {
+  color: var(--text-dim);
+  font-size: var(--f-sm);
+}
+
+/* ---- 小节标题 ---- */
+.section-title {
+  font-size: var(--f-sm);
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: var(--sp-4) 0 var(--sp-2);
+}
+
+/* ---- 标签/徽章 ---- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  font-size: var(--f-xs);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.chip-accent { background: var(--accent-dim); color: var(--accent); border-color: transparent; }
+.chip-warm { background: var(--warm-dim); color: var(--warm); border-color: transparent; }
+.chip-danger { background: var(--danger-dim); color: var(--danger); border-color: transparent; }
+
+/* ---- 按钮 ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--card-2);
+  color: var(--text);
+  font-size: var(--f-md);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+.btn:hover { background: rgba(255, 255, 255, 0.08); }
+.btn:active { transform: scale(0.98); }
+.btn-primary {
+  background: var(--accent-dim);
+  border-color: transparent;
+  color: var(--accent);
+}
+.btn-primary:hover { background: rgba(63, 198, 138, 0.24); }
+.btn-ghost { background: transparent; }
+.btn-danger { background: var(--danger-dim); color: var(--danger); border-color: transparent; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---- 数据小块(概览数字) ---- */
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-value { font-size: var(--f-2xl); font-weight: 600; line-height: 1.1; }
+.stat-label { color: var(--text-dim); font-size: var(--f-xs); }
+.stat-warm .stat-value { color: var(--warm); }
+
+/* ---- 空状态 ---- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-7) var(--sp-4);
+  color: var(--text-faint);
+  font-size: var(--f-sm);
+  text-align: center;
+}
+.empty-state .empty-icon { font-size: 28px; opacity: 0.7; }
+
+/* ---- 骨架屏(加载中,避免空白闪烁) ---- */
+.skeleton {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+  border-radius: var(--r-sm);
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* ---- 列表行(世界书/日记/插件等复用) ---- */
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.list-row:hover { background: rgba(255, 255, 255, 0.04); }
+.list-row.active { background: var(--accent-dim); border-color: rgba(63, 198, 138, 0.3); }
+.list-row + .list-row { margin-top: 2px; }

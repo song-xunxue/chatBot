@@ -9,6 +9,10 @@
 2026-09-13
 变更说明：
   1. 队列删减重构:record_manual_reply 改直接落库路径(无队列合并);删队列链测试
+
+2026-10-25
+变更说明：
+  1. 新增 send_proactive use_tts 覆盖测试(True 强制语音/False 压过已开配置;proactive_reply 插件用)
 """
 import pytest
 
@@ -26,6 +30,40 @@ async def test_send_proactive_lands_and_delivers(fake_redis, fake_adapter):
     assert len(msgs) == 1 and msgs[0]["sender"] == "proxy" and msgs[0]["source"] == "proxy"
     assert msgs[0]["content"] == "在吗~"
     assert len(fake_adapter.sent) == 1
+
+
+# ================ send_proactive use_tts 覆盖(2026-10-25,proactive_reply 插件用) ================
+
+async def test_send_proactive_use_tts_true_forces_voice(fake_redis, fake_adapter, monkeypatch):
+    """use_tts=True 显式走语音(即使 Redis 代答 TTS 配置未开);语音成功不再补发文本"""
+    from modality import tts as tts_mod
+
+    async def fake_resolve_voice(redis, oid, voice):
+        return voice
+
+    async def fake_send_voice_reply(oid, content, *, msg_id, msg_seq, voice, speed, gain,
+                                    emotion_enable, send_text_also, human_authored):
+        return {"delivered": True, "mode": "voice"}
+
+    monkeypatch.setattr(tts_mod, "resolve_voice", fake_resolve_voice)
+    monkeypatch.setattr(tts_mod, "send_voice_reply", fake_send_voice_reply)
+    r = await takeover_svc.send_proactive(fake_redis, "10001", "晚安~", use_tts=True)
+    assert r["delivered"] is True and r["mode"] == "voice"
+    assert fake_adapter.sent == []                    # 语音已发,不重复发文本
+
+
+async def test_send_proactive_use_tts_false_overrides_config(fake_redis, fake_adapter, monkeypatch):
+    """use_tts=False 显式走文本:即使 Redis 代答 TTS 配置已开也不触发语音合成"""
+    await takeover_store.set_tts_config(fake_redis, "10001", enable=True, send_text_also=False)
+    from modality import tts as tts_mod
+
+    async def boom(*a, **k):
+        raise AssertionError("不应触发语音合成")
+
+    monkeypatch.setattr(tts_mod, "send_voice_reply", boom)
+    r = await takeover_svc.send_proactive(fake_redis, "10001", "在吗~", use_tts=False)
+    assert r["delivered"] is True and r["mode"] == "active"
+    assert len(fake_adapter.sent) == 1               # 纯文本下发
 
 
 # ================ record_manual_reply(2026-09-13 直接落库版) ================
