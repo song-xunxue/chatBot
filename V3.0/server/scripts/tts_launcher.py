@@ -21,6 +21,12 @@ api_v2 就绪后每 30s 向云端面板上报心跳(heartbeat.json 指向 http:/
   1. 修关闭假阳性 bug:点窗口 X 关闭时 CTRL_CLOSE 只给 ~5s 清理,旧版 _post_heartbeat timeout 10s
      来不及完成 → Redis 心跳 90s TTL 残留 → 面板假显就绪。改:全局 _hb_cfg + _report_offline(短 timeout 3s,
      幂等)+ atexit + signal(SIGINT/SIGBREAK) + finally 四重触发,确保关闭清理窗口内上报 ready=false 清 Redis。
+
+2026-10-26
+变更说明:
+  1. 加 Windows Job Object 绑定(KILL_ON_JOB_CLOSE):点 X 强杀/任务管理器结束启动器时,
+     api_v2/frpc 子进程一并退出,不留孤儿进程(Windows 默认父死子留,旧版 terminate 只在
+     Ctrl+C/正常退出路径生效)。ctypes 实现,无新依赖;失败静默(不阻塞启动)。
 """
 import atexit
 import json
@@ -110,6 +116,66 @@ def _signal_handler(signum, frame):
     raise SystemExit(0)
 
 
+def _bind_job_object():
+    """把本进程绑进 Job Object(KILL_ON_JOB_CLOSE):启动器被强杀(点窗口 X 触发
+    CTRL_CLOSE 强终止 / 任务管理器结束进程)时,api_v2/frpc 等子进程随 Job 一并退出,
+    不留孤儿。子进程经 CreateProcess 自动继承同一 Job,无需逐个登记。
+    用 ctypes 直调 kernel32(免 pywin32 依赖,pyinstaller 不加体积);失败静默(非致命)。"""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _IO_COUNTERS(ctypes.Structure):
+            _fields_ = [(n, ctypes.c_uint64) for n in (
+                "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+                "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+
+        class _BASIC_LIMITS(ctypes.Structure):
+            _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64),
+                        ("PerJobUserTimeLimit", ctypes.c_int64),
+                        ("LimitFlags", wintypes.DWORD),
+                        ("MinimumWorkingSetSize", ctypes.c_size_t),
+                        ("MaximumWorkingSetSize", ctypes.c_size_t),
+                        ("ActiveProcessLimit", wintypes.DWORD),
+                        ("Affinity", ctypes.c_size_t),   # ULONG_PTR,64 位下 8 字节(勿用 POINTER)
+                        ("PriorityClass", wintypes.DWORD),
+                        ("SchedulingClass", wintypes.DWORD)]
+
+        class _EXTENDED_LIMITS(ctypes.Structure):
+            _fields_ = [("BasicLimitInformation", _BASIC_LIMITS),
+                        ("IoInfo", _IO_COUNTERS),
+                        ("ProcessMemoryLimit", ctypes.c_size_t),
+                        ("JobMemoryLimit", ctypes.c_size_t),
+                        ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                        ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+        kernel32 = ctypes.windll.kernel32
+        # 64 位下句柄按 c_void_p 收发:不声明 restype/argtypes 会被当 32 位 int 截断,绑定必失败
+        kernel32.CreateJobObjectW.restype = ctypes.c_void_p
+        kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
+        kernel32.SetInformationJobObject.restype = wintypes.BOOL
+        kernel32.SetInformationJobObject.argtypes = [ctypes.c_void_p, ctypes.c_int,
+                                                     ctypes.c_void_p, wintypes.DWORD]
+        kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+        kernel32.AssignProcessToJobObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        job = kernel32.CreateJobObjectW(None, None)
+        if not job:
+            return False
+        info = _EXTENDED_LIMITS()
+        info.BasicLimitInformation.LimitFlags = 0x2000   # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        # JobObjectExtendedLimitInformation=9:设置扩展限制(含"Job 句柄关闭即杀全体")
+        if not kernel32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)):
+            return False
+        if not kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess()):
+            return False
+        globals()["_job_handle"] = job   # 持有句柄防被 GC(句柄一关 Job 全体即死)
+        print("[Job] 已绑定 Job Object(关窗口即连子进程一起停止)")
+        return True
+    except Exception as e:
+        print(f"[Job] 绑定失败(忽略,不影响启动): {e}")
+        return False
+
+
 def _heartbeat_loop(cloud_url, token, stop_event):
     """后台线程:每 30s 上报就绪心跳(仅当 api_v2 9880 在监听);stop_event.set() 后上报离线再退出。
 
@@ -130,6 +196,7 @@ def main():
     print("  GPT-SoVITS(api_v2 直跑) + frpc 启动器")
     print("  跳过 GAG GUI,直接 api_v2.py 加载清浔(dania)模型")
     print("=" * 50)
+    _bind_job_object()
 
     api_proc = None
     if _port_open(API_PORT):
