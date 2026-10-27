@@ -3,7 +3,6 @@ score.record_negative_sample + 软删联动单测(M7)。
 record_negative_sample 是软删联动公开封装(供 rest_chat DELETE ai/proxy 消息时扩充反推负样本)。
 本测试验证数据流;实际 DELETE 端点联动在 test_rest_chat(M7b)测。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from score import service as score_service

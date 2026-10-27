@@ -2,7 +2,6 @@
 /**
  * 插件管理：按分类分组列表 + 全局开关 + 按对象启用/参数配置（rest_plugin）
  * V1.1 M10：中文化（display_name/category/description）+ 按 category 分组展示
- * 作者: 李文煜
  */
 import { ref, h, computed, onMounted } from 'vue'
 import {

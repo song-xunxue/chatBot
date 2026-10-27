@@ -10,7 +10,6 @@ QQ REST 消息发送(httpx)
 M1 echo 链路:webhook 收 C2C_MESSAGE_CREATE → send_c2c_message(openid, "收到:xxx", msg_id=...)。
 M2 起真实回复由 pipeline 产出;主动消息(无 msg_id,耗月配额)留 M8 代人聊天。
 
-作者: 李文煜
 日期: 2026-06-25
 
 2026-06-25

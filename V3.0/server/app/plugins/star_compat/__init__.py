@@ -16,7 +16,6 @@ Config/Platform 等)、指令组级联。依赖这些的 .star 插件加载失�
 机制:轻量 astrbot 兼容包(star_compat/astrbot/,同名 API 子集)——StarLoader 把 star_compat/
 加入 sys.path,使 .star 插件 `import astrbot` 命中兼容包(而非 V2.0/Ref/AstrBot 真包)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-30

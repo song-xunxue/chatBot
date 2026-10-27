@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
  * 主布局：左侧栏导航 + 顶栏（标题/登出）+ 内容区
- * 作者: 李文煜
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

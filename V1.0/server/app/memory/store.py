@@ -3,7 +3,6 @@
 按层（Core/Episodic/Reflect/Long-term/State）封装 Redis 读写，纯存储不含算法。
 对应 docs/04 §3.3、docs/09 §2.2/§4。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

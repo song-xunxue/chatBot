@@ -3,7 +3,6 @@ GPT-SoVITS 就绪状态检测单测(M-tts-2,2026-08-10)
 覆盖:check_gptsovits_status 心跳命中/主动探测/force 强探/probe=False 不探/非 gptsovits 不探/config 缺失
 六大分支 + 在线/离线探测。核心契约:心跳缓存命中绝不探测 frp(免重复打隧道)。
 
-作者: 李文煜
 日期: 2026-08-10
 """
 import json

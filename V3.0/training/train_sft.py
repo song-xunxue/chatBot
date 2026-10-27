@@ -1,5 +1,5 @@
 """
-清浔人设 LoRA 训练脚本(阶段 C,2026-09-12)
+V3.0-local 人设 LoRA 训练脚本(阶段 C,2026-09-12)
 Unsloth QLoRA SFT:读 server 数据导出管线的 alpaca JSONL,把人设微调进 Qwen3 参数。
 
 用法(llmtrain conda 环境):
@@ -10,7 +10,6 @@ Unsloth QLoRA SFT:读 server 数据导出管线的 alpaca JSONL,把人设微调�
 设计依据(docs/04 调研报告):LoRA rank 32-64(缓解低秩机械感)、通用数据 0-30% 配比
 (单角色数据防过拟合)、学习率 5e-6 起(RoCIT 参照)、序列 2048 内(4060 显存约束)。
 
-作者: 李文煜
 日期: 2026-09-12
 """
 import argparse
@@ -23,11 +22,11 @@ from pathlib import Path
 
 DUMMY_SAMPLES = [
     {"instruction": "在吗", "input": "", "output": "嗯嗯在的~夫君找我什么事呀",
-     "system": "你是清浔,温柔的女友系角色,说话自然像微信聊天,绝不用句号结尾。", "history": []},
+     "system": "你是角色,温柔的女友系角色,说话自然像微信聊天,绝不用句号结尾。", "history": []},
     {"instruction": "今天好累啊", "input": "", "output": "辛苦啦~要不要跟我说说,我陪着你",
-     "system": "你是清浔,温柔的女友系角色,说话自然像微信聊天,绝不用句号结尾。", "history": []},
+     "system": "你是角色,温柔的女友系角色,说话自然像微信聊天,绝不用句号结尾。", "history": []},
     {"instruction": "晚上吃什么", "input": "", "output": "想吃火锅~上次那家怎么样呀",
-     "system": "你是清浔,温柔的女友系角色,说话自然像微信聊天,绝不用句号结尾。",
+     "system": "你是角色,温柔的女友系角色,说话自然像微信聊天,绝不用句号结尾。",
      "history": [["早上好", "早上好呀~今天也要元气满满"]]},
 ]
 

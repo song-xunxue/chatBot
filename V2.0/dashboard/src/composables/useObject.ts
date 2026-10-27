@@ -4,7 +4,6 @@
  * 改为模块级单例 ref + localStorage 持久化,头部一处输入全局生效。
  * reloadTick:头部输入 @keyup.enter 自增 → 各页 watch(reloadTick) 触发本页 load(仅当前挂载页响应)。
  * ensureOid:启动/进入页面时自动取最近会话 object_id(单人设/单用户场景,免去手填 32 位 openid)。
- * 作者: 李文煜
  */
 import { ref, watch } from 'vue'
 import { listRecentBlocks } from '@/api'

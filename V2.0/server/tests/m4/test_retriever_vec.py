@@ -1,7 +1,6 @@
 """
 向量检索工具单测(2026-07-07 记忆优化阶段1):cosine_similarity + rrf_fuse 纯函数。
 
-作者: 李文煜
 日期: 2026-07-07
 """
 from memory.retriever import cosine_similarity, rrf_fuse

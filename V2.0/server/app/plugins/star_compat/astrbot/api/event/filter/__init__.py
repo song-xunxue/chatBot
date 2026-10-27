@@ -2,7 +2,6 @@
 @command/@regex/@on_llm_request/@on_llm_response/@after_message_sent/@llm_tool 装饰器。
 装饰器副作用:把 handler 元数据注册到 astrbot._registry(StarLoader 收集),返回原函数不包装。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 import re

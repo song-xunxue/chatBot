@@ -4,7 +4,6 @@ Tool(工具抽象:name/description/parameters JSON schema/execute)+ ToolRegistry
 导出 OpenAI tools 格式/统一调用)+ ToolContext(执行上下文:redis/object_id)。
 供 tool-loop 引擎与 MCP client 注册的工具统一调度,LLM 经 function calling 决策调用。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

@@ -20,7 +20,6 @@ M-V3-0 最小验证:OneBot v11 反向 WebSocket echo 服务(websockets 17 API)�
   默认监听 0.0.0.0:8091,鉴权 token = "v3test-token"
   环境变量覆盖:WS_PORT / WS_PATH / WS_TOKEN / SELF_ID(小号QQ号,过滤自发消息)
 
-作者: 李文煜
 日期: 2026-08-12
 """
 import os

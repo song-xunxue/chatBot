@@ -3,7 +3,6 @@
 Retriever 抽象基类 + KeywordRetriever（首版，关键词召回 top-K）+ EmbeddingRetriever（占位，M4/M5）。
 对应 docs/06 §5、docs/09 §4.1。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

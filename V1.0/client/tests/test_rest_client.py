@@ -2,7 +2,6 @@
 RestClient mock 测试：验证 vision / asr / get_pet_avatar_bytes / get / post 的 httpx
 调用（URL/header/参数）。回填 M5/M6 测试缺口——之前只冒烟、未 mock 网络层。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

@@ -3,7 +3,6 @@
 retain 评分（importance × recency × access × emotion 加权）+ recency_decay 指数衰减。
 对应 docs/06 §6、docs/09 §2.4。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

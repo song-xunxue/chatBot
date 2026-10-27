@@ -2,7 +2,6 @@
 chat_store block 三层单测:append/get_history/sender→role 映射/UUID mid/
 静默分组/roleplay 物理隔离/软删过滤/count_messages。对应 docs/02 §9/§11。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

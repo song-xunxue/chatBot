@@ -5,7 +5,6 @@ CosyVoice2 预设音色探测(2026-08-04 M-tts 设计)
 
 端点 POST https://api.siliconflow.cn/v1/audio/speech  voice=FunAudioLLM/CosyVoice2-0.5B:{name}
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import sys

@@ -2,7 +2,6 @@
 consolidation 单测(M4):consolidate_sleep 睡眠巩固
 (LLM 提炼 episodic→long-term fact + importance 阈值 + 冗余 episodic 清理 / 无 LLM 降级只清理)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

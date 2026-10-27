@@ -7,7 +7,6 @@
  * 仅保留 useObject 接线(reloadTick 联动刷新 + ensureOid 预取,与其它移动页共享单例)。
  * 窄屏重组:按钮 size=large 全宽(触摸≥44px)、provider 三标签卡片化换行、确认弹窗 92vw 全宽、确认输入改 textarea。
  * 鉴权:无 token 时 router 守卫跳登录页,axios 拦截器自动注入 X-Access-Token。
- * 作者: 李文煜
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { NCard, NSpace, NButton, NTag, NSpin, NEmpty, NInput, NInputNumber, NModal,

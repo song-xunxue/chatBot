@@ -6,7 +6,6 @@ consolidate_sleep:把高 importance 的情景记忆摘要提炼为长期事实(�
 定期触发(由 coordinator.forget_tick 整合,复用遗忘批处理周期,不新增 loop)。
 无 LLM 时只做 episodic 清理(降级)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

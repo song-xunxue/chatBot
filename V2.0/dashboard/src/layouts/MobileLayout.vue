@@ -3,7 +3,6 @@
  * 移动端顶层布局(手机端管理面板):简易顶栏(标题)+ 内容区,无侧栏/oid 输入/登出。
  * 与 PC 端 MainLayout 对称但极简,为 /m/* 路由(代人代答等)提供共性外壳,便于将来扩展。
  * 鉴权由 router 守卫处理(query token 免登录);oid 由各页 useObject.ensureOid 自动取。
- * 作者: 李文煜
  */
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'

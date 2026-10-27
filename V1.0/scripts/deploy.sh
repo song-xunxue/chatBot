@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # MyChat 服务端部署脚本
-# 作者: 李文煜
 # 日期: 2026-06-15
 # 用法: 在服务器项目根目录执行  sudo bash scripts/deploy.sh
 #

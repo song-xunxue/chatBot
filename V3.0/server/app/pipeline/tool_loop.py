@@ -3,7 +3,6 @@ tool-loop 引擎(M5)
 LLM + tools → function calling 决策 tool_calls → 执行工具 → 结果回填 → 再推理(循环,
 最多 max_iterations 轮防死循环)。借鉴 AstrBot tool-loop。非流式(QQ 场景累积完整回复再下发)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

@@ -3,7 +3,6 @@ rest_memory REST 单测(httpx.AsyncClient + ASGITransport,全 async):
 鉴权 / 查看(layer+category 过滤)/ 统计 / 手动遗忘+恢复 / 锁定 / 批量遗忘。
 独立 app(仅挂 memory_router);每测 reset_coordinator 避免 coordinator 单例跨测试缓存旧 redis。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28
@@ -132,13 +131,13 @@ async def test_post_create_manual_memory(monkeypatch, fake_redis):
     app = _wire(monkeypatch, fake_redis)
     async with await _ac(app) as ac:
         r = await ac.post("/api/v1/memory/u1", json={
-            "content": "煜君习惯深夜聊天", "category": "preference",
+            "content": "主人习惯深夜聊天", "category": "preference",
             "importance": 0.7, "reason": "观察规律", "tags": ["作息"],
             "useful_score": 0.9, "tier": 2, "locked": True,
         }, headers=_H)
         assert r.status_code == 200
         d = r.json()
-        assert d["content"] == "煜君习惯深夜聊天"
+        assert d["content"] == "主人习惯深夜聊天"
         assert d["source"] == "manual"
         assert d["reason"] == "观察规律"
         assert d["tags"] == ["作息"]

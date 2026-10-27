@@ -10,7 +10,6 @@ QQ access_token 获取与缓存
 缓存设计:Redis key mychat:qq:access_token 存 JSON {value, expires_at}。
 不用原生 TTL(要读 expires_at 算提前 300s 刷新量)。模块级 asyncio.Lock + double-check 防并发重复刷新。
 
-作者: 李文煜
 日期: 2026-06-25
 
 2026-06-25

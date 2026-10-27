@@ -4,7 +4,6 @@ LLM registry 配置驱动单测(2026-07-02,#7 深化)
 加 provider 只在此添一条,三处自动跟上(消除此前三份散落名单)。
 modality/registry 由 tests/m_vision 覆盖(此处不重复)。
 
-作者: 李文煜
 日期: 2026-07-02
 """
 import pytest

@@ -12,7 +12,6 @@ registry 的 Star 类与 handler → 实例化 Star(注入 Context)→ 适配注
 
 加载失败隔离(单 .star 异常不影响其他)。深度 API(群/@/Provider/Config)依赖的插件降级。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

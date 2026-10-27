@@ -1,7 +1,6 @@
 """
 V1.0 收敛插件(time_aware / reply_enhance)纯函数单测。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 from plugins.time_aware.plugin import time_of_day, season_label

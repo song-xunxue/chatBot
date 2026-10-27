@@ -2,7 +2,6 @@
 stage_score / pipeline 评分接入单测:run_stream 全链路后 ai 回复被自动评分
 (reply_mid 填充 + score 四元组写入)、score_enabled=False 降级、评分 LLM 异常不阻塞主流程。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

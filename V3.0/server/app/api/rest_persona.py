@@ -11,7 +11,6 @@
   POST   /persona/{pid}/snapshot        快照(反推前留底,返回 version_no)
   POST   /persona/{pid}/rollback        回滚到指定 version_no
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-07-06

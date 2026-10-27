@@ -8,7 +8,6 @@
  * 逻辑与 PC 端完全一致(useObject 共享 oid;PC 无轮询,移动端同样不加)。
  * 窄屏取舍:统计 4 列改 2x2;三层卡片改 NTabs;类别筛选/弹窗内控件全宽;记忆条目卡片化(m-card);
  * 卡片操作按钮 size=large 平铺一行(触摸≥44px);弹窗 94vw + 内容区限高可滚动。
- * 作者: 李文煜
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import {
@@ -229,7 +228,7 @@ onMounted(async () => { await ensureOid(); await load() })
         <n-space vertical :size="12">
           <n-input
             v-model:value="editContent" type="textarea" :autosize="{ minRows: 4, maxRows: 8 }" autofocus
-            placeholder="用角色第一人称记录,'我'指角色自己(区分角色与用户)。如'我叫清浔''用户喜欢动漫''用户希望被称为煜'"
+            placeholder="用角色第一人称记录,'我'指角色自己(区分角色与用户)。如'我叫(角色)''用户喜欢动漫''用户希望被称为主人'"
           />
           <n-input
             v-model:value="editReason" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }"
@@ -269,7 +268,7 @@ onMounted(async () => { await ensureOid(); await load() })
         <n-space vertical :size="12">
           <n-input
             v-model:value="cContent" type="textarea" :autosize="{ minRows: 4, maxRows: 8 }" autofocus
-            placeholder="记忆内容(角色第一人称)。如'我叫清浔''煜君喜欢深夜聊天'"
+            placeholder="记忆内容(角色第一人称)。如'我叫(角色)''主人喜欢深夜聊天'"
           />
           <n-input
             v-model:value="cReason" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }"

@@ -3,7 +3,6 @@ M8 测试公共夹具:fakeredis + 可控 mock LLM provider(评分 JSON)。
 复用根 conftest 的 _qq_secret/_no_real_llm/api_client/qq_http(autouse 注入 QQ MockTransport/清 LLM key);
 M8 测试显式 monkeypatch 控制 send_c2c_message 下发分支 + 评分 provider。
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-06-30

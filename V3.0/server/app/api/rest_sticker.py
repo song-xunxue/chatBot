@@ -10,7 +10,6 @@
   POST   /sticker/{name}/describe     对已有文件重跑 vision 描述并更新注册(失败 400)
   POST   /sticker/render              文字表情生成(body text 必填/template 可选底图)
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

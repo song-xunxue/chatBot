@@ -6,7 +6,6 @@ init_plugins() 在 main.py lifespan 启动阶段调用;shutdown_plugins() 关闭
 M2 阶段:plugin_dir 内无业务插件(manifest 扫描子目录为空),总线空载但可用,
 pipeline 的 bus.fire 无订阅即 CONTINUE,保证钩子链路通。业务插件(M6 .star 兼容层)后续加载。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

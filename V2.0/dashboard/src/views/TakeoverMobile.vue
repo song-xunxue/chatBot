@@ -6,7 +6,6 @@
  * 逻辑与 PC 端完全一致(useObject 共享 oid + 5s 轮询 + visibilitychange 暂停),
  * 仅 template 按手机窄屏重组:删写死宽度→全宽、按钮 size large(touch≥44px)、单行输入改 textarea。
  * 鉴权:无 token 时 router 守卫跳登录页(输 token 存 localStorage),axios 拦截器自动注入 X-Access-Token。
- * 作者: 李文煜
  */
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import {

@@ -4,7 +4,6 @@ sticker_plus 表情包挑选器(纯逻辑,可单测)
 回复的图,每步的信息拼进 reason 短串返回(可解释:日志/面板能看到为何选它)。
 供 plugin.py 自动配图调用;库数据复用 sticker_store(mychat:sticker:lib + STICKER_DIR)。
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

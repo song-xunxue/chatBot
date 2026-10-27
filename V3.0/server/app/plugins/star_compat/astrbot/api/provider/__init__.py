@@ -2,7 +2,6 @@
 V2.0 用自己的 llm provider 体系;此处仅提供 dataclass 占位,供 @on_llm_request/@on_llm_response
 handler 接收参数时 import 不报错。深度 Provider API 不可用。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 

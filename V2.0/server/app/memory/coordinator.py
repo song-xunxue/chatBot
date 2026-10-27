@@ -4,7 +4,6 @@
 retrieve/render(检索组装);on_turn_complete(编码);forget_tick/手动遗忘。
 per-oid 锁(RMW 一致性)、上限淘汰+物理清理、单例双检锁+初始化降级、事实去重归一化。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27
@@ -252,7 +251,7 @@ class MemoryCoordinator:
                 return
             oid = ctx.object_id
             model = self._summary_model()
-            # 2026-07-07 拟人化:取角色对用户的称呼,传给 encoder 让记忆用具体称呼(如"煜君喜欢动漫")
+            # 2026-07-07 拟人化:取角色对用户的称呼,传给 encoder 让记忆用具体称呼(如"主人喜欢动漫")
             _pc = getattr(ctx, "persona_card", None)
             user_alias = (_pc.user_alias if _pc else "") or ""
             threshold = settings.memory_episodic_summarize_threshold

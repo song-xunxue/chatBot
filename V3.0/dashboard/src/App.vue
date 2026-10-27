@@ -2,7 +2,6 @@
 /**
  * 根组件：Naive UI 全局 Provider（中文 locale + message/dialog 注入）
  * 2026-09-16 暗色重设计:darkTheme + NapCat 系主题覆盖(色板见 styles/theme.css)。
- * 作者: 李文煜
  */
 import { NConfigProvider, NMessageProvider, NDialogProvider, NLoadingBarProvider,
          zhCN, dateZhCN, darkTheme } from 'naive-ui'

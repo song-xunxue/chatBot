@@ -3,7 +3,6 @@ GPTSoVitsProvider 真实端到端验证(M-tts GPT-SoVITS 接入,2026-08-08)
 走 get_tts("gptsovits") → GPTSoVitsProvider(读 .env 的 GPTSOVITS_* 配置)→ 调真服务 9880 合成。
 验证整条 provider 链路(非 mock):config 读取 + _ensure_weights + /tts + 返 wav。
 
-作者: 李文煜
 日期: 2026-08-08
 """
 import asyncio
@@ -29,7 +28,7 @@ async def main():
     out = Path("E:/FFOutput/gag_provider_test.wav")
     out.write_bytes(wav)
     print(f"[OK] {len(wav)/1024:.1f}KB -> {out}")
-    print("试听确认音色 = 清浔(dana)。OK 则 provider 链路通,可切 TTS_PROVIDER=gptsovits 上线")
+    print("试听确认音色 = 正确(dana)。OK 则 provider 链路通,可切 TTS_PROVIDER=gptsovits 上线")
 
 
 if __name__ == "__main__":

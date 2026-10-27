@@ -14,7 +14,6 @@ roleplay 训练样本 REST 接口(M8 + 2026-07-05 多会话+评分):会话 CRUD 
   DELETE /roleplay/{oid}/messages/{mid}      删单条(→neg 队列 + 清 score 样本)
   POST   /roleplay/{oid}/extract             把训练样本抽成 long_term 记忆(手动触发,复用 encoder)
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-07-05
@@ -169,7 +168,7 @@ async def extract_to_memory(oid: str, body: dict = Body(default={})):
     redis = await get_redis()
     block_id = body.get("block_id") or None
     coord = await get_memory_coordinator()
-    # 2026-07-07 拟人化:取角色对用户称呼,encoder 用具体称呼抽记忆(如"煜君喜欢动漫")
+    # 2026-07-07 拟人化:取角色对用户称呼,encoder 用具体称呼抽记忆(如"主人喜欢动漫")
     from persona.store import get_object_persona_id, get_persona
     _pid = await get_object_persona_id(redis, oid)
     _card = await get_persona(redis, _pid)

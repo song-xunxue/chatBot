@@ -2,7 +2,6 @@
 记忆编码器单元测试（mock LLM）
 验证 summarize/reflect/extract_facts/_parse_facts/heuristic 降级/clamp
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

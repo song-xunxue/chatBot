@@ -2,7 +2,6 @@
 M6 测试公共夹具:fakeredis + EventBus + ToolRegistry。
 自举:把 plugins/star_compat/ 加入 sys.path,使测试可 `import astrbot`(命中兼容包)。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 import sys

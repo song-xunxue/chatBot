@@ -2,7 +2,6 @@
 /**
  * 主布局(V2.0 M7):左侧栏导航 + 顶栏(标题/全局 oid/登出)+ 内容区。
  * 菜单:人设/历史/记忆/心情/插件/系统/代人代答/训练样本(评分已并入对话历史,2026-07-03)。
- * 作者: 李文煜
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

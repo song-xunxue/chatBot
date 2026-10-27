@@ -2,7 +2,6 @@
 记忆遗忘机制
 retain 评分(importance × recency × access × emotion 加权) + recency_decay 指数衰减。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

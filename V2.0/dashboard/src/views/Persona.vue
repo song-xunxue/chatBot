@@ -4,7 +4,6 @@
  * 单人设模式(只编辑) + 长文本弹窗大窗口编辑 + 暴露 personality/scenario/speech_style/catchphrase
  *   (这些字段反推会写,但原面板看不到 → 设计断层;现补暴露) +
  * 人设反推预览/应用(reverse_infer dry_run/apply,展示字段 diff 旧值→新值,给应用/放弃按钮)。
- * 作者: 李文煜
  */
 import { ref, onMounted, computed } from 'vue'
 import {
@@ -36,7 +35,7 @@ const LONG_FIELDS: { field: string; label: string; hint: string }[] = [
   { field: 'description', label: '描述(背景设定)', hint: '背景故事 / 世界观设定' },
   { field: 'scenario', label: '场景示例', hint: '场景设定(反推可改 → 渲染【场景示例】段)' },
   { field: 'user_description', label: '关于用户(你)', hint: '对话另一方(你)的特征,让人设更熟悉你' },
-  { field: 'user_alias', label: '对用户的称呼', hint: '角色怎么称呼对方(如"煜君");自动从对话学,这里可手动改,renderer/记忆用它代"用户"更拟人' },
+  { field: 'user_alias', label: '对用户的称呼', hint: '角色怎么称呼对方(如"主人");自动从对话学,这里可手动改,renderer/记忆用它代"用户"更拟人' },
   { field: 'catchphrase', label: '口头禅', hint: '标志性短语(渲染【人物画像】段)' },
 ]
 

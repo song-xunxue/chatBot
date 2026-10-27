@@ -1,7 +1,6 @@
 /**
  * REST API 封装：人设 / 插件 / 记忆 / 桌宠 / 多模态
  * 对接服务端 rest_persona / rest_plugin / rest_memory / rest_pet / rest_multimodal
- * 作者: 李文煜
  */
 import { api } from './client'
 

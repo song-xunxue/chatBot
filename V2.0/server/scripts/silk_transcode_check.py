@@ -11,7 +11,6 @@ pysilk 用法(对照 AstrBot tencent_record_helper.py):
   encode(BytesIO(pcm), out_io, rate, rate, tencent=True)  # 0x02 前缀 QQ 兼容流
   decode(BytesIO(silk去0x02), out_io, 24000)              # 回环验证
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import shutil

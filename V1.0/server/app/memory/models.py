@@ -4,7 +4,6 @@ MemoryItem（长期）/ EpisodicEntry（情景摘要）/ CoreFact（核心）/
 RecallResult / ForgetConfig / Layer / Category。
 对应 docs/06 §3、docs/09 §2.3。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

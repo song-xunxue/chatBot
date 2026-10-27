@@ -3,7 +3,6 @@
 单一注册表 _VISION_PROVIDERS(name→类/key字段/展示名),与 llm/registry 同构。
 此前 get_vision 是 if-name→return-new 浅模块;现配置驱动,加 vision provider 只改一处。
 
-作者: 李文煜
 日期: 2026-07-02
 """
 from dataclasses import dataclass

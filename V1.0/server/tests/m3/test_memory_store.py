@@ -3,7 +3,6 @@
 验证 Core/Episodic/Reflect/Long-term/State 各层读写、键隔离、访问统计、遗忘标记、
 Working 委托 chat_store、对象索引扫描、chat_store 前缀与向后兼容
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

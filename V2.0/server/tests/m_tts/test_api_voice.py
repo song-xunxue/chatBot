@@ -4,7 +4,6 @@ QQ 上传/发语音 api_client 单测(M-tts,2026-08-04)
 + send_c2c_voice(POST messages,msg_type=7 + media.file_info + msg_id/msg_seq,主动消息无 msg_id)。
 mock httpx(MockTransport 路由 files/messages)+ token(get_access_token 直 patch)。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import json

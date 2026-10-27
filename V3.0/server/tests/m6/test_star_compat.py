@@ -2,7 +2,6 @@
 .star 兼容层包装饰器/类单测:@command/@regex/@llm_tool 注册、Star __init_subclass__ 注册、
 AstrMessageEvent 适配 MessageContext、Context.write_memory/get_persona。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 from astrbot._registry import get_star_handlers, get_star_classes, clear_registry

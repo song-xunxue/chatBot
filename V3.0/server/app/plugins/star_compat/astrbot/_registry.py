@@ -1,7 +1,6 @@
 """V2.0 .star 兼容层本地注册表(模拟 AstrBot star_registry / star_handlers)。
 @filter 装饰器副作用注册到此;StarLoader 收集后适配到 V2.0 EventBus / ToolRegistry。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-30

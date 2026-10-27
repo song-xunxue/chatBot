@@ -4,7 +4,6 @@ GLM / DeepSeek / 硅基流动均提供 OpenAI 兼容的 /chat/completions 接口
 本基类用 httpx 统一实现 chat(一次性) 与 stream_chat(流式 SSE)，子类只需配置
 base_url / api_key / default_model。
 
-作者: 李文煜
 日期: 2026-06-19
 
 2026-06-19

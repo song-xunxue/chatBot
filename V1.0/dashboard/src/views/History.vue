@@ -2,7 +2,6 @@
 /**
  * 对话历史（V1.2）：聊天框式气泡展示（user 右/assistant 左，像代人聊天）+
  * 5分钟窗分组 + 时间格式化 + 修改(预选角色)/删除。
- * 作者: 李文煜
  */
 import { ref, computed } from 'vue'
 import {

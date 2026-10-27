@@ -1,7 +1,6 @@
 /**
  * chart.js 暗色配置(2026-09-16 面板暗色重设计)
  * canvas 不解析 CSS 变量,图表须用字面色值——与 styles/theme.css 色板手动保持同步。
- * 作者: 李文煜
  */
 export const CHART = {
   accent: '#3fc68a',

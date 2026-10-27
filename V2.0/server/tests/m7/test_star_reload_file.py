@@ -2,7 +2,6 @@
 StarLoader.reload_file 增量热重载单测(M7)。
 验证:reload 单文件不误卸其他 .star(避开 clear_registry 全清)、reload 后文件改动生效、文件不存在返回 False。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from pipeline.context import MessageContext

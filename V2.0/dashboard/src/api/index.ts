@@ -2,7 +2,6 @@
  * REST API 封装(V2.0 M7):人设 / 聊天历史 / 评分 / 心情 / 记忆 / 插件 / 系统。
  * 对接 V2.0 服务端 rest_persona / rest_chat / rest_score / rest_mood / rest_memory / rest_plugin / rest_system。
  * 鉴权由 client.ts 拦截器自动注入 X-Access-Token(Header)。
- * 作者: 李文煜
  */
 import { api } from './client'
 

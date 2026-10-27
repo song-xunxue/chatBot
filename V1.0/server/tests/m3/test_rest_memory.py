@@ -2,7 +2,6 @@
 记忆 REST 接口测试（httpx.AsyncClient + ASGITransport，与 fakeredis 同 loop）
 验证 查看/过滤/手动遗忘/恢复/锁定/批量遗忘/统计/鉴权
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

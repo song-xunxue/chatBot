@@ -4,7 +4,6 @@ on_message_out:按换行拆 reply_text 成多段,逐段 send_c2c_message 下发(
 不改 reply_text(save 仍存完整对话历史),发完设 ctx.reply_sent=True 让 webhook 跳过默认单条下发。
 拆分/间隔/最大段数面板可配(config_schema)。失败兜底:某段下发失败则剩余写回 reply_text 交 webhook 单条发。
 
-作者: 李文煜
 日期: 2026-07-07
 
 2026-07-07

@@ -3,7 +3,6 @@
  * 对话历史(V2.0 拟人化 2026-07-07):左栏混合 chat 真实 block + roleplay 训练 block(source tag 区分),
  * 主区按 source 切换:real=真实对话流(改分/编辑/软删/评分总览/反推)/training=训练样本流(录入/评分/抽取为记忆)。
  * 训练样本并入对话历史页(去独立菜单),一体体验。sender=user 显示 user_alias(角色对用户称呼,拟人化)。
- * 作者: 李文煜
  */
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { Bar } from 'vue-chartjs'
@@ -101,7 +100,7 @@ function relTs(ts: any): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
   return `${Math.floor(diff / 86_400_000)}d`
 }
-// 消息发送者标签:real user 显示 user_alias(如"煜君"),否则 sender/role 原值
+// 消息发送者标签:real user 显示 user_alias(如"主人"),否则 sender/role 原值
 function senderLabel(m: any): string {
   const s = m.source === 'training' ? m.role : m.sender
   if (s === 'user' && userAlias.value) return userAlias.value

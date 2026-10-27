@@ -2,7 +2,6 @@
 retriever 单测(M4):BM25 评分(稀有词高分)/ KeywordRetriever / sample_weighted
 (全取/采样数量/高分偏向)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

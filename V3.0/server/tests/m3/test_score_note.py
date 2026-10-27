@@ -2,7 +2,6 @@
 评分批注 score_note 单测(2026-07-07):改分带批注 → 持久化到 message + get_score 返回;
 不带批注 → 字段空不报错。
 
-作者: 李文煜
 日期: 2026-07-07
 """
 from storage import chat_store

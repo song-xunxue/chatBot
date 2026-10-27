@@ -1,4 +1,4 @@
-# 清浔人设训练(阶段 C · 本地 4060)
+# V3.0-local 人设训练(阶段 C · 本地 4060)
 
 > 2026-09-12 建立 · 依据 docs/04 调研报告 · 数据 = 评分系统导出(阶段 B 管线)
 
@@ -39,4 +39,3 @@ run_train.bat v0 ..\server\data\training\qingxun_sft_2026xxxx.jsonl
 
 ## 作者
 
-李文煜 · 2026-09-12

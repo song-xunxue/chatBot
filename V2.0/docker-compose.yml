@@ -1,5 +1,4 @@
 # MyChat V2.0 服务端编排(QQ 官方机器人后端)
-# 作者: 李文煜
 # 日期: 2026-07-01
 # 启动: docker compose up -d   停止: docker compose down   日志: docker compose logs -f
 #

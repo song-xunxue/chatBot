@@ -6,7 +6,6 @@ sticker_plus 插件单测
 心情 label 透传/inject_hint 异常软失败/usage_window 裁剪);render_text_sticker
 (落盘+注册+幂等/空与超长 ValueError);plugin.yaml manifest 校验。
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

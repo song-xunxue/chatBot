@@ -15,7 +15,6 @@ roleplay 训练样本 → long_term 记忆抽取编排
      (用户选"共池默认进召回",source 仅写入不做读取过滤)。
   5. 不写库:只返回 facts,写由调用方调 coordinator.upsert_facts_batch(持锁批量去重)。
 
-作者: 李文煜
 日期: 2026-07-07
 
 2026-07-07

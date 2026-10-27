@@ -6,7 +6,6 @@ tts_reply 插件 + 插件参数端点单测(M-tts,2026-08-04)
 
 2026-10-01 变更:silk 自编环节移除(音频直传 NapCat 自转),mock 链同步去掉 to_tencent_silk。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import base64

@@ -1,7 +1,6 @@
 """
 tools 基类单测:Tool(to_openai/execute)+ ToolRegistry(register/get/all/openai_tools/call)。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 from tools.base import Tool, ToolRegistry, ToolContext

@@ -3,7 +3,6 @@ Redis 异步客户端（单例）
 从 settings.redis_url 建立连接；若配置了 REDIS_PASSWORD 则注入到 URL。
 decode_responses=True 使返回值为 str（免去手动 decode）。
 
-作者: 李文煜
 日期: 2026-06-19
 
 2026-06-19

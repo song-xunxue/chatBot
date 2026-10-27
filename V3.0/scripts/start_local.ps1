@@ -4,7 +4,6 @@ V3.0 一键本地启动脚本(Windows PowerShell 5.1 兼容,不使用 PS7 专属
 server/scripts/local_dev.py -> 轮询 /health 就绪后打印访问地址与鉴权信息。
 注意: 本文件必须以 UTF-8 带 BOM 保存(PS5.1 对无 BOM 文件按 ANSI 解析,中文注释/输出会全部乱码)。
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

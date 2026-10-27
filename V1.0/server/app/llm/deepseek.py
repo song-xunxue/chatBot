@@ -2,7 +2,6 @@
 DeepSeek Provider —— OpenAI 兼容
 DeepSeek 官方提供 OpenAI 兼容接口，base_url 为 https://api.deepseek.com。
 
-作者: 李文煜
 日期: 2026-06-19
 
 2026-06-19

@@ -2,7 +2,6 @@
 coordinator M4 增强单测:retrieve 用 BM25 rank + 加权随机召回 / forget_tick 整合睡眠巩固。
 直接构造 MemoryCoordinator(不经单例,避免跨测试缓存)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

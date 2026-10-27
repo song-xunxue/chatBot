@@ -1,7 +1,6 @@
 """
 回调地址验证(op=13 握手)测试:签名金标准(对照 QQ 官方 DEMO signature)+ 路由回包
 
-作者: 李文煜
 日期: 2026-06-25
 """
 from qq.webhook import sign_validation

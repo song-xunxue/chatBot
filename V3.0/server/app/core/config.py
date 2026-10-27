@@ -7,7 +7,6 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
   - QQ AppSecret:既换 access_token(调 QQ REST 发消息),又作 Webhook 回调 Ed25519 验签密钥派生源
     (QQ 文档术语「Bot Secret」即此字段;OpenClaw/AstrBot/阿里云接入均只需 2 凭证佐证,用户后台确认无独立 Bot Secret)
 
-作者: 李文煜
 日期: 2026-06-25
 
 2026-06-25

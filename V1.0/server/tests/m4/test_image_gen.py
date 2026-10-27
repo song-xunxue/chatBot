@@ -2,7 +2,6 @@
 image_gen 插件测试：配额内生成图(入 ctx.rich.image)、超额自主拒绝(STOP)、provider 失败回滚配额。
 经 real_manager 加载真实 image_gen 插件，fakeredis 计数验证日配额。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

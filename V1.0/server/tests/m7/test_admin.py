@@ -2,7 +2,6 @@
 rest_admin 测试：models / history / persona_evolve 提案列表+忽略、鉴权。
 播种经 redis_client._redis（与 client fixture 同一 fakeredis，避免双实例竞态）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

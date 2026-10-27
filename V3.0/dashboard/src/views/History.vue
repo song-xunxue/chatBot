@@ -4,7 +4,6 @@
  * 主区按 source 切换:real=真实对话流(改分+纠正回复/软删/评分总览/反推)/training=训练样本流(录入/评分/抽取为记忆)。
  * 2026-08-18:删"编辑内容"(破坏性改 content)——纠错统一走改分弹窗纠正回复(原内容保留+正样本反推)。
  * 训练样本并入对话历史页(去独立菜单),一体体验。sender=user 显示 user_alias(角色对用户称呼,拟人化)。
- * 作者: 李文煜
  */
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { Bar } from 'vue-chartjs'
@@ -100,7 +99,7 @@ function relTs(ts: any): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
   return `${Math.floor(diff / 86_400_000)}d`
 }
-// 消息发送者标签:real user 显示 user_alias(如"煜君");proxy=面板代答/角色QQ手动回复;其余原值
+// 消息发送者标签:real user 显示 user_alias(如"主人");proxy=面板代答/角色QQ手动回复;其余原值
 // (training 消息的存储 source 是 'roleplay',原判 'training' 恒不命中,顺手修正)
 function senderLabel(m: any): string {
   const s = m.source === 'roleplay' ? m.role : m.sender

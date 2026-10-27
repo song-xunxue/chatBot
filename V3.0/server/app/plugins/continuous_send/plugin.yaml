@@ -1,6 +1,5 @@
 name: continuous_send
 version: 0.1.0
-author: 李文煜
 description: 消息分段发送——按换行拆回复成多段逐条下发(多个气泡,像真人微信连发),段间随机间隔模拟打字节奏
 entry: plugin.py
 display_name: 分段发送

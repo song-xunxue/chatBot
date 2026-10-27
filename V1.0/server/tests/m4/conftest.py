@@ -2,7 +2,6 @@
 M4 插件测试公共夹具
 复用顶层 conftest 的 fake_redis（fakeredis 注入）；本文件提供临时插件目录、EventBus、PluginManager 夹具。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

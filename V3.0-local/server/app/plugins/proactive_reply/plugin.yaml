@@ -1,0 +1,18 @@
+name: proactive_reply
+version: 0.1.0
+description: 主动搭话——空闲且不扰民时段,以人设身份主动发一条开场消息(本地模型生成,经 takeover 下发,落 proxy 消息面板可见)
+entry: plugin.py
+display_name: 主动搭话
+category: 主动消息
+hooks:
+  - { name: on_tick, priority: 110 }
+default_enabled: false
+config_schema:
+  quiet_hours: { type: string, default: "23:30-08:00", description: "静默时段(HH:MM-HH:MM,支持跨零点如 23:30-08:00),时段内绝不主动发消息" }
+  daily_max: { type: number, default: 3, min: 0, max: 50, step: 1, description: "每个对象每天最多主动发送条数" }
+  min_gap_minutes: { type: number, default: 120, min: 0, max: 1440, step: 10, description: "两次主动消息的最小间隔(分钟)" }
+  idle_minutes: { type: number, default: 90, min: 0, max: 1440, step: 10, description: "对方最近一条消息距现在不足该值时不打扰(分钟)" }
+  prob: { type: number, default: 0.05, min: 0, max: 1, step: 0.01, description: "每次 tick 的命中概率(tick=60s;0=永不主动,1=每 tick 必发)" }
+  use_tts: { type: bool, default: false, description: "主动消息是否走语音(经 takeover TTS 通道,失败自动降级文本)" }
+  llm_provider: { type: string, default: "local", description: "生成开场白用的 LLM provider 名(local=本地 Ollama,glm=云端)" }
+  farewell_aware: { type: bool, default: true, description: "晚安感知:对方最后一条消息是道别/就寝语(晚安/睡了/困了等)时,静默直到对方再开口,不再主动搭话" }

@@ -9,7 +9,6 @@
   body:   {model, input, voice, response_format, sample_rate, speed, stream}
   resp:   200 直接返回音频二进制(非 JSON);header x-siliconcloud-trace-id
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import sys

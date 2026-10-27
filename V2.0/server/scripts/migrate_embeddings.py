@@ -7,7 +7,6 @@
   python -m scripts.migrate_embeddings
   或  docker exec mychat-server-v2 python -m scripts.migrate_embeddings
 
-作者: 李文煜
 日期: 2026-07-07
 """
 import asyncio

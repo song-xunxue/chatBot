@@ -2,7 +2,6 @@
 rest_mood REST 单测(M7):鉴权 / 档位 CRUD(冲突 400)/ 全局参数读写(超范围 400)/
 mood 读写 + 历史 / 评分试算。独立 app(仅挂 mood_router)。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import httpx

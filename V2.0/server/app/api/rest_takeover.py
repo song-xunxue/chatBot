@@ -11,7 +11,6 @@
   POST /takeover/{oid}/skip            跳过(队首或指定 pid)
   POST /takeover/{oid}/send            主动发送(不依赖 pending,管理员直接推消息给用户)
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-07-05

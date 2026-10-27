@@ -1,0 +1,5 @@
+{
+  "_说明": "本地启动器心跳上报配置模板。复制本文件到 V2.0/tts-tools/heartbeat.json(与启动器 exe 同目录),填实际 cloud_url + token 后启动器即每 30s 上报就绪心跳。实际 heartbeat.json 已 gitignore(含 token 不入库)。",
+  "cloud_url": "http://43.140.219.99:8000",
+  "token": "替换为面板登录token"
+}

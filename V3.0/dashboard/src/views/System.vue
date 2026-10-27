@@ -4,7 +4,6 @@
  * QQ 官方机器人凭证卡已删(V3.0 纯 QQ 号/OneBot 项目,无官方凭证概念)。
  * 清空所有数据:删运行时数据(对话/记忆/训练样本/评分/mood值/代答),保留人设+配置,需输入"清空"确认。
  * 2026-09-12 训练前置工具:人设盲测基准(A/B provider 对比)+ 训练数据导出(SFT/DPO)。
- * 作者: 李文煜
  */
 import { ref, computed, onMounted } from 'vue'
 import { NCard, NSpace, NButton, NTag, NSpin, NEmpty, NInput, NInputNumber, NModal,

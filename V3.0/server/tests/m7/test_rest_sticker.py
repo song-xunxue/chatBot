@@ -5,7 +5,6 @@ rest_sticker REST 单测(2026-10-25,sticker_plus 配套):表情包库管理 5 �
 describe(vision 成功更新注册、失败 400)/ render(生成+注册+token、空白文字 400)。
 fakeredis + monkeypatch STICKER_DIR 到 tmp_path(render 模块按值持有 STICKER_DIR,须一并 patch)。
 
-作者: 李文煜
 日期: 2026-10-25
 """
 import base64

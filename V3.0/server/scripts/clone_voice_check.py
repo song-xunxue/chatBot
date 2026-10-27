@@ -6,7 +6,6 @@
 用已有 tts_test_output.mp3(alex 音色)作测试参考音频(仅验证链路,非目标音色)。
 产物 clone_test.mp3 试听;测试音色最后删除清理。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import sys

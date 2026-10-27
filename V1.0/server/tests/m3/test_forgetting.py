@@ -2,7 +2,6 @@
 记忆遗忘机制单元测试
 验证 recency_decay 衰减/重置、retain_score 公式、should_forget 阈值/locked/forgotten
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

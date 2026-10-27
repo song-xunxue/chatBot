@@ -1,7 +1,6 @@
 """
 ConnectionRegistry 测试：register/broadcast/deregister、失败连接隔离移除。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

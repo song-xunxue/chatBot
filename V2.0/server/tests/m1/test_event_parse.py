@@ -1,7 +1,6 @@
 """
 C2C_MESSAGE_CREATE 事件解析 + 路由分发测试
 
-作者: 李文煜
 日期: 2026-06-25
 """
 import json

@@ -6,7 +6,6 @@ M7 面板本地验收启动器(本地开发/演示用工具,不入镜像仅本�
 启动:cd V2.0/server && mychat/python.exe scripts/panel_dev.py
 访问:http://localhost:8000   登录 token:dev-token   示例 object_id:demo
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-07-02

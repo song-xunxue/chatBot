@@ -4,7 +4,6 @@ messages：对话历史缓存（增量同步用）；outbox：离线未发送队
 单连接 + threading.Lock 串行化（UI 线程与 WS 线程都会访问），check_same_thread=False。
 单对象保存上限 message_limit，超出清理最旧（Q-04）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

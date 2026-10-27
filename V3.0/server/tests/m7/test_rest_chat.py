@@ -2,7 +2,6 @@
 rest_chat REST 单测(M7):鉴权 / block 列表 / 消息列表 / 取单条(404)/ 编辑 / 软删(联动 neg)/ 关 block。
 独立 app(仅挂 chat_router)+ ASGITransport(不走 lifespan)。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import httpx

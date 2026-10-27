@@ -3,7 +3,6 @@
 鉴权 / 取分(200+404)/ 手动改分 / 人设健康度 / 反推 dry_run+apply 两步契约 / 反推禁用 403。
 用独立 app(仅挂 score_router,无 main lifespan)+ fakeredis 注入。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

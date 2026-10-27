@@ -3,7 +3,6 @@ GLM(智谱)图像理解 Provider —— OpenAI 兼容多模态
 复用 GLM 文本 endpoint(/api/paas/v4/chat/completions),messages.content 为 list,
 含 image_url(data:base64)。模型默认 glm-4v-flash(轻量 free);可经 .env GLM_VISION_MODEL 切换。
 
-作者: 李文煜
 日期: 2026-07-01
 
 2026-07-01

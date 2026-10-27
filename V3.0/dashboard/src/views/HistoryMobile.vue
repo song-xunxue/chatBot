@@ -7,7 +7,6 @@
  * ③ 评分总览(均分+正中负文字计数,Bar 图省略)+ 反推 dryRun/确认落库 + 正反样例 折叠置底
  * 逻辑与 PC 端完全一致(useObject 共享 oid + ensureOid + 5s 轮询 + visibilitychange 暂停),
  * 仅 template 按手机窄屏重组:左栏→弹窗选择器、图表→文字计数、单行输入改 textarea、主按钮 size large(触摸≥44px)。
- * 作者: 李文煜
  */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
@@ -90,7 +89,7 @@ function relTs(ts: any): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
   return `${Math.floor(diff / 86_400_000)}d`
 }
-// 消息发送者标签:real user 显示 user_alias(如"煜君");proxy=面板代答/角色QQ手动回复;其余原值
+// 消息发送者标签:real user 显示 user_alias(如"主人");proxy=面板代答/角色QQ手动回复;其余原值
 // (training 消息的存储 source 是 'roleplay',原判 'training' 恒不命中,顺手修正)
 function senderLabel(m: any): string {
   const s = m.source === 'roleplay' ? m.role : m.sender

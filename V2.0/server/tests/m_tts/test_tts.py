@@ -3,7 +3,6 @@ TTS provider 单测(M-tts,2026-08-04)
 覆盖:4 女声表 + _full_voice 拼接 + get_tts 工厂(有/无 key 降级)+ SiliconFlow synthesize payload
 (纯文本 vs 情感指令 <|endofprompt|> + speed/gain 透传)+ infer_tts_emotion(LLM 推导/无 provider/异常降级)。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import httpx

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # MyChat V2.0 服务端部署脚本(QQ 官方机器人后端)
-# 作者: 李文煜
 # 日期: 2026-07-01
 # 用法: 在服务器 V2.0 项目根目录执行  sudo bash scripts/deploy_v2.sh
 #

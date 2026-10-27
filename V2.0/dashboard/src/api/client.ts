@@ -1,7 +1,6 @@
 /**
  * Axios 实例：自动注入 access_token（X-Access-Token 头），401 跳登录
  * baseURL 走 Vite dev proxy（/api → 服务端 :8000），生产可设 VITE_API_BASE
- * 作者: 李文煜
  */
 import axios from 'axios'
 import router from '@/router'

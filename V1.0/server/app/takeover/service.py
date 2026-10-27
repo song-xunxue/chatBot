@@ -3,7 +3,6 @@
 per-object 代人模式开关 + pending 请求管理（全局 INCR 序列防碰撞，per-object 单 active）。
 对应 docs/10 §8。无 HTTP/WS 依赖，便于单测。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

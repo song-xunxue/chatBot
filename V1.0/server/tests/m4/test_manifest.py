@@ -1,7 +1,6 @@
 """
 manifest 解析单测：完整解析、缺 name、非法钩子、默认值
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24
@@ -23,7 +22,7 @@ def _write(tmp_path: Path, text: str) -> Path:
 
 def test_parse_full(tmp_path):
     p = _write(tmp_path,
-        "name: tts\nversion: 0.2.0\nauthor: 李文煜\n"
+        "name: tts\nversion: 0.2.0\nauthor: ""\n"
         "description: x\nentry: plugin.py\n"
         "hooks:\n"
         "  - { name: on_after_llm, priority: 100 }\n"
@@ -33,7 +32,7 @@ def test_parse_full(tmp_path):
     mf = parse_manifest(p)
     assert mf.name == "tts"
     assert mf.version == "0.2.0"
-    assert mf.author == "李文煜"
+    assert mf.author == ""
     assert mf.default_enabled is True
     assert [h.name for h in mf.hooks] == ["on_after_llm", "on_message_out"]
     assert mf.hooks[0].priority == 100

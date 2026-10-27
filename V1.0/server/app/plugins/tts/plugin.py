@@ -3,7 +3,6 @@ tts 插件（F-P-01 语音合成）
 on_after_llm：把回复文本合成为语音(空或超 max_chars 跳过)，加入 ctx.rich.audio。
 真实语音服务经 modality provider 接入(默认 stub)，Q-10 确认后换真实 provider。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

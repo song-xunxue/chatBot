@@ -3,7 +3,6 @@
 流式入口 run_stream：load_history → persona_inject → memory_retrieve → 插件钩子 → llm_stream → save。
 对应 docs/02 §4.2 管道顺序；M4 在 4 个点接入插件钩子（on_message_in/before_llm/after_llm/message_out）。
 
-作者: 李文煜
 日期: 2026-06-19
 
 2026-06-19

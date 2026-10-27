@@ -2,7 +2,6 @@
 takeover_store per-object FIFO 队列单测:开关/入队出队/指定pid/孤儿清理/跳过/msg_seq。
 对应 docs/02 §8.2。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from storage import takeover_store

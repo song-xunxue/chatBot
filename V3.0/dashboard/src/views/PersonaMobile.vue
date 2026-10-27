@@ -8,7 +8,6 @@
  * ④ provider/model 绑定为低频配置,折叠置底(参照 TakeoverMobile 的 TTS 折叠)
  * 人设为全局单人设,listPersonas/getSystemConfig 不依赖会话 oid(oid 仅反推入口校验,照 PC);
  * PC 端无轮询,本页同样不轮询。鉴权:router 守卫跳登录 + axios 拦截器注入 X-Access-Token。
- * 作者: 李文煜
  */
 import { ref, onMounted, computed, watch } from 'vue'
 import {
@@ -43,7 +42,7 @@ const LONG_FIELDS: { field: string; label: string; hint: string }[] = [
   { field: 'description', label: '描述(背景设定)', hint: '背景故事 / 世界观设定' },
   { field: 'scenario', label: '场景示例', hint: '场景设定(反推可改 → 渲染【场景示例】段)' },
   { field: 'user_description', label: '关于用户(你)', hint: '对话另一方(你)的特征,让人设更熟悉你' },
-  { field: 'user_alias', label: '对用户的称呼', hint: '角色怎么称呼对方(如"煜君");自动从对话学,这里可手动改,renderer/记忆用它代"用户"更拟人' },
+  { field: 'user_alias', label: '对用户的称呼', hint: '角色怎么称呼对方(如"主人");自动从对话学,这里可手动改,renderer/记忆用它代"用户"更拟人' },
   { field: 'catchphrase', label: '口头禅', hint: '标志性短语(渲染【人物画像】段)' },
 ]
 

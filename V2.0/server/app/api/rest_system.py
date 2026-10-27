@@ -9,7 +9,6 @@
   PUT  /system/qq-credentials  更新 QQ 凭证(写 Redis + 热生效)
   POST /system/reset           清空所有运行时数据,保留人设+配置(2026-07-05,需 confirm='清空')
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-07-05

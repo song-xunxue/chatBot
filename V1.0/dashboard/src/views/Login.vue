@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
  * 登录页：输入 access_token（与服务端 ACCESS_TOKEN 一致），存 localStorage 后跳转
- * 作者: 李文煜
  */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'

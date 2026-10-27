@@ -2,7 +2,6 @@
 rest_persona REST 单测(M7):鉴权 / 取·改 / 模型绑定 / 导出 / 快照回滚。
 单人设简化(2026-07-04):create/delete/import 端点已删,改用 store 层种数据测读改/导出。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import httpx

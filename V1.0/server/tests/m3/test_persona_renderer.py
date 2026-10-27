@@ -2,7 +2,6 @@
 人设 system_prompt 渲染测试
 验证 render_system_prompt 的五维拼装、动态状态、空兜底
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

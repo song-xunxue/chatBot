@@ -4,7 +4,6 @@ token 鉴权 + 接收 user_msg + 走消息处理管道(run_stream) + 流式推�
 ai_start/ai_chunk/ai_done。M2：把 M1.5 的 echo 回显替换为真实 LLM 流式回复。
 V1.1 M13：代人聊天 B 实时接管——代人模式开启时 user_msg 旁路 LLM，推代答请求到面板。
 
-作者: 李文煜
 日期: 2026-06-15
 
 2026-06-15

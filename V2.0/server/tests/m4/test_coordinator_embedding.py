@@ -4,7 +4,6 @@ coordinator 向量重排 + 语义去重单测(2026-07-07 记忆优化阶段1):
 2. 配置 provider → 新记忆写入同步存 vec
 3. 语义去重:相同内容(cosine=1>=阈值)→ 合并 access_count++,不新建
 
-作者: 李文煜
 日期: 2026-07-07
 """
 import pytest

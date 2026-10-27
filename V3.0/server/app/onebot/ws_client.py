@@ -20,7 +20,6 @@ self_id 过滤:仅处理 settings.onebot_self_id 的事件(接管对话的号;�
 响应 message_id 去重忽略;其余为手动回复 → takeover.record_manual_reply 落库+消化待答队列
 (绝不重复下发)。修"手动回复不落聊天记录 + 待答队列堆积不消"两问题。
 
-作者: 李文煜
 日期: 2026-08-16
 
 2026-09-07

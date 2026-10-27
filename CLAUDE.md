@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目状态
 
-这是一个 **Python 聊天机器人项目**（V1.0 已归档 / V2.0 已下线 / V3.0 在用真实聊天记录攒数据做个人风格微调；**V3.0/ 目录已冻结，现行演进在 `V3.0-local/`（清浔）与 `Vdafeiyu/`（大肥鱼）两个本地栈**）。PyCharm/IntelliJ 模块名为 `Mychat`（见 `.idea/Mychat.iml`，类型 `PYTHON_MODULE`）。
+这是一个 **Python 聊天机器人项目**（V1.0 已归档 / V2.0 已下线 / V3.0 在用真实聊天记录攒数据做个人风格微调；**V3.0/ 目录已冻结，现行演进在 `V3.0-local/`与 `Vdafeiyu/`（大肥鱼）两个本地栈**）。PyCharm/IntelliJ 模块名为 `Mychat`（见 `.idea/Mychat.iml`，类型 `PYTHON_MODULE`）。
 
-`D:\code\Git_Local\ChatBot` **就是 git 仓库根**（父目录 `D:\code\Git_Local` 只是各项目克隆的父目录，本身不是仓库）：工作分支 `v3.0`（V3.0 冻结基线+双栈共用件+文档；跟踪 `origin/v3.0`），`v2.0` 为 V2.0 线上存档分支，双远程 `origin`=Gitee、`github`=GitHub（**「推送/更新 git」默认双平台都要，先 origin 后 github**）。**2026-10-27 起两栈分支化入库**：`v3.0-local`=清浔栈整树（696 测基线）、`vdafeiyu`=大肥鱼栈整树（603 测，dist 例外收入）；两栈目录在 v3.0 工作区仍是 ignored 状态（物理文件不动，栈分支用 plumbing 建勿 checkout）；`.local/`（QQ 登录态）绝不入库，`.env`/`server/data/`（聊天数据）/`.data/`（redis 快照）/`logs/` 在任何分支都不入库。
+`D:\code\Git_Local\ChatBot` **就是 git 仓库根**（父目录 `D:\code\Git_Local` 只是各项目克隆的父目录，本身不是仓库）：**唯一活动分支 `v3.0`**（V3.0 冻结基线 + 双栈整树 `V3.0-local/`、`Vdafeiyu/` + 共用件 + 文档，2026-10-27 整合，工作区与仓库一一镜像），`master`/`v2.0`/`dev/v1.1` 为历史存档分支；双远程 `origin`=Gitee、`github`=GitHub，仓库默认分支已切 `v3.0`（**「推送/更新 git」默认双平台都要，先 origin 后 github**）。隐私红线（任何分支不入库）：`.env`、`server/data/`（聊天数据/人设/金样本）、`.data/`（redis 快照）、`logs/`、`node_modules/`、`.local/`（QQ 登录态）；**仓库内容不出现真实姓名、人设角色本名及其变体、人设对用户的专属称谓**（2026-10-27 隐私规范，存量已清），git 提交不加 Co-Authored-By 尾注。
 
 构建本项目时，参考实现为 **AstrBot**（见根目录 `Reference` 文件）：
 
@@ -40,10 +40,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - 运行 Python 时优先用 conda 环境，通过完整路径调用 `python.exe`（conda 不在 bash PATH 中）
   - **已知 conda 环境（按项目区分，勿混用）**：
     - `mychat` — **V3.0 / V3.0-local / Vdafeiyu 现行专属**（跑测试 + 本地双栈运行都用它；V1.0 也用它）
-    - `qingxun` — **V2.0 / 清浔专属历史环境**（python 3.11，匹配 `server/Dockerfile`；V2.0 下线后仅打包启动器用）
+    - `qingxun` — **V2.0 / V3.0-local 专属历史环境**（python 3.11，匹配 `server/Dockerfile`；V2.0 下线后仅打包启动器用）
     - `llmtrain` — QLoRA 训练（unsloth+trl+peft）；其他通用：`mypytorch`（PyTorch/CUDA）、`langchain`、`coze_env`
   - 不确定用哪个时主动询问用户；conda.exe 完整路径 `C:/Users/26904/anaconda3/Scripts/conda.exe`
-- **项目类型已确认：项目类型**（非作业类型）。所有代码文件统一采用项目类型头部注释风格：功能说明 + 作者（`李文煜`）+ 日期（`yyyy-mm-dd`）+ 变更日志
+- **项目类型已确认：项目类型**（非作业类型）。项目类型头部注释：功能说明 + 日期（`yyyy-mm-dd`）+ 变更日志，**一律不写作者**（2026-10-27 用户立规，隐私防泄露：仓库简介/日志/文件头/提交信息任何位置不出现真实姓名，存量署名行见到即删；git 提交不加 Co-Authored-By 尾注；作业类型规范不受影响）
 - 其余规范（中文文档/注释、Windows 兼容性、conda 环境等）见全局 `~/.claude/CLAUDE.md`
 
 ## 全局核心规范（与 Claude Code 共用同一套）
@@ -52,7 +52,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 浓缩要点（没读原文件也按这些执行）：
 
-- 作者署名统一 `李文煜`；项目类型文件头 = 功能说明 + 作者 + 日期 + 变更日志；文档与注释用中文，调库处在行内注释说明作用与关键参数
+- **项目文件一律不写作者**（2026-10-27 隐私规范：文件头/简介/提交信息任何位置不出现真实姓名，不加 Co-Authored-By 尾注）；项目类型文件头 = 功能说明 + 日期 + 变更日志；文档与注释用中文，调库处在行内注释说明作用与关键参数
 - Python 一律走 conda 完整路径（本项目现行：V3.0 系=`mychat`、训练=`llmtrain`、V2.0 历史=`qingxun`），不确定先问
 - Git 只推项目类，先 `origin`(Gitee) 后 `github`(GitHub)，只 add 本项目目录内文件；`.env` / 密钥 / `.db` / `.gitignore` 一律不入库；**不主动问「要不要提交」、不自行 commit/push，只在用户说「提交」/「推送」时执行**
 - 用户以英文输入时 prose 英+中双语（英文在前），表格/代码/路径不译；中文输入只回中文
@@ -92,12 +92,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 栈 | 服务 | Redis | NapCat | QQ | 启动/看护 |
 |---|---|---|---|---|---|
-| 清浔 `V3.0-local/` | 8091 | 6390 | node.exe 6099（反向 WS） | 1145077465 | 计划任务 ChatBotLocalServer + ChatBotLocalWatchdog（每 2 分钟 watch_stack.ps1） |
+| `V3.0-local/` | 8091 | 6390 | node.exe 6099（反向 WS） | 1145077465 | 计划任务 ChatBotLocalServer + ChatBotLocalWatchdog（每 2 分钟 watch_stack.ps1） |
 | 大肥鱼 `Vdafeiyu/` | 8081 | 6380 | QQ.exe HTTP 3000 | 3682822273 | 一键 `Vdafeiyu/scripts/start-dafeiyu.ps1`；NapCat 看护=计划任务 NapCat-Watchdog（精确匹配版 keepalive）；redis/server 无看护 |
 
 - 铁律：**redis 必须先于服务启动**（否则整进程退 FAKEREDIS 丢数据）；**绝不强杀 QQ/NapCat**（丢登录态重扫码；清理必须按 `-q <QQ号>`+目录精确匹配）
 - 大肥鱼栈操作手册：`Vdafeiyu/GUIDE.md`（先读 `AGENTS.md`）；**其 dashboard/dist 绝不能从 V3.0-local 拷贝**
-- TTS GPT-SoVITS 9880 两栈共用；本地 LLM Ollama 11434（清浔栈用）
+- TTS GPT-SoVITS 9880 两栈共用；本地 LLM Ollama 11434（V3.0-local 栈用）
 
 ### 云端 V3.0 容器组（43.140.219.99，本地化后仍在但未巡检）
 

@@ -6,7 +6,6 @@ score 四元组计算的唯一来源(架构收口 #2,2026-07-04)
 mood_bias 由 mood.compute_mood_bias 产生(档位.score_bias + uniform noise);本 module 只负责
 "base + bias → clamp/round → 完整四元组"的**纯计算**,不读 mood、不存库(bias 来源规则的收口归候选5)。
 
-作者: 李文煜
 日期: 2026-07-04
 """
 

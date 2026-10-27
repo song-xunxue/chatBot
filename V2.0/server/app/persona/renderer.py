@@ -4,7 +4,6 @@
 + profile/preferences/relationship/example_dialogue) + 动态状态
 拼装为 LLM system prompt。各段"非空才输出",段顺序固定。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27
@@ -81,7 +80,7 @@ def _render_preferences(prefs) -> str:
 
 def _render_dialogue(examples: list, user_label: str = "用户") -> str:
     """示例对话段:渲染前 MAX_DIALOGUE_RENDER 条,每条 user/character 截断。
-    user_label(2026-07-07):用角色对用户的称呼(如"煜君")代"用户",拟人化。"""
+    user_label(2026-07-07):用角色对用户的称呼(如"主人")代"用户",拟人化。"""
     lines = []
     for ex in examples[:MAX_DIALOGUE_RENDER]:
         u = getattr(ex, "user", "") or ""

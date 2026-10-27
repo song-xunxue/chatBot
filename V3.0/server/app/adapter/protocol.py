@@ -7,7 +7,6 @@ official / onebot 各一实现;pipeline 零依赖(只产 ctx.reply_text,由调�
 - send_text 出站守卫(human_authored=False 过 sanitize_reply)是两实现共同的不变量(架构 #3)。
 - msg_id/msg_seq:official 被动回复语义(60min 窗口/防同 msg_id 重复);onebot 忽略(主动直发,无配额)。
 
-作者: 李文煜
 日期: 2026-08-16
 """
 from typing import Protocol, runtime_checkable

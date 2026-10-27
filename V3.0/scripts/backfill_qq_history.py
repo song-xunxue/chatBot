@@ -23,7 +23,6 @@ get_friend_msg_history 拉取(~/ChatBot-V3 服务器 /tmp/hist_all.json,241 条�
   docker cp backfill_qq_history.py mychat-server-v3:/tmp/
   sudo docker exec mychat-server-v3 python /tmp/backfill_qq_history.py
 
-作者: 李文煜
 日期: 2026-09-15
 """
 import asyncio

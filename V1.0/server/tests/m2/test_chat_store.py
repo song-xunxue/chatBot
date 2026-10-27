@@ -2,7 +2,6 @@
 对话历史存储 chat_store 测试（基于 fakeredis）
 验证 append / get_history / clear_history 的时序、隔离、limit 截断、中文保真
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

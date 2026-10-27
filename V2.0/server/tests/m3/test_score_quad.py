@@ -2,7 +2,6 @@
 score.quad compute_quad 单测(架构 #2 收口):公式 clamp(round(base+bias)) 的唯一来源。
 钉死:基础相加 / 上下界 clamp / 银行家 round / 返回四元组完整键。
 
-作者: 李文煜
 日期: 2026-07-04
 """
 from score.quad import compute_quad

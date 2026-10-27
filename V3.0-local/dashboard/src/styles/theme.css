@@ -1,0 +1,53 @@
+/**
+ * NapCat 风格暗色主题变量(2026-09-16 面板暗色重设计,docs/05 计划书阶段1)
+ * 全部视图页的硬编码色统一收敛到这些变量;改主题只动这一处。
+ */
+:root {
+  /* 底色层级 */
+  --bg: #111114;                          /* 页面底 */
+  --card: #1a1a1f;                        /* 卡片面 */
+  --card-2: #222228;                      /* 二级悬浮面(气泡/弹出) */
+  --border: rgba(255, 255, 255, 0.08);    /* 通用暗边框 */
+  /* 主色(NapCat 系荧光绿) */
+  --accent: #3fc68a;
+  --accent-hover: #5bd6a0;
+  --accent-dim: rgba(63, 198, 138, 0.16); /* 主色半透明底(active/用户气泡) */
+  /* 文字 */
+  --text: rgba(255, 255, 255, 0.82);
+  --text-dim: rgba(255, 255, 255, 0.45);
+  --text-faint: rgba(255, 255, 255, 0.3);
+  /* 语义色 */
+  --danger: #e5484d;
+  --danger-dim: rgba(229, 72, 77, 0.14);
+  --info: #5b9cf5;
+  --info-dim: rgba(91, 156, 245, 0.14);
+  --warning: #f0a935;
+  --warning-dim: rgba(240, 169, 53, 0.14);
+  /* IM 气泡 */
+  --bubble-user: rgba(63, 198, 138, 0.16);
+  --bubble-bot: #222228;
+  --bubble-sys: rgba(255, 255, 255, 0.06);
+  /* 阴影 */
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+html,
+body,
+#app {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 通用卡片面(视图页外包容器用) */
+.panel-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+}

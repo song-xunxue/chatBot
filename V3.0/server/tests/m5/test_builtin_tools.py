@@ -2,7 +2,6 @@
 自研工具单测:get_persona(绑定/未绑定)+ write_memory(写入/空内容/类别)+
 web_search(mock DuckDuckGo JSON)+ register_builtin_tools 全注册。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 import json

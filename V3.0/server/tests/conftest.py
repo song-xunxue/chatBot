@@ -4,7 +4,6 @@
 原 QQ 官方栈夹具(secret/签名/MockTransport)已随官方栈删除——V3.0 纯 OneBot,
 出站 mock 统一在 adapter 层(注入 adapter._current 单例)。
 
-作者: 李文煜
 日期: 2026-06-25
 
 2026-08-17

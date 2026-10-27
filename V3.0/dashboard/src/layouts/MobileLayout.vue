@@ -4,7 +4,6 @@
  * 顶栏(标题)+ 掉线浮动胶囊(drop-in)+ 内容区(路由过渡)+ 底部 tab 毛玻璃导航。
  * 为 /m/* 路由(对话/历史/记忆/人设/心情/插件/系统)提供共性外壳。
  * 鉴权由 router 守卫处理(登录后回跳原页面);oid 由各页 useObject.ensureOid 自动取。
- * 作者: 李文煜
  */
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
@@ -34,12 +33,12 @@ const activePath = computed(() => {
 <template>
   <n-layout style="height: 100vh; display: flex; flex-direction: column; background: var(--bg)">
     <n-layout-header class="m-topbar">
-      <span class="m-title">{{ (route.meta.title as string) || '清浔 3.0 管理面板' }}</span>
+      <span class="m-title">{{ (route.meta.title as string) || 'chatbotV3.0 管理面板' }}</span>
       <span class="dot" :class="offline ? 'dot-off pulse-dot' : 'pulse-dot'"></span>
     </n-layout-header>
     <!-- 掉线浮动胶囊(drop-in 动画) -->
     <div v-if="offline" class="m-offline drop-in">
-      <b>清浔 QQ 已掉线,消息正在丢失!</b>
+      <b>QQ 已掉线,消息正在丢失!</b>
       <span class="m-offline-detail">{{ detail }} —— 请在电脑上打开 NapCat WebUI 扫码重登</span>
     </div>
     <n-layout-content content-style="padding:12px;flex:1;min-height:0" :native-scrollbar="false" style="flex:1">

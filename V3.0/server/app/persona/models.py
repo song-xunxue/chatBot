@@ -4,7 +4,6 @@ PersonaCard 及其子结构(DynamicState/SpecialReply/ModelBinding/
 Profile/Preferences/Relationship/DialogueExample),
 统一人设的数据载体,供 store/renderer/importer 使用。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27
@@ -19,7 +18,7 @@ Profile/Preferences/Relationship/DialogueExample),
 
 2026-07-07
 变更说明：
-  1. 拟人化:PersonaCard 新增 user_alias 字段(角色对用户的称呼,如"煜君")。自动从对话学
+  1. 拟人化:PersonaCard 新增 user_alias 字段(角色对用户的称呼,如"主人")。自动从对话学
      (memory/user_alias.py 正则 + coordinator.on_turn_complete 钩子)/面板可改;renderer/encoder
      用它代替"用户"全链路(【关于X】/示例对话"X:"/记忆抽取 prompt),让记忆与对话用具体称呼更拟人
 """
@@ -100,7 +99,7 @@ class PersonaCard:
     language: str = "zh-CN"
     description: str = ""                        # 背景设定
     user_description: str = ""                   # 关于用户(对话另一方的描述,让人设熟悉用户)
-    user_alias: str = ""                         # 角色对用户的称呼(如"煜君";自动从对话学/面板可改;renderer/encoder 用它代"用户",拟人化)
+    user_alias: str = ""                         # 角色对用户的称呼(如"主人";自动从对话学/面板可改;renderer/encoder 用它代"用户",拟人化)
     personality: str = ""                        # 性格
     scenario: str = ""                           # 场景示例
     creator_notes: str = ""                      # 核心人设指令

@@ -5,7 +5,6 @@ FastAPI 应用工厂、生命周期、健康检查、QQ Webhook 路由。
 M2 范围:QQ Webhook 收私聊消息 → 连发防抖 → pipeline(persona/记忆/mood/LLM)→ 被动回复。
 lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件系统(空载) + mood 衰减循环。
 
-作者: 李文煜
 日期: 2026-06-25
 
 2026-06-25

@@ -1,0 +1,233 @@
+/**
+ * API 契约测试(V2.0 M7):
+ *   mock 底层 axios + 驱动拦截器,验证封装层 .then(r=>r.data) 解包、token 注入、401 跳转,
+ *   以及各 V2.0 端点 URL/method/body 契约(persona/chat/score/mood/memory/plugin/system/worldbook)。
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// hoisted 共享态:vi.mock 工厂提升到顶部,普通 let 不可被工厂引用
+const hoisted = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+  requestFulfilled: null as ((cfg: any) => any) | null,
+  responseRejected: null as ((err: any) => any) | null,
+  apiMethods: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), patch: vi.fn() },
+}))
+
+vi.mock('@/router', () => ({ default: { push: hoisted.routerPush } }))
+
+// mock axios:create 返回伪实例,拦截器 use 存 handler,method 被调时驱动拦截器
+vi.mock('axios', () => {
+  const fakeInstance = {
+    interceptors: {
+      request: { use: (ful: (cfg: any) => any) => { hoisted.requestFulfilled = ful } },
+      response: { use: (_f: any, rej: (err: any) => any) => { hoisted.responseRejected = rej } },
+    },
+    ...hoisted.apiMethods,
+  }
+  return { default: { create: () => fakeInstance } }
+})
+
+const routerPush = hoisted.routerPush
+const apiMethods = hoisted.apiMethods
+
+import {
+  listPersonas, bindPersonaModel,
+  listBlocks, listMessages, deleteMessage,
+  getSamples, reverseInferDryRun, reverseInferApply, setScore, setMessageNote,
+  getMoodParams, setMoodParams, moodCalc,
+  restoreMemory, lockMemory,
+  enablePlugin, reloadStar,
+  getSystemConfig, reloadSystem,
+  toggleTakeover, getTakeoverStatus, sendTakeover,
+  addRoleplay, addRoleplayBatch, listRoleplay, updateRoleplay, deleteRoleplay,
+  listRoleplaySessions, newRoleplaySession, extractRoleplay,
+  getWorldbookEntries, createWorldbookEntry, updateWorldbookEntry,
+  deleteWorldbookEntry, getWorldbookStats, rebuildWorldbook,
+} from '@/api'
+
+function mockResolve(method: 'get' | 'post' | 'put' | 'delete' | 'patch', responseData: any) {
+  apiMethods[method].mockImplementation(async (url: string, config?: any) => {
+    const base = { url, headers: {}, ...config }
+    const cfg = hoisted.requestFulfilled ? hoisted.requestFulfilled(base) : base
+    return { data: { ...responseData, __cfg: cfg } }
+  })
+}
+
+function mockReject(method: 'get' | 'post' | 'put' | 'delete', status: number) {
+  apiMethods[method].mockImplementation(async () => {
+    const err = { response: { status } }
+    if (hoisted.responseRejected) return hoisted.responseRejected(err)
+    throw err
+  })
+}
+
+describe('api endpoint mapping + wrapper unwrapping', () => {
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
+
+  it('wrapper 解包:返回 r.data 而非整个 response', async () => {
+    mockResolve('get', { id: 'p1', name: 'alice' })
+    const ret: any = await listPersonas()
+    expect(ret).not.toHaveProperty('data')
+    expect(ret.id).toBe('p1')
+  })
+
+  it('persona: list/bindModel(单人设简化:无 create/delete)', async () => {
+    mockResolve('get', {}); await listPersonas()
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/persona')
+    mockResolve('put', {}); await bindPersonaModel('p', { provider: 'glm' })
+    expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/persona/p/model', { provider: 'glm' })
+  })
+
+  it('chat: blocks/messages/delete(联动 body)', async () => {
+    mockResolve('get', {}); await listBlocks('o', 10)
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/chat/o/blocks', { params: { limit: 10 } })
+    await listMessages('o', { block_id: 'b1' })
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/chat/o/messages', { params: { block_id: 'b1' } })
+    mockResolve('delete', {}); await deleteMessage('m1')
+    expect(apiMethods.delete).toHaveBeenCalledWith('/api/v1/chat/messages/m1')
+  })
+
+  it('score: samples/reverseInfer 两步', async () => {
+    mockResolve('get', {}); await getSamples('o', 'positive')
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/score/samples/o', { params: { kind: 'positive' } })
+    mockResolve('post', {}); await reverseInferDryRun('o', { mode: 'overwrite' })
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/score/reverse_infer/o/dry_run', { mode: 'overwrite' })
+    await reverseInferApply('o', 'tok9')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/score/reverse_infer/o/apply', { confirm_token: 'tok9' })
+  })
+
+  it('score: setScore 带 corrected 纠正回复 + corrected_score 纠正分数(V3.0 2026-08-18)', async () => {
+    mockResolve('patch', {})
+    await setScore('m1', 40, '太生硬', '换成角色口吻的说法', 95)
+    expect(apiMethods.patch).toHaveBeenCalledWith('/api/v1/chat/messages/m1/score',
+      { score_base: 40, score_note: '太生硬', corrected: '换成角色口吻的说法', corrected_score: 95 })
+  })
+
+  it('chat: setMessageNote 消息批注(评分理由+暗含意思,V3.0 2026-09-15)', async () => {
+    mockResolve('patch', {})
+    await setMessageNote('m2', '这句其实是撒娇;评分理由:语气贴合')
+    expect(apiMethods.patch).toHaveBeenCalledWith('/api/v1/chat/messages/m2/note',
+      { note: '这句其实是撒娇;评分理由:语气贴合' })
+  })
+
+  it('mood: params/calc', async () => {
+    mockResolve('get', {}); await getMoodParams()
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/mood/params')
+    mockResolve('put', {}); await setMoodParams({ mood_step: 0.2 })
+    expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/mood/params', { mood_step: 0.2 })
+    mockResolve('post', {}); await moodCalc('o', { score_base: 80, mood: 0.8 })
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/mood/o/calc', { score_base: 80, mood: 0.8 })
+  })
+
+  it('memory: restore/lock(V2.0 新路径)', async () => {
+    mockResolve('post', {}); await restoreMemory('o', 'm1')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/memory/o/m1/restore')
+    await lockMemory('o', 'm1', true)
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/memory/o/m1/lock', { locked: true })
+  })
+
+  it('plugin: enable/reloadStar/objectConfig', async () => {
+    mockResolve('post', {}); await enablePlugin('tts')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/plugin/tts/enable')
+    await reloadStar('s1')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/plugin/star/s1/reload')
+  })
+
+  it('system: config/reload', async () => {
+    mockResolve('get', {}); await getSystemConfig()
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/system/config')
+    mockResolve('post', {}); await reloadSystem()
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/system/reload')
+  })
+
+  it('takeover: toggle/status/send', async () => {
+    mockResolve('post', {}); await toggleTakeover('o', true)
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/toggle', { enabled: true })
+    mockResolve('get', {}); await getTakeoverStatus('o')
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/takeover/o/status')
+    mockResolve('post', {}); await sendTakeover('o', 'hi')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/takeover/o/send', { content: 'hi' })
+  })
+
+  it('roleplay: add/sessions/batch/list/update/delete', async () => {
+    mockResolve('post', {}); await addRoleplay('o', { role: 'user', content: 'hi' })
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { role: 'user', content: 'hi' })
+    mockResolve('post', {}); await newRoleplaySession('o')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/sessions')
+    mockResolve('get', {}); await listRoleplaySessions('o')
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/roleplay/o/sessions')
+    mockResolve('post', {}); await addRoleplayBatch('o', [{ role: 'user', content: 'x' }])
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/batch', { items: [{ role: 'user', content: 'x' }] })
+    mockResolve('get', {}); await listRoleplay('o')
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { params: {} })
+    await listRoleplay('o', { block_id: 'b1', limit: 50 })
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/roleplay/o/messages', { params: { block_id: 'b1', limit: 50 } })
+    mockResolve('put', {}); await updateRoleplay('o', 'm1', 'new')
+    expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/m1', { content: 'new' })
+    mockResolve('delete', {}); await deleteRoleplay('o', 'm1')
+    expect(apiMethods.delete).toHaveBeenCalledWith('/api/v1/roleplay/o/messages/m1')
+    mockResolve('post', {}); await extractRoleplay('o')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/extract', {})
+    mockResolve('post', {}); await extractRoleplay('o', 'b1')
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/roleplay/o/extract', { block_id: 'b1' })
+  })
+
+  it('worldbook: entries CRUD + stats + rebuild(V3.0 2026-10-26)', async () => {
+    // 列表:可选 source/enabled/limit 过滤(空=不过滤)
+    mockResolve('get', {}); await getWorldbookEntries({ source: 'manual', enabled: true, limit: 50 })
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/worldbook/entries',
+      { params: { source: 'manual', enabled: true, limit: 50 } })
+    await getWorldbookEntries()
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/worldbook/entries', { params: {} })
+    // 新建:必填 title/content/keys/mode,其余可选
+    mockResolve('post', {})
+    await createWorldbookEntry({ title: '故乡', content: '她住在滨海小城', keys: ['故乡'], mode: 'trigger' })
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/worldbook/entries',
+      { title: '故乡', content: '她住在滨海小城', keys: ['故乡'], mode: 'trigger' })
+    // 更新:任意子集(如只翻转 enabled)
+    mockResolve('put', {}); await updateWorldbookEntry('w1', { enabled: false })
+    expect(apiMethods.put).toHaveBeenCalledWith('/api/v1/worldbook/entries/w1', { enabled: false })
+    // 物理删
+    mockResolve('delete', {}); await deleteWorldbookEntry('w1')
+    expect(apiMethods.delete).toHaveBeenCalledWith('/api/v1/worldbook/entries/w1')
+    // 统计
+    mockResolve('get', {}); await getWorldbookStats()
+    expect(apiMethods.get).toHaveBeenCalledWith('/api/v1/worldbook/stats')
+    // 重建(空 body)
+    mockResolve('post', {}); await rebuildWorldbook()
+    expect(apiMethods.post).toHaveBeenCalledWith('/api/v1/worldbook/rebuild', {})
+  })
+})
+
+describe('client.ts token 注入', () => {
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
+
+  it('无 token 不注入 X-Access-Token', async () => {
+    mockResolve('get', {}); const ret: any = await listPersonas()
+    expect(ret.__cfg.headers['X-Access-Token']).toBeUndefined()
+  })
+  it('有 token 注入 X-Access-Token', async () => {
+    localStorage.setItem('access_token', 'tkn-abc')
+    mockResolve('get', {}); const ret: any = await listPersonas()
+    expect(ret.__cfg.headers['X-Access-Token']).toBe('tkn-abc')
+  })
+})
+
+describe('client.ts 401 拦截', () => {
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
+
+  it('401 → 清 token + 跳登录', async () => {
+    localStorage.setItem('access_token', 'stale')
+    mockReject('get', 401)
+    await expect(getSystemConfig()).rejects.toEqual({ response: { status: 401 } })
+    expect(localStorage.getItem('access_token')).toBeNull()
+    expect(routerPush).toHaveBeenCalledWith({ name: 'login' })
+  })
+  it('非 401 → 不跳转、不清 token', async () => {
+    localStorage.setItem('access_token', 'keep')
+    mockReject('get', 500)
+    await expect(getSystemConfig()).rejects.toEqual({ response: { status: 500 } })
+    expect(localStorage.getItem('access_token')).toBe('keep')
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+})

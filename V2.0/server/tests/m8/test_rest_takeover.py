@@ -2,7 +2,6 @@
 代答 REST 接口单测(httpx.AsyncClient + ASGITransport):鉴权/toggle/status/queue/answer/answer-batch/skip。
 独立 app(仅挂 takeover_router,无 lifespan)+ fakeredis 注入 + mock send_c2c_message。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import httpx

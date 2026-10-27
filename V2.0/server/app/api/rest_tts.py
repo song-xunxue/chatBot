@@ -10,7 +10,6 @@ TTS 语音 REST 接口(M-tts,2026-08-04):音色试听 + 自定义音色(声音�
   GET  /tts/voice/active?object_id 设当前音色回显
   PUT  /tts/voice/active           设/清当前音色(克隆 uri;清=回退预设)
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import asyncio

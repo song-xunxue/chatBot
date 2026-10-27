@@ -2,7 +2,6 @@
 roleplay REST 接口单测(httpx.AsyncClient + ASGITransport):鉴权/录/批量/列/改/删(→neg)。
 独立 app(仅挂 roleplay_router)+ fakeredis 注入。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import httpx

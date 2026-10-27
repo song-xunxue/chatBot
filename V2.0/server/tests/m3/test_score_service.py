@@ -2,7 +2,6 @@
 score.service 单测:classify 阈值 / _parse_score 解析容错 / score_reply 全链路
 (LLM 打分→mood 补偿→四元组写入→正负样本归类)/ 手动改分 / 取分 / 人设健康度。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

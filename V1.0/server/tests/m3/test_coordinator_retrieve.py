@@ -3,7 +3,6 @@ MemoryCoordinator 检索 + 组装测试
 验证关键词召回 top-K、访问统计更新、Core 全量注入、Episodic 近摘要、
 render 顺序（长期在前摘要在后）、空降级、forgotten 排除、无匹配返回空
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

@@ -5,7 +5,6 @@
  *   2) 反推人设区（触发 reverseInfer 预览 diff → applyReverseInfer 落库合并）
  *   3) 代人聊天 B 实时接管区（对象选择 + 开关 + 待答列表轮询 + 选中代答）
  *   附：人格反推提案折叠区
- * 作者: 李文煜
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import {

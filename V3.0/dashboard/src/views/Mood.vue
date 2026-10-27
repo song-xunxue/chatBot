@@ -2,7 +2,6 @@
 /**
  * 心情系统页(M7,5 Tab 顶级菜单,docs/03 §8):
  * 使用说明 / 档位管理(CRUD + 范围冲突校验)/ 全局参数 / 实时监控(mood 曲线)/ 评分试算器。
- * 作者: 李文煜
  */
 import { ref, computed, watch } from 'vue'
 import { useObject } from '@/composables/useObject'

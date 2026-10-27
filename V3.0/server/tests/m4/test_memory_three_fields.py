@@ -6,7 +6,6 @@
 4. should_forget 三档:手动 T2 永不 / T1 看 useful_score / T0 看 retain_score;自动档由 useful_score;locked 豁免
 5. on_turn_complete RL:本轮 score>=85 召回记忆 useful_score += δ;<60 -= δ;手动档/锁定不动
 
-作者: 李文煜
 日期: 2026-08-13
 """
 import json

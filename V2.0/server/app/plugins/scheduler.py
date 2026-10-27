@@ -7,7 +7,6 @@ V2.0 改造(M2):V1.0 依赖 ConnectionRegistry(WebSocket 活跃对象),但 V2.0 
 改用 QQ REST。改为注入 object_ids_provider 回调(返回需 tick 的 object_id 列表),
 由 mood/主动消息等模块自行提供活跃对象来源。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

@@ -2,7 +2,6 @@
 多模态理解 REST 测试：vision/asr 走 stub provider（不触网）、鉴权。
 硅基流动真实调用需联网+计费，单测用 stub（monkeypatch provider 配置）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

@@ -13,7 +13,6 @@
 单人设简化(2026-07-05):去 per-object 配置端点(单人设下 object 维度无意义);manager 内
 is_enabled_for 等方法保留(gate 仍调,单人设下默认 True 等价全局开关,行为不变)。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from fastapi import APIRouter, Body, Depends, HTTPException

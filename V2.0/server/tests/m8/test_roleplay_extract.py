@@ -5,7 +5,6 @@ roleplay 训练样本 → long_term 记忆抽取单测(2026-07-07):
 - POST /roleplay/{oid}/extract 端点:手动触发写入 long_term
 - score _collect_sample/record_score_sample:source 标记(dialog/roleplay,修已存在共池污染)
 
-作者: 李文煜
 日期: 2026-07-07
 """
 import httpx

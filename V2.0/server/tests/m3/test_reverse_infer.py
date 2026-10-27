@@ -3,7 +3,6 @@ score.reverse_infer 单测:_build_diff(白名单/drift/fill_empty vs overwrite) 
 infer_and_merge 两步契约(dry_run 返回 diff+token / apply 凭 token 合并+snapshot+回滚留底) +
 降级(无样本/无 provider/无 token/错误 token)+ 白名单过滤越权字段。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

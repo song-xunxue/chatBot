@@ -3,7 +3,6 @@
 维护面板 WS 连接集合，广播 takeover_request/resolved 到所有订阅面板。
 与 ConnectionRegistry 解耦（后者按 object_id 路由客户端，panel_bus 路由面板订阅者）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

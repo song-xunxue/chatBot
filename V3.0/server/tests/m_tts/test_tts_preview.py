@@ -3,7 +3,6 @@ TTS 预览端点单测(M-tts,2026-08-04)
 覆盖:POST /tts/preview 合成 mp3 返 audio/mpeg(固定预览文本)+ 自定义文本 + 无效音色 400
 + stub 空产出 503 + 合成异常 503。直调端点函数(绕过 Depends),mock get_tts.synthesize。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import pytest

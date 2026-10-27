@@ -2,7 +2,6 @@
 reply_enhance 插件测试：输出合并、输入累积(暂缓/攒够 flush)。
 经 real_manager 加载真实 reply_enhance 插件，按对象配置 accumulate，经总线触发验证。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

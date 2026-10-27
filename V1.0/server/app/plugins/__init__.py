@@ -3,7 +3,6 @@
 get_event_bus() / get_plugin_manager() 供 runner 与 REST 取用（未初始化返回 None → runner 跳过钩子，保持向后兼容）。
 init_plugins() 在 main.py lifespan 启动阶段调用；shutdown_plugins() 关闭阶段调用。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

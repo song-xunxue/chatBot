@@ -4,7 +4,6 @@
 - ChatView：QScrollArea 内垂直排列气泡 + 底部输入栏；流式 API（start/append/finalize）
 微信风格由 theme.QSS 驱动（objectName）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

@@ -2,7 +2,6 @@
 插件基类 Plugin、插件上下文 PluginContext、钩子结果 HookResult、6 个钩子名常量。
 钩子签名统一:async def hook(self, ctx: MessageContext) -> HookResult | None(None 视为 CONTINUE)。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

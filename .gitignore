@@ -1,5 +1,4 @@
 # MyChat Git 忽略规则
-# 作者: 李文煜
 # 日期: 2026-06-15
 
 # 环境与密钥（绝不入库）
@@ -78,11 +77,13 @@ V3.0/tts-tools/
 V3.0/training/outputs/
 V3.0/training/unsloth_compiled_cache/
 
-# 本地开发副本(2026-10-25:从 V3.0 移植,仅本机运行,不入库)
-V3.0-local/
 
-# 大肥鱼本地栈(2026-10-26:含 .data/redis 聊天记忆数据与运行时文件,不入库)
-Vdafeiyu/
+# 双栈整树并入 v3.0(2026-10-27):运行时/隐私仍不入库——全局规则已覆盖 .env/logs/
+# server/data/node_modules/__pycache__;redis 快照兜底;Vdafeiyu 的 dist 无源码系唯一
+# 面板资产,例外收入
+.data/
+!Vdafeiyu/dashboard/dist/
+!Vdafeiyu/dashboard/dist/**
 
 # NapCat 本体与 QQ 登录态(2026-10-26:passkey/token/二维码等敏感凭证,绝不入库)
 .local/

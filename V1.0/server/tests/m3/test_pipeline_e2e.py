@@ -3,7 +3,6 @@ M3.4 编码管线端到端测试
 验证 coordinator.on_turn_complete：阈值触发 Episodic 摘要、事实抽取带 importance/emotion、
 去重合并、失败不崩溃、无 LLM 跳过事实抽取
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

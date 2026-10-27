@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
  * 模型配置：LLM provider 列表(是否配 key/可用) + 人设模型绑定（rest_admin /models + rest_persona /model）
- * 作者: 李文煜
  */
 import { ref, h, onMounted } from 'vue'
 import {

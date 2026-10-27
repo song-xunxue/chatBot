@@ -3,7 +3,6 @@ LLM Provider 注册表
 按 provider 名实例化对应实现，从 settings 注入 api_key；并提供"已配置 key 的可用 provider"查询，
 用于无 key 时的降级提示。
 
-作者: 李文煜
 日期: 2026-06-19
 
 2026-06-19

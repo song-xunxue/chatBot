@@ -16,7 +16,6 @@ Qwen3 thinking 处理(2026-10-25 修正):Ollama 的 OpenAI 兼容端点(/v1/chat
 HTTPStatusError,如后端是 vLLM)时回退 OpenAI 兼容路径 + 末条 user 消息注入
 " /no_think" 软关思考。出口统一 _strip_think 剥除作兜底(所有路径保留)。
 
-作者: 李文煜
 日期: 2026-09-12
 
 2026-10-25

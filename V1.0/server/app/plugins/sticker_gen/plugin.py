@@ -3,7 +3,6 @@ sticker_gen 插件（F-P-03 表情包生成）
 on_after_llm：按回复内容派生 prompt 生成表情包图，加入 ctx.rich.sticker。
 经 modality ImageProvider 接入(默认 stub)。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

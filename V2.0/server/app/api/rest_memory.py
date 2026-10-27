@@ -11,7 +11,6 @@
   POST   /memory/{oid}/{mid}/lock                锁定/解锁(防遗忘)
   POST   /memory/{oid}/forget                    批量遗忘(body: category?/keyword?)
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

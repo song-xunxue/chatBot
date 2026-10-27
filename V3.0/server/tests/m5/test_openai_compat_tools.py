@@ -2,7 +2,6 @@
 openai_compat chat_with_tools 单测:解析 tool_calls(含 arguments JSON)/ 无 tools 返回纯文本。
 用 mock httpx(不真调 GLM),验 function calling 响应解析。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 import json

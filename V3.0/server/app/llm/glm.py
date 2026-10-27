@@ -2,7 +2,6 @@
 GLM(智谱) Provider —— OpenAI 兼容
 智谱开放平台提供 OpenAI 兼容接口,base_url 指向 /api/paas/v4。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

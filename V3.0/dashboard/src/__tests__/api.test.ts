@@ -2,7 +2,6 @@
  * API 契约测试(V2.0 M7):
  *   mock 底层 axios + 驱动拦截器,验证封装层 .then(r=>r.data) 解包、token 注入、401 跳转,
  *   以及各 V2.0 端点 URL/method/body 契约(persona/chat/score/mood/memory/plugin/system)。
- * 作者: 李文煜
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

@@ -6,7 +6,6 @@ uvicorn 整合(propagate=False)/ 第三方噪音压制 / 业务 INFO 可达 root
 注意:setup_logging 用 dictConfig 会重置 root handlers,会冲掉 pytest caplog 的捕获 handler,
 故可见性测试用自挂的 _CaptureHandler(在 setup_logging 之后加,不被 dictConfig 清),不用 caplog。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import logging
@@ -90,7 +89,7 @@ def test_business_logger_info_reaches_root_handler(restore_root_logger):
     root = logging.getLogger()
     root.addHandler(cap)  # setup_logging 之后挂,不被 dictConfig 清
     try:
-        logging.getLogger("app.memory.coordinator").info("学到用户称呼 oid=test alias=煜君")
+        logging.getLogger("app.memory.coordinator").info("学到用户称呼 oid=test alias=主人")
     finally:
         root.removeHandler(cap)
     assert any("学到用户称呼" in m for m in cap.records)

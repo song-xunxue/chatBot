@@ -1,11 +1,10 @@
 """
 GPT-SoVITS(api_v2) + frpc 一键启动器(console,2026-08-08;2026-08-10 加心跳上报;2026-08-11 修关闭上报)
-直接跑 api_v2.py(跳过 GAG GUI),从 tts_infer.yaml 自动加载清浔 dania 模型。
+直接跑 api_v2.py(跳过 GAG GUI),从 tts_infer.yaml 自动加载 dania 模型。
 启动器 console 显示 api_v2 加载日志 + 9880 端口状态。关窗口=停止两者。
 api_v2 就绪后每 30s 向云端面板上报心跳(配 heartbeat.json),面板据此显示"本地模型就绪"免主动探测。
 打包:pyinstaller --onefile --console --name GPT-SoVITS启动器 tts_launcher.py
 
-作者: 李文煜
 日期: 2026-08-08
 
 2026-08-10
@@ -126,7 +125,7 @@ def _heartbeat_loop(cloud_url, token, stop_event):
 def main():
     print("=" * 50)
     print("  GPT-SoVITS(api_v2 直跑) + frpc 启动器")
-    print("  跳过 GAG GUI,直接 api_v2.py 加载清浔(dania)模型")
+    print("  跳过 GAG GUI,直接 api_v2.py 加载dania 模型")
     print("=" * 50)
 
     api_proc = None

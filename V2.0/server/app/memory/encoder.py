@@ -3,7 +3,6 @@
 summarize(对话摘要) + reflect(反思归纳) + extract_facts(事实抽取带 importance/emotion/category)。
 调用 LLMProvider;无 LLM 或调用失败时降级(摘要用启发式,事实抽取返回空)。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27
@@ -82,7 +81,7 @@ async def extract_facts(user_text: str, reply_text: str, llm: LLMProvider | None
         f"若{label}没有明确确认,绝对不要抽成记忆:那很可能只是角色随口编的,不是真的事实。\n"
         f"2. 区分谁说的:{label}亲口陈述的偏好/事件才记;角色回复里的话只在{label}本轮或之前确认过时才记。\n"
         f"3. 严格区分'我'(角色)与'{label}'(对方),切勿把角色名字/特征记成{label}的。\n"
-        f"content 用角色口吻,例如'我叫清浔''{label}喜欢动漫''我和{label}是同学'。\n"
+        f"content 用角色口吻,例如'我叫(角色)''{label}喜欢动漫''我和{label}是同学'。\n"
         f"{label}: {user_text}\n角色(我): {reply_text}\n"
         "每条记忆还需给出:reason(为什么这条值得长期记,含金量,没有则空串)、"
         "tags(1-3 个简短分类标签,如['喜好','日常'])。\n"
@@ -104,7 +103,7 @@ async def extract_facts_batch(messages: list, llm: LLMProvider | None,
     """从最近 N 轮对话批量提取事实(2026-07-07 优化3:替每轮单条 extract_facts,降 LLM 成本)。
     带防幻觉铁律(只信用户陈述,角色虚构承诺不抽)。返回 [{content, importance, emotion, category}]。
     user_alias(2026-07-07 拟人化):角色对用户的称呼,非空时 prompt/示例用它代"用户",
-    让抽出的事实用具体称呼(如"煜君喜欢动漫"而非"用户喜欢动漫")。无 LLM/无消息/失败返回空。"""
+    让抽出的事实用具体称呼(如"主人喜欢动漫"而非"用户喜欢动漫")。无 LLM/无消息/失败返回空。"""
     if not llm or not messages:
         return []
     label = (user_alias or "").strip() or "用户"   # 拟人化:用具体称呼代"用户"
@@ -124,7 +123,7 @@ async def extract_facts_batch(messages: list, llm: LLMProvider | None,
         f"(例如角色说'下周带你去吃椰子鸡'但{label}从没提过)——若{label}没有明确确认,绝对不要抽成记忆。\n"
         f"2. {label}亲口陈述的偏好/事件才记;角色回复里的话只在{label}本轮或之前确认过时才记。\n"
         f"3. 严格区分'我'(角色)与'{label}'(对方),切勿把角色名字/特征记成{label}的。\n"
-        f"content 用角色口吻(如'我叫清浔''{label}喜欢动漫''我和{label}是同学')。\n\n"
+        f"content 用角色口吻(如'我叫(角色)''{label}喜欢动漫''我和{label}是同学')。\n\n"
         f"{dialog}\n\n"
         "每条记忆还需给出:reason(为什么这条值得长期记,含金量,没有则空串)、"
         "tags(1-3 个简短分类标签,如['喜好','日常'])。\n"
@@ -183,7 +182,7 @@ async def consolidate_facts(episodic_summaries: list[str], llm: LLMProvider | No
         f"请以角色第一人称('我'指角色自己)视角,从中提炼角色值得长期记住的认知——"
         f"关于{label}的特点/偏好、角色与{label}的关系、角色自身的事。\n"
         f"关键:严格区分'我'(角色)与'{label}'(对方),切勿把角色名字/特征记成{label}的。"
-        f"content 用角色口吻(如'我叫清浔''{label}喜欢动漫')。\n" + joined +
+        f"content 用角色口吻(如'我叫(角色)''{label}喜欢动漫')。\n" + joined +
         "\n每条记忆还需给出:reason(为什么这条值得长期记,含金量,没有则空串)、"
         "tags(1-3 个简短分类标签,如['喜好','日常'])。\n"
         "严格只输出一个 JSON 数组,每个元素形如 "

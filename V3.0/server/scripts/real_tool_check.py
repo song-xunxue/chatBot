@@ -5,7 +5,6 @@
   2. 记忆场景:LLM 决策调 write_memory 写入长期记忆
 确认 function calling + tool-loop + 自研工具在真实 LLM 下工作。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 import sys

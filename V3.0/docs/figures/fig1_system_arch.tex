@@ -1,5 +1,4 @@
 % V3.0 系统总体架构分层图
-% 作者: 李文煜
 \documentclass[border=3mm]{standalone}
 \usepackage{ctex}
 \usepackage{tikz}
@@ -27,8 +26,8 @@
 ]
 
 % ===== L1 用户层 =====
-\node[ubox, minimum width=3.6cm] (mainqq) {手机 QQ · 主号\\(浔的昳 2690468347)};
-\node[ubox, minimum width=3.6cm, right=1.2cm of mainqq] (botqq) {手机 QQ · 清浔号\\(手动回复 1145077465)};
+\node[ubox, minimum width=3.6cm] (mainqq) {手机 QQ · 主号\};
+\node[ubox, minimum width=3.6cm, right=1.2cm of mainqq] (botqq) {手机 QQ · 接管号\\(手动回复 1145077465)};
 \begin{scope}[on background layer]
   \node[layer, fit=(mainqq)(botqq), label={[laylabel]left:用户层}] (L1) {};
 \end{scope}

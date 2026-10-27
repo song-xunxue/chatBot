@@ -2,7 +2,6 @@
 mood 历史曲线单测(M7):set_mood 写历史 + get_history_curve(旧→新正序)+ LTRIM 上限。
 对应 docs/03 §8 实时监控 Tab 曲线。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from mood import service

@@ -5,7 +5,6 @@ MOSS-TTSD 不认 <|endofprompt|>(会读出),故 emotion 注入只对 CosyVoice2 
 
 产物 /e/FFOutput/ab_cosyvoice.mp3 + ab_moss.mp3
 
-作者: 李文煜
 日期: 2026-08-07
 """
 import httpx

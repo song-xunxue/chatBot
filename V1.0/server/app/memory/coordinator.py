@@ -5,7 +5,6 @@ M3.3 retrieve/render；M3.4 on_turn_complete（编码）；M3.5 forget_tick/手�
 M3-review 修正：per-oid 锁（RMW 一致性）、上限淘汰+物理清理、单例双检锁+初始化降级、
   事实去重归一化+缓存复用、负样本 pending、span_start_ts、Task 强引用由 stages 持有。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

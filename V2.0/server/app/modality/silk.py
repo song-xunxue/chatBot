@@ -9,7 +9,6 @@ QQ 官方机器人语音消息必须 SILK 格式(0x02 前缀);TTS 产出 mp3 经
 依赖:silk-python(pysilk) + ffmpeg(系统二进制;开发 conda 装 / 部署 Dockerfile 装)
 ffmpeg 定位:优先 PATH,回退 conda env Library/bin[Win] / bin[Linux](开发+部署都覆盖)
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import asyncio

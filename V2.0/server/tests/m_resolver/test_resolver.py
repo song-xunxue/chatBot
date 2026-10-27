@@ -3,7 +3,6 @@ provider resolver 单测(2026-07-02,架构 #1)
 覆盖统一解析链(override→任务设定→chat_provider)、可用性判断、级联降级、各任务专用设定。
 固化"一条规则一个归属",防止再退化成 6 处各自 or 兜底。
 
-作者: 李文煜
 日期: 2026-07-02
 """
 from llm.resolver import resolve_provider_name, is_provider_available, resolve_provider

@@ -3,7 +3,6 @@
 用 fakeredis(本地无真 Redis)+ 真 GLM provider 跑通 pipeline 全链路,打印 LLM 真实回复。
 验证:QQ 消息 → 防抖(略)→ pipeline(persona/mood/记忆/LLM)→ 回复。
 
-作者: 李文煜
 日期: 2026-06-27
 """
 import sys

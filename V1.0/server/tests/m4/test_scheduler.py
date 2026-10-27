@@ -1,7 +1,6 @@
 """
 TickScheduler 测试：tick_once 对每个活跃对象触发 on_tick；start/stop 生命周期。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

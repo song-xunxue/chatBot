@@ -4,7 +4,6 @@ summarize（对话摘要）+ reflect（反思归纳）+ extract_facts（事实�
 调用 LLMProvider；无 LLM 或调用失败时降级（摘要用启发式，事实抽取返回空）。
 对应 docs/06 §4、docs/09 §4.3。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

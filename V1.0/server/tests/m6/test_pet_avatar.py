@@ -2,7 +2,6 @@
 桌宠头像 REST 测试：上传/获取/删除、格式限制、鉴权。
 复用顶层 client 夹具(fakeredis + lifespan)；monkeypatch _PET_DIR 到临时目录防污染。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

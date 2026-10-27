@@ -2,7 +2,6 @@
 管道 runner 端到端测试（fake provider + fakeredis）
 验证 run_stream 的 token 流、回复累积、历史写入、多轮历史带入
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

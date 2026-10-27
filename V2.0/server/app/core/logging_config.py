@@ -15,7 +15,6 @@
 
   Dockerfile 配套 ENV PYTHONUNBUFFERED=1,确保 stdout 不缓冲、日志实时可见。
 
-作者: 李文煜
 日期: 2026-08-04
 
 2026-08-04

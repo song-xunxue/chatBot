@@ -2,7 +2,6 @@
 mood 全局参数 Redis 存储单测(M7):get_params/set_params + apply_emotion/decay 改读 Redis。
 对应 docs/03 §8 全局参数 Tab。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import pytest

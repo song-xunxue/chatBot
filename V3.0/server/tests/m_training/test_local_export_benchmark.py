@@ -4,7 +4,6 @@
 2. export:SFT(pos/manual/correction/roleplay)+ DPO(correction 对)构造与 JSONL 落盘
 3. benchmark:A/B provider 同上下文对比 + 固定裁判打分聚合
 
-作者: 李文煜
 日期: 2026-09-12
 
 2026-10-25
@@ -191,7 +190,7 @@ async def test_local_provider_fallback_injects_no_think(monkeypatch):
 
     p = LocalLLMProvider(api_key="")
     from llm.base import Message
-    resp = await p.chat([Message(role="system", content="你是清浔"),
+    resp = await p.chat([Message(role="system", content="你是角色"),
                          Message(role="user", content="在吗"),
                          Message(role="assistant", content="嗯"),
                          Message(role="user", content="在忙什么")])
@@ -203,7 +202,7 @@ async def test_local_provider_fallback_injects_no_think(monkeypatch):
     # 注入到"最后一条"user(在忙什么),不是第一条 user(在吗);system 不动
     assert msgs[1]["content"] == "在吗"
     assert msgs[3]["content"] == "在忙什么 /no_think"
-    assert msgs[0]["content"] == "你是清浔"
+    assert msgs[0]["content"] == "你是角色"
     assert resp.text == "在的~"
 
 
@@ -232,11 +231,11 @@ async def test_local_provider_fallback_http_status_and_system_inject(monkeypatch
 
     p = LocalLLMProvider(api_key="")
     from llm.base import Message
-    resp = await p.chat([Message(role="system", content="你是清浔")])
+    resp = await p.chat([Message(role="system", content="你是角色")])
     assert len(_NotFoundClient.calls) == 2                 # 404 也回退
     assert _NotFoundClient.calls[1]["url"].endswith("/chat/completions")
     # 无 user:注入 system 末尾
-    assert _NotFoundClient.calls[1]["json"]["messages"][0]["content"] == "你是清浔 /no_think"
+    assert _NotFoundClient.calls[1]["json"]["messages"][0]["content"] == "你是角色 /no_think"
     assert resp.text == "好的"
 
 

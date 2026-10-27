@@ -2,7 +2,6 @@
 pipeline 全链路单测(mock LLM):run_stream 产出回复 + persona/mood 注入 + save 落库。
 用 mock_provider 替换 LLM,验证管道编排而非真实模型。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

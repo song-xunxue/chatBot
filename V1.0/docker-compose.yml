@@ -1,5 +1,4 @@
 # MyChat 服务端编排
-# 作者: 李文煜
 # 日期: 2026-06-15
 # 启动: docker compose up -d   停止: docker compose down   日志: docker compose logs -f
 services:

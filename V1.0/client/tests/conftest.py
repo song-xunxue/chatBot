@@ -2,7 +2,6 @@
 客户端测试公共夹具：sys.path 注入（client/app + 项目根 shared）、临时 SQLite 路径、
 Qt offscreen QApplication 会话夹具。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

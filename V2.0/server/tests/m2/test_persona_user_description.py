@@ -2,7 +2,6 @@
 persona renderer【关于用户】段渲染单测(2026-07-05 面板改造):
 验证 PersonaCard.user_description 字段被渲染为【关于用户】段注入 system_prompt。
 
-作者: 李文煜
 日期: 2026-07-05
 """
 from persona.models import PersonaCard

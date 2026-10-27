@@ -1,6 +1,5 @@
 name: tts_reply
 version: 1.2.0
-author: 李文煜
 description: 回复转语音发送——GPT-SoVITS 合成 wav 转 silk 发 QQ 语音条;音色/语速/gain/情感/合成参数 面板可配
 entry: plugin.py
 display_name: 语音回复

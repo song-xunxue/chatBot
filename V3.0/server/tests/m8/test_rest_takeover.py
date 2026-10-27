@@ -3,7 +3,6 @@
 覆盖:鉴权 / toggle+status(AI 静默开关)/ send(主动发送+空 400)/ tts_config / oid QQ 号校验。
 原队列端点族(queue/answer/batch/skip/clear)测试已移除。
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-09-13

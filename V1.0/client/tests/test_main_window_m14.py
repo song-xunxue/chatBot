@@ -2,7 +2,6 @@
 V1.1 M14 客户端交互测试（P0-5）：对象切换清空+重载 / 空状态 / 桌宠仅回复时抖动语义。
 守护此前 UI 层裸奔的关键路径（审查 ww19vp317 P0-5）。
 
-作者: 李文煜
 日期: 2026-06-25
 
 2026-06-25
@@ -73,13 +72,13 @@ def test_proactive_msg_triggers_shake(qapp, tmp_path, mock_ws):
 def test_select_object_switches_oid(qapp, tmp_path, mock_ws):
     """V1.1 M14：点击对象 → cfg.object_id 切换 + 标题更新（chat.clear 在 ChatView.clear 已测）"""
     win = _make_win(qapp, tmp_path, mock_ws)
-    item = QListWidgetItem("清浔")
+    item = QListWidgetItem("小明")
     item.setData(Qt.UserRole, "qingxun")
     win.object_list.addItem(item)
     win._on_select_object(item)
     qapp.processEvents()
     assert win.cfg.object_id == "qingxun"
-    assert win.title.text() == "清浔"
+    assert win.title.text() == "小明"
     win.close()
     qapp.processEvents()
 

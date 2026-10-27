@@ -1,5 +1,4 @@
 ﻿# 功能：两个启动器共用的底层函数——不弹任何窗口地拉起服务、探活、写日志
-# 作者：李文煜
 # 日期：2026-10-26
 # 变更日志：
 #   2026-10-26 首版：Start-Svc 用 Start-Process -WindowStyle Hidden，全程不经过 cmd / vbs / WMI

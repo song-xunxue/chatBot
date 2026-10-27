@@ -4,7 +4,6 @@
 复用 ws.py 同款 access_token 鉴权（Header X-Access-Token 或 query token）。
 对应 docs/03 §6.1、docs/10 §4（V1.1 M9 PUT 改 PATCH 深度合并 + history/rollback 端点）。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

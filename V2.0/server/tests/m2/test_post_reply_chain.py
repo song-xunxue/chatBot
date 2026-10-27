@@ -2,7 +2,6 @@
 run_post_reply_chain 单测(架构 #1 统一回合副作用链):
 验证 save→score→memory 顺序 + ai(普通回复)/ proxy(代答)两种 sender 共用同一链。
 
-作者: 李文煜
 日期: 2026-07-04
 """
 from pipeline.context import MessageContext

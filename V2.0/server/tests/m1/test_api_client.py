@@ -1,7 +1,6 @@
 """
 发私聊消息(httpx MockTransport)测试
 
-作者: 李文煜
 日期: 2026-06-25
 """
 import json

@@ -14,7 +14,6 @@ LocalLLMProvider.chat(),断言实际请求 URL 走原生分支)。
   python bench_think.py all      # 顺序全跑(①可能数分钟,2~4 tok/s)
   python bench_think.py openai   # 只跑 ①
 
-作者: 李文煜
 日期: 2026-10-25
 """
 import os

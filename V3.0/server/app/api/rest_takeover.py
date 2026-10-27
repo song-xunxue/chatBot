@@ -5,13 +5,12 @@ V2.0 的待答队列端点族(queue/answer/answer-batch/skip/queue/clear)已移�
 路由(prefix /api/v1):
   POST /takeover/{oid}/toggle          开关「AI 静默模式」(开=AI 不自动回复,全手动)
   GET  /takeover/{oid}/status          开关状态
-  POST /takeover/{oid}/send            主动发送(以清浔身份推消息,落 proxy + 下发 QQ)
+  POST /takeover/{oid}/send            主动发送(以人设身份推消息,落 proxy + 下发 QQ)
   GET/PUT /takeover/{oid}/tts_config   代答 TTS 两开关(语音合成参数复用 tts_reply 插件)
 
 自动模式下管理员经 QQ 手动回复后,自动进入手动静默期(takeover_manual_silence_min
 分钟内 AI 不自动回复),无需任何面板操作。
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-08-18
@@ -64,7 +63,7 @@ async def status(oid: str):
 
 @router.post("/takeover/{oid}/send", dependencies=[Depends(verify_token)])
 async def send_proactive(oid: str, body: dict = Body(default={})):
-    """主动发送(以清浔身份直接推消息给用户)。body: {content}。
+    """主动发送(以人设身份直接推消息给用户)。body: {content}。
     落 proxy 消息(进 live 历史)+ 下发 QQ。静默模式的主要面板触达途径。"""
     content = (body.get("content") or "").strip()
     if not content:

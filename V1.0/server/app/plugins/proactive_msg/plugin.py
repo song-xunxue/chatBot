@@ -4,7 +4,6 @@ on_tick：按概率(probability)与冷却(cooldown_sec)决定是否主动给对�
 触发时经 ConnectionRegistry 广播 proactive_msg 信封(含 nudge 桌宠抖动)。
 内容从 time_aware 缓存的时辰派生问候(无则用模板)。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

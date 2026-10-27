@@ -4,7 +4,6 @@ reply_enhance 插件（F-P-05 回复增强）
    on_before_llm 判断"攒够再回"——达 flush_count 或末条语义完整(句末标点)则合并 flush，否则 STOP 暂缓回复。
 2) 输出合并：on_message_out 合并回复中的多余空行/碎片段，使回复更紧凑。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

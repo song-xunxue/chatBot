@@ -3,7 +3,6 @@ REST 鉴权公共依赖(M7)
 抽各 router 重复的 _auth(X-Access-Token Header 或 ?token= query,对 settings.access_token 校验)。
 M7 新 router 经 Depends(verify_token) 复用;rest_score/rest_memory 保留各自 _auth(M3/M4 已测,不改)。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from fastapi import Header, HTTPException, Query

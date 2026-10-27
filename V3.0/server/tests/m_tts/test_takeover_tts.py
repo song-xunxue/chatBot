@@ -3,7 +3,6 @@
 覆盖:_deliver TTS 分支(启用→语音且透传 msg_seq/human_authored;失败→降级文本;禁用→纯文本;
 send_text_also 透传)+ _read_tts_voice_params(插件 config / 插件未加载默认)+ tts_config 端点。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import pytest

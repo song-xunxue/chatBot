@@ -14,7 +14,6 @@ CosyVoice2 情感指令:input 形如 "{情感描述}<|endofprompt|>{实际文本
 音色(4 女声,面板下拉):anna 沉稳 / bella 激情 / claire 温柔 / diana 欢快。
 产出 mp3 经 modality/silk.to_tencent_silk 转 silk 后发 QQ 语音条。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import asyncio
@@ -42,7 +41,7 @@ TTS_VOICES: dict[str, str] = {
     "claire": "温柔女声",
     "diana": "欢快女声",
 }
-DEFAULT_VOICE = "claire"  # 默认音色(配清浔温柔人设)
+DEFAULT_VOICE = "claire"  # 默认音色(配温柔人设)
 
 
 def _full_voice(voice: str, model: str) -> str:

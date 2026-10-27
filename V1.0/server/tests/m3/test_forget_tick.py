@@ -2,7 +2,6 @@
 forget_tick 遗忘批处理集成测试（M3-review 补 high test gap）
 验证软遗忘、locked/important 保留、上限淘汰、对象隔离、空对象、手动遗忘不存在返回 False
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

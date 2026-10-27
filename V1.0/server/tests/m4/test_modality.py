@@ -1,7 +1,6 @@
 """
 modality provider 抽象测试：默认 stub、synthesize/generate 产出载体、register 回退。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

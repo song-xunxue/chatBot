@@ -2,7 +2,6 @@
 pipeline tool-loop 集成单测:有注册工具走 tool-loop(产最终回复)/ 无工具降级 stream。
 用 fresh ToolRegistry(monkeypatch get_tool_registry,不污染全局)+ mock provider(chat_with_tools)。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 import json

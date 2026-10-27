@@ -3,7 +3,6 @@ verify_token 鉴权依赖纯函数单测(2026-07-02,#4 鉴权去重配套)
 直接对接口测(不再依赖 ASGI/TestClient 集成 round-trip)。
 覆盖:Header 通过 / query 通过 / 空 token 拒 / 错 token 拒 / 服务端未配置 fail-closed。
 
-作者: 李文煜
 日期: 2026-07-02
 """
 import pytest

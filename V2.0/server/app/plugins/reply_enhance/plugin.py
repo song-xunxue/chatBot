@@ -6,7 +6,6 @@ reply_enhance 插件(回复增强)
 
 M6 从 V1.0 收敛到 V2.0(代码零改;Plugin 基类/EventBus/redis 一致)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

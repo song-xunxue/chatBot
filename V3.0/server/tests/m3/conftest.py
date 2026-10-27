@@ -3,7 +3,6 @@ M3 测试公共夹具:fakeredis + 可控 mock LLM provider(评分 JSON / 反推�
 复用根 conftest 的 _no_real_llm(autouse 清空 key);m3 测试显式 monkeypatch key +
 get_provider 注入 mock,精确控制 LLM 产出。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

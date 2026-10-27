@@ -2,7 +2,6 @@
 测试公共夹具(M1)
 提供:sys.path 兜底、fakeredis 注入、httpx MockTransport 注入、QQ secret 配置、签名生成器。
 
-作者: 李文煜
 日期: 2026-06-25
 
 2026-06-25

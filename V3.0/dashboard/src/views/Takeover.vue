@@ -2,10 +2,9 @@
 /**
  * 对话控制页(2026-09-13 队列删减重构,原「代人代答」):
  * ① AI 静默模式开关(开=AI 不自动回复,全手动;关=自动回复+手动静默期)
- * ② 主动发送(以清浔身份推消息,替代原队列代答) ③ 代答 TTS 两开关。
+ * ② 主动发送(以人设身份推消息,替代原队列代答) ③ 代答 TTS 两开关。
  * 待答队列卡片/代答输入/批量/跳过/清空已随队列删减移除——手动 QQ 回复由
  * message_sent 感知自动落库+恒正样本+静默窗,无需面板操作。
- * 作者: 李文煜
  */
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { NSpace, NInput, NButton, NSwitch, NTag, NCard, useMessage } from 'naive-ui'
@@ -91,16 +90,16 @@ onUnmounted(() => {})
           </n-tag>
         </n-space>
         <span style="font-size:12px;color:var(--text-dim)">
-          关(默认)= AI 自动回复;你用清浔 QQ 手动回复后,AI 自动静默 10 分钟(手动聊天不打扰),过后恢复。<br />
+          关(默认)= AI 自动回复;你用接管号 QQ 手动回复后,AI 自动静默 10 分钟(手动聊天不打扰),过后恢复。<br />
           开 = AI 完全不自动回复,由你经 QQ 手动回复或下方「主动发送」触达。
         </span>
       </n-space>
     </n-card>
 
-    <n-card title="主动发送(以清浔身份推消息)">
+    <n-card title="主动发送(以人设身份推消息)">
       <n-space vertical size="small">
         <n-space align="center">
-          <n-input v-model:value="proactiveText" placeholder="输入要以清浔身份发给用户的内容..."
+          <n-input v-model:value="proactiveText" placeholder="输入要以人设身份发给用户的内容..."
                    style="width:520px" @keyup.enter="sendProactive" />
           <n-button type="primary" :disabled="!oid || oid === 'default'" @click="sendProactive">发送</n-button>
         </n-space>

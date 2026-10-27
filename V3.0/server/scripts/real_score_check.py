@@ -5,7 +5,6 @@
   2. reverse_infer dry_run 真调 GLM 从评分正/负样本提炼人设字段 → diff
 确认评分/反推 prompt 在真实 LLM 下正确产出 JSON(单测用 mock provider,此处验真)。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 import sys

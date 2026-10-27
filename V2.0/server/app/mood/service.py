@@ -9,7 +9,6 @@ Redis 键:
   mychat:mood:kinds          ZSet    档位索引(score=sort, member=key)
   mychat:mood:kind:{key}     Hash    单档位定义
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

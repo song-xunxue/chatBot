@@ -2,7 +2,6 @@
 /**
  * 登录页：输入 access_token（与服务端 ACCESS_TOKEN 一致），存 localStorage 后跳转。
  * 支持 redirect 回跳：移动端 /m/* 被守卫拦截时带 redirect，登录后回到原页面。
- * 作者: 李文煜
  */
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'

@@ -4,7 +4,6 @@
  * 左栏会话列表(每段 block=一个训练会话)+「+新建」;主区对话流(user右/assistant左/system居中);
  * 底部录入选身份+内容(角色时可填分数);assistant 消息内联改分。评分按阈值作反推正/负样本驱动人设进化。
  * roleplay 物理隔离不进 LLM 上下文。去 oid 输入框,启动自动加载全局 oid。
- * 作者: 李文煜
  */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {

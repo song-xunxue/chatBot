@@ -9,7 +9,6 @@
   DELETE /chat/messages/{mid}            物理删单条(ai/proxy + 有 score → 删前联动写 neg)
   POST   /chat/blocks/{block_id}/close   手动关闭 block(close_reason=manual)
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-08-18

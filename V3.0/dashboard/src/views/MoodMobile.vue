@@ -8,7 +8,6 @@
  * 本页 PC 端无轮询,移动端同样不加轮询。
  * 仅 template 按窄屏重组:档位 tag 列表改卡片列表、删写死宽度→全宽、按钮 size large(touch≥44px)、
  * 编辑表单左右分栏改上下堆叠。
- * 作者: 李文煜
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import { Line } from 'vue-chartjs'

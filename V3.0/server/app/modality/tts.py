@@ -15,7 +15,6 @@ CosyVoice2 情感指令:input 形如 "{情感描述}<|endofprompt|>{实际文本
 产出音频(mp3/wav)直发 adapter.send_voice,由 NapCat 内置 ffmpeg 自转 silk(2026-10-01,
 勿再走 modality/silk 自编——NapCat 对自编 silk 时长解析为 0,QQ 只显 1s 截断)。
 
-作者: 李文煜
 日期: 2026-08-04
 
 2026-10-01
@@ -48,7 +47,7 @@ TTS_VOICES: dict[str, str] = {
     "claire": "温柔女声",
     "diana": "欢快女声",
 }
-DEFAULT_VOICE = "claire"  # 默认音色(配清浔温柔人设)
+DEFAULT_VOICE = "claire"  # 默认音色(配温柔人设)
 
 
 def _full_voice(voice: str, model: str) -> str:

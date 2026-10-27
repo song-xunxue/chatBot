@@ -1,7 +1,6 @@
 """
 webhook 验签测试:密钥派生金标准(对照 QQ 官方 DEMO publicKey)+ 自签自验闭环 + 错误拒绝
 
-作者: 李文煜
 日期: 2026-06-25
 """
 from qq.webhook import _derive_seed, _keypair, verify_signature

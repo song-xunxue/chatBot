@@ -3,7 +3,6 @@ reverse_infer _llm_extract prompt 风格约束单测(2026-07-06 B-4):
 验证提炼 prompt 含"禁括号动作描写"约束,防反推把舞台指示风格学进 speech_style/personality。
 (LLM 真实提炼效果靠集成测;单测验证 prompt 被正确注入约束)
 
-作者: 李文煜
 日期: 2026-07-06
 """
 from types import SimpleNamespace

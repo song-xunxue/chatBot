@@ -9,7 +9,6 @@ demo 会话已有历史(has_history)则整段跳过,真 redis 模式重复启动
 局域网其它页面直调 REST 需在 .env 配 CORS_ORIGINS(默认只放行 localhost:5173)。
 启动: C:/Users/26904/anaconda3/envs/mychat/python.exe V3.0/server/scripts/local_dev.py [--port 8091]
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

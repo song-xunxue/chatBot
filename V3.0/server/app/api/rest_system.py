@@ -7,7 +7,6 @@
   POST /system/reload          重载配置(重读 .env + in-place 覆盖 settings 单例)
   POST /system/reset           清空所有运行时数据,保留人设+配置(2026-07-05,需 confirm='清空')
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-07-05

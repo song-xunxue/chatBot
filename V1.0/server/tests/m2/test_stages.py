@@ -2,7 +2,6 @@
 管道 stages 测试
 验证 persona_inject 占位/不覆盖、build_messages 拼装顺序、load_history 填充
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

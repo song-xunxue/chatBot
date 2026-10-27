@@ -3,7 +3,6 @@
 钩子签名统一：async def hook(self, ctx: MessageContext) -> HookResult | None（None 视为 CONTINUE）。
 对应 docs/05 §5（基类与生命周期）、§6（钩子）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

@@ -3,7 +3,6 @@ main.py SPA catch-all 单测(修子路由刷新 404):
 1. main.py 实际 catch-all(GET /history 等前端路由返 index.html 200,非 404;API /health 优先)—— 需 dist 已构建
 2. catch-all 模式隔离单测(无 dist 依赖):前端路由→index.html / 静态文件→透传
 
-作者: 李文煜
 日期: 2026-07-05
 """
 import httpx

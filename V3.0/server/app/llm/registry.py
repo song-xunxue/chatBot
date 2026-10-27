@@ -5,7 +5,6 @@ get_provider / available_providers 从表查;provider_specs() 供 rest_system �
 深化前:get_provider 与 available_providers 各一份 if-name 名单 + rest_system._PROVIDERS 第三份——
 三处按 provider 名索引的名单,加 provider 要改 3 处(浅模块负杠杆)。现归一为一份注册表。
 
-作者: 李文煜
 日期: 2026-07-02
 
 2026-09-12

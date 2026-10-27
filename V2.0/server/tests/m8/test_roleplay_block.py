@@ -2,7 +2,6 @@
 roleplay block 三层单测:append/batch/list/close/update/delete + 物理隔离铁律。
 对应 docs/02 §9.2(roleplay block 键)/§12.3。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from storage import chat_store

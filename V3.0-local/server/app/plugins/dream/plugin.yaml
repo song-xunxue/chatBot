@@ -1,0 +1,22 @@
+name: dream
+version: 0.1.0
+description: "做梦与日记——每天凌晨(dream_hour)用昨天的素材(长期记忆/mood曲线/最近对话/昨日日记)让 LLM 以她的第一人称生成一段梦+一篇日记,落盘+Redis索引,精炼版写入事件记忆(source=diary),按梦的色调给 mood 微小偏移;绝不发 QQ 消息"
+entry: plugin.py
+display_name: 做梦与日记
+category: 内省
+default_enabled: false
+hooks:
+  - { name: on_tick, priority: 130 }
+config_schema:
+  dream_hour: { type: number, default: 4, min: 0, max: 23, step: 1, description: "做梦时刻(小时,0-23),该小时内首个 tick 触发,每天最多一次" }
+  dream_mood_delta: { type: number, default: 0.05, min: 0, max: 0.5, step: 0.01, description: "梦对次日心情的偏移量(正梦+,噩梦-,中性不动)" }
+  keep_days: { type: number, default: 90, min: 7, max: 365, step: 1, description: "日记保留天数,过期文件与索引自动清理" }
+  llm_provider:
+    type: string
+    default: deepseek
+    options:
+      - { value: deepseek, label: "DeepSeek" }
+      - { value: glm, label: "GLM(智谱)" }
+      - { value: siliconflow, label: "硅基流动" }
+      - { value: local, label: "本地模型(Ollama/vLLM)" }
+    description: "做梦用的 LLM 源"

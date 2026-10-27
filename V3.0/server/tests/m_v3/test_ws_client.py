@@ -6,7 +6,6 @@ OneBot 入站 WS 单测(V3.0 M-V3-2,2026-08-16):
 4. call_action:未连接抛 RuntimeError
 5. message_sent 手动回复(2026-09-07):自己发送去重/手动触发记录/群聊忽略/语音占位/竞态等待
 
-作者: 李文煜
 日期: 2026-08-16
 
 2026-09-07
@@ -242,7 +241,7 @@ def _evt_sent(user_id=111, self_id=999, text="手动回", msg_id=777, mtype="pri
            "time": 1757200000,                       # 秒(OneBot 事件 time 字段)
            "raw_message": text,
            "message": segs if segs is not None else [{"type": "text", "data": {"text": text}}],
-           "sender": {"nickname": "清浔"}}
+           "sender": {"nickname": "角色"}}
     if target_id is not None:
         evt["target_id"] = target_id
     return evt

@@ -2,7 +2,6 @@
 rest_system REST 单测(M7):鉴权 / config(provider 状态,不暴露 key)/ reload(in-place 刷新 settings)。
 独立 app(仅挂 system_router);reload 的 QQ 客户端重建 mock 为 noop,Settings mock 验证 in-place 覆盖。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import httpx

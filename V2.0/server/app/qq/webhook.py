@@ -16,7 +16,6 @@ M2 链路(替换 M1a echo):
   - 连发防抖(input_debounce_sec):用户连发多条合并为一次 LLM 调用(避免 N 条=N 次 LLM+记忆+评分)
   - 超时合并 → pipeline.run_stream → 累积完整回复 → send_c2c_message 被动回复(带 msg_id)
 
-作者: 李文煜
 日期: 2026-06-25
 
 2026-06-25

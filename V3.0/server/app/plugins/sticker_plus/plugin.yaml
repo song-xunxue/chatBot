@@ -1,6 +1,5 @@
 name: sticker_plus
 version: 0.1.0
-author: 李文煜
 description: "表情包增强——自动配图(按心情档位+描述词重叠+最近使用降权从表情包库挑一张,回复末尾追加 [表情包: 描述] token,最多1张/条);文字表情渲染参数一并在面板暴露(REST/面板调试用)"
 entry: plugin.py
 display_name: 表情包增强

@@ -3,7 +3,6 @@ list_recent_blocks 混合 chat+roleplay 单测(2026-07-07 拟人化 UI 合并):
 chat 真实 block + roleplay 训练 block 混合返回,带 source 字段(real/training)区分,
 供对话历史页混合展示(训练样本并入对话历史)。
 
-作者: 李文煜
 日期: 2026-07-07
 """
 from storage import chat_store

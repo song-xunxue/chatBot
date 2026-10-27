@@ -4,7 +4,6 @@
 infer_and_merge 两步契约（dry_run/apply/no_samples/no_provider/bad_token）。
 LLM 用 monkeypatch mock，不调真实 API。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

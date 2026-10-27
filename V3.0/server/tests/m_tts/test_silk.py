@@ -3,7 +3,6 @@ silk 转码单测(M-tts,2026-08-04)
 覆盖:find_ffmpeg 返回路径;to_tencent_silk 真实转码(正弦波 WAV→silk,0x02 前缀 + decode 回环);
 非音频输入 → RuntimeError。依赖 ffmpeg+pysilk,缺失则 skip(不阻塞主套件)。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import io

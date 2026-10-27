@@ -1,6 +1,5 @@
 """astrbot.api.event 兼容(V2.0 子集):AstrMessageEvent(适配 V2.0 MessageContext)+ filter 装饰器。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 

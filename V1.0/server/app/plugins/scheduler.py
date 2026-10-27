@@ -3,7 +3,6 @@ on_tick 调度器 TickScheduler
 周期性对每个活跃 object_id 触发 on_tick 钩子，驱动 mood_dynamic/time_aware/proactive_msg 等定时插件。
 间隔由 settings.plugin_tick_interval 控制。tick_once 供测试立即触发。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

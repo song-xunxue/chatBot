@@ -15,7 +15,6 @@ Redis 键:
   mychat:score:pos:{oid}   List  高分正样本(驱动反推示范,JSON: mid/text/score/ts,最近 N 条)
   mychat:score:neg:{oid}   List  低分负样本(驱动反推应避免,JSON 同上)
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

@@ -1,7 +1,6 @@
 """
 access_token 缓存与刷新测试(fakeredis + httpx MockTransport)
 
-作者: 李文煜
 日期: 2026-06-25
 """
 import json

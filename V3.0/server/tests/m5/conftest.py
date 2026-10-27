@@ -2,7 +2,6 @@
 M5 测试公共夹具:fakeredis + 可控 mock LLM provider(chat_with_tools 按预设序列返回 tool_calls/text)。
 复用根 conftest 的 _no_real_llm / _disable_tool_loop(autouse)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

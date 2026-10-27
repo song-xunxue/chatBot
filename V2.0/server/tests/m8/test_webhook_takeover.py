@@ -2,7 +2,6 @@
 webhook 代答联动单测:代答开 → C2C 消息入 pending 队列不进 pipeline;代答关 → 走防抖。
 用 ASGITransport + 合法签名 payload + fakeredis 注入 + mock _schedule_debounce。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import json

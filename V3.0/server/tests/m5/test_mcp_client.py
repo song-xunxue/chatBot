@@ -2,7 +2,6 @@
 MCP client 单测:parse_mcp_servers(JSON 解析/降级)+ _MCPRemoteTool(转发/ schema)+
 MCPClient.call(mock session 转发)。不真连外部 server(连接集成留真实验证)。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 from mcp_client import parse_mcp_servers, MCPClient, _MCPRemoteTool

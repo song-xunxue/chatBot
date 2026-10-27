@@ -7,7 +7,6 @@ V2.0 适配(M2):Working 层委托 V2.0 chat_store(block 三层)。
   - get_working_span: 调 chat_store.get_history(max_messages=turns*2)
   (V1.0 用扁平 List llen/lrange,V2.0 改 block 三层后这两处适配)
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

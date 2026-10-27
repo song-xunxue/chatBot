@@ -9,7 +9,6 @@
 用法:python clone_segments.py <audio_or_video> [seg_len=15] [test_text]
 产物:同级 clone_samples/seg_N.mp3(对比试听)+ uris.json(各段 uri,挑中后据此设当前音色)
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import json

@@ -3,7 +3,6 @@
  * 移动端对话控制页(2026-09-13 队列删减重构,功能对等 PC Takeover.vue):
  * ① AI 静默开关 ② 主动发送(全宽 textarea+大按钮) ③ 发送语音 TTS 两开关(折叠)。
  * 队列卡片已删——手动 QQ 回复自动落库+静默窗,无需面板操作。
- * 作者: 李文煜
  */
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import {
@@ -100,7 +99,7 @@ onUnmounted(() => {})
         <n-input
           v-model:value="proactiveText"
           type="textarea"
-          placeholder="以清浔身份发给用户的内容..."
+          placeholder="以人设身份发给用户的内容..."
           :autosize="{ minRows: 2, maxRows: 6 }"
         />
         <n-button type="primary" size="large" block :disabled="!oid || oid === 'default'" @click="sendProactive">发送</n-button>

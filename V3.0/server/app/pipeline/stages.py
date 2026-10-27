@@ -4,7 +4,6 @@ M2 实现:load_history / persona_inject / memory_retrieve / mood_inject / build_
          llm_stream / save / mood_update / memory_write。
 适配 V2.0:block 三层 chat_store(get_history(max_messages)/append_message(sender=)) + mood 服务。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

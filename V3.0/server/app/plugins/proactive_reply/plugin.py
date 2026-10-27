@@ -2,12 +2,11 @@
 proactive_reply 插件(主动消息·主动搭话)
 - on_tick:对当前对象做五重门控(静默时段/每日上限/最小间隔/空闲阈值/概率),全过才主动搭话;
   命中后复用主链路口径(人设 render_system_prompt + mood hint + OUTPUT_CONTRACT + 最近 6 条对话)
-  让本地模型生成一句 20-60 字开场白,经 takeover.send_proactive 以清浔身份发出
+  让本地模型生成一句 20-60 字开场白,经 takeover.send_proactive 以人设身份发出
   (落 proxy 消息进 live 历史 + 下发 QQ,面板可见)。
 - 状态存 Redis(mychat:proactive:*):上次发送时间戳 + 当日计数(按日期分键,自然日切换自动归零)。
 - 全链软失败:任何异常只记日志绝不外抛,不影响 tick 循环与其他插件。
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

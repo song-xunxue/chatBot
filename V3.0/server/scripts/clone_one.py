@@ -6,7 +6,6 @@
 用法:python clone_one.py <audio_or_video> [test_text]
 产物:同级 <name>_sample.mp3(克隆合成的测试句,试听)+ last_clone_uri.txt(uri,设当前用)
 
-作者: 李文煜
 日期: 2026-08-07
 """
 import re

@@ -4,7 +4,6 @@
 - POST /training/{oid}/export     训练数据导出(SFT + DPO 偏好对,LLaMA-Factory 格式)
 鉴权 verify_token(同其余端点)。详见 docs/04 调研报告路线图阶段 A/B。
 
-作者: 李文煜
 日期: 2026-09-12
 """
 from fastapi import APIRouter, Body, Depends

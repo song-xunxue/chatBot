@@ -3,7 +3,6 @@
 1. 工厂恒返 OnebotAdapter
 2. OnebotAdapter:文本过/跳过出站守卫、CQ 注入防护(array 格式)、失败抛异常、语音 record 段构造
 
-作者: 李文煜
 日期: 2026-08-16
 
 2026-08-17

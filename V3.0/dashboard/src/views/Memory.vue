@@ -5,7 +5,6 @@
  * 统计(core/episodic/long_term_active/forgotten)+ 类别筛选 + 彩色标签 + 手动遗忘/锁定 + 编辑记忆。
  * 2026-08-13:展示 reason(理由)/tags(标签)/useful_score(用进废退分)/tier(档位);
  *   编辑可改 reason/tags/useful_score/tier;顶部「+ 新增记忆」手动写入(source=manual)。
- * 作者: 李文煜
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import {
@@ -209,7 +208,7 @@ onMounted(async () => { await ensureOid(); await load() })
     <n-modal v-model:show="editShow" preset="card" title="编辑记忆" style="width:620px;max-width:92vw">
       <n-space vertical :size="12">
         <n-input v-model:value="editContent" type="textarea" :rows="4" autofocus
-                 placeholder="用角色第一人称记录,'我'指角色自己(区分角色与用户)。如'我叫清浔''用户喜欢动漫''用户希望被称为煜'" />
+                 placeholder="用角色第一人称记录,'我'指角色自己(区分角色与用户)。如'我叫(角色)''用户喜欢动漫''用户希望被称为主人'" />
         <n-input v-model:value="editReason" type="textarea" :rows="2"
                  placeholder="理由:为什么这条值得记(可选,面板展示用)" />
         <n-space align="center" :wrap="false">
@@ -242,7 +241,7 @@ onMounted(async () => { await ensureOid(); await load() })
     <n-modal v-model:show="createShow" preset="card" title="新增记忆(手动)" style="width:620px;max-width:92vw">
       <n-space vertical :size="12">
         <n-input v-model:value="cContent" type="textarea" :rows="4" autofocus
-                 placeholder="记忆内容(角色第一人称)。如'我叫清浔''煜君喜欢深夜聊天'" />
+                 placeholder="记忆内容(角色第一人称)。如'我叫(角色)''主人喜欢深夜聊天'" />
         <n-input v-model:value="cReason" type="textarea" :rows="2"
                  placeholder="理由:为什么这条值得记(可选)" />
         <n-space align="center" :wrap="false">

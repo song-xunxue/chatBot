@@ -4,7 +4,6 @@ continuous_send 插件单测(2026-07-07):
 2. on_message_out 分段发 + msg_seq 递增(QQ 同 msg_id 必须不同 msg_seq)+ reply_sent 标记 + 不改 reply_text
 3. on_before_llm 思考延迟(LLM 前随机等待)
 
-作者: 李文煜
 日期: 2026-07-07
 """
 import asyncio

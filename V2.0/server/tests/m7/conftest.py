@@ -3,7 +3,6 @@ M7 测试公共夹具:EventBus + ToolRegistry(star_reload 测试用)。
 自举:把 plugins/star_compat/ 加入 sys.path,使测试可 `import astrbot`(命中 V2.0 兼容包)。
 fake_redis 沿用根 conftest(注入 redis_client._redis)。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import sys

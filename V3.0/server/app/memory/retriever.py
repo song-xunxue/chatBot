@@ -7,7 +7,6 @@ sample_weighted(加权随机召回,避确定性偏见,angel_memory 借鉴)。
 M4 改造:检索器只负责 rank(返回 (score,item) 降序),top-K 截断交给 coordinator
 (确定性 or 加权随机),便于在召回层引入多样性。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

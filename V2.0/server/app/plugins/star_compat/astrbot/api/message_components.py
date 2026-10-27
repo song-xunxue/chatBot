@@ -1,7 +1,6 @@
 """astrbot.api.message_components 兼容(最小子集):Plain/At/Image/Reply。
 V2.0 私聊场景主要用 Plain;其余占位供插件 import 不报错。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 

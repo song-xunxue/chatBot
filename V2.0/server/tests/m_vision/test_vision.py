@@ -4,7 +4,6 @@ M-vision 图像理解模块单测(2026-07-01)
       parse_c2c_message attachments 解析、rest_multimodal 端点(鉴权+解析)。
 mock httpx,全程不真调 GLM API。
 
-作者: 李文煜
 日期: 2026-07-01
 """
 import base64

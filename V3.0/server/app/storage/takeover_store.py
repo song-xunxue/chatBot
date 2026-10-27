@@ -7,7 +7,6 @@
   mychat:takeover:msgseq:{oid}    INCR          per-oid 发送序(official 时代防重;onebot 忽略,保留无害)
   mychat:takeover:tts:{oid}       String(JSON)  代答 TTS 两开关
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-06-30

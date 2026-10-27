@@ -2,7 +2,6 @@
 自研工具(M5):get_persona / write_memory / reverse_infer_trigger / web_search(DuckDuckGo)。
 对应 docs/01 §6 自研工具清单(get_persona/write_memory/reverse_infer_trigger/联网兜底)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

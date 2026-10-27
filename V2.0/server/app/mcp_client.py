@@ -6,7 +6,6 @@ MCP client(M5)
 config.mcp_servers(JSON 字符串):[{name, transport:"stdio"|"sse", command, args | url}, ...]
 stdio 启动子进程 server(command+args);sse 连远程 server(url)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

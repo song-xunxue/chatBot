@@ -10,7 +10,6 @@ tool_loop 内联 json.loads 四处同构独立实现(改一处格式约定要改
 均用 raw_decode 从每个 '{'/'[' 尝试解析,容忍前后多余文本/嵌套/代码块包裹;找不到返 None。
 predicate 让调用方保留各自的领域过滤(如 score 跳过"含 score 但非数"的对象继续扫描)。
 
-作者: 李文煜
 日期: 2026-07-04
 """
 import json

@@ -1,7 +1,6 @@
 name: proactive_reply
 version: 0.1.0
-author: 李文煜
-description: 主动搭话——空闲且不扰民时段,以清浔身份主动发一条开场消息(本地模型生成,经 takeover 下发,落 proxy 消息面板可见)
+description: 主动搭话——空闲且不扰民时段,以人设身份主动发一条开场消息(本地模型生成,经 takeover 下发,落 proxy 消息面板可见)
 entry: plugin.py
 display_name: 主动搭话
 category: 主动消息

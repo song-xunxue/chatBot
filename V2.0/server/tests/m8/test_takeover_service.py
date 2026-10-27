@@ -2,7 +2,6 @@
 takeover service 代答产出全链路单测:落消息/下发被动优先降级主动/评分记忆心情软失败/批量/TakeoverNotFound。
 mock send_c2c_message 控制下发分支;memory_enabled=False 跳过记忆编码(单独用例 mock coordinator)。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import httpx

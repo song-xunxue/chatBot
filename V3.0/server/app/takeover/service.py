@@ -1,15 +1,14 @@
 """
 对话控制应用层服务(2026-09-13 静默模式重构)
 职责收敛为三件事:
-  ① record_manual_reply —— 管理员经 QQ(清浔号)手动回复的记录:message_sent 上报触发,
+  ① record_manual_reply —— 管理员经 QQ(接管号)手动回复的记录:message_sent 上报触发,
      直接落 proxy 消息(source='manual')+ 恒正评分(黄金样本)+ 心情 + 写手动静默期;
-  ② send_proactive —— 面板主动发送(以清浔身份推消息给用户,落 proxy + 下发);
+  ② send_proactive —— 面板主动发送(以人设身份推消息给用户,落 proxy + 下发);
   ③ _deliver —— 下发 QQ(TTS 开关/被动降级主动,send_proactive 复用)。
 V2.0 时代的待答队列代答链(resolve_and_deliver/batch/skip/clear)已随队列删减移除。
 
 异常边界:落库硬失败上抛;评分/心情软失败(try 吞,不阻塞)。
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-06-30
@@ -115,7 +114,7 @@ async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, 
 
 
 async def send_proactive(redis, oid: str, content: str, *, use_tts: bool | None = None) -> dict:
-    """主动发送(管理员经面板/主动搭话插件以清浔身份推消息给用户)。
+    """主动发送(管理员经面板/主动搭话插件以人设身份推消息给用户)。
     落 proxy 消息(进 live 历史,供后续 LLM 上下文引用)+ 下发 QQ。
     不走评分/记忆编码副作用链(无 user 回合,评分无意义);proxy 消息本身进 chat history 已够记忆引用。
     use_tts=None 沿用 Redis 代答 TTS 配置;True/False 显式指定是否走语音(失败降级文本)。

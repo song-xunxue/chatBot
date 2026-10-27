@@ -5,7 +5,6 @@
   - 扁平形态:data.{name,description,...}(ST V2 完整卡)
 兼容 profile/preferences/relationship/example_dialogue 字段的嵌套/扁平两写法。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

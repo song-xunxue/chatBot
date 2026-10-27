@@ -2,7 +2,6 @@
 插件配置 REST 测试（复用顶层 client 夹具；lifespan 会 init_plugins 加载真实 hello）
 覆盖：列表/详情/enable/disable/按对象配置 GET+PUT/鉴权/404。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

@@ -2,7 +2,6 @@
 rest_plugin REST 单测(M7):鉴权 / 列表(原生+star 合并)/ 启用禁用 / 原生 reload /
 .star reload / 404 / 503(未初始化)。用 mock PluginManager + mock StarLoader(独立 app 无 lifespan)。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from unittest.mock import AsyncMock, MagicMock

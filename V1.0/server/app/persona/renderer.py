@@ -4,7 +4,6 @@
 + V1.1 profile/preferences/relationship/example_dialogue）+ 动态状态
 拼装为 LLM system prompt。对应 docs/06 §8 [system]+[state] 段、docs/09 §3.4、docs/10 §4。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

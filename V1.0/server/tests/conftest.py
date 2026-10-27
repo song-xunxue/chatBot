@@ -2,7 +2,6 @@
 测试公共夹具（fixtures）
 提供 fakeredis 注入、LLM key 重置、人设临时目录、REST TestClient 等公共夹具。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

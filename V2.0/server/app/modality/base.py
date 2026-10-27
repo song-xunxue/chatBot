@@ -3,7 +3,6 @@
 当前范围:图像理解(VisionProvider)——QQ 收图 → GLM vision 解析成文本 → 进 pipeline。
 图像生成/ASR 暂不移植;TTS 已加(2026-08-04 M-tts,见 modality/tts.py)。
 
-作者: 李文煜
 日期: 2026-07-01
 
 2026-07-01

@@ -6,7 +6,6 @@ health 与带 token 的 chat/sessions 均 200。import scripts.local_dev 本身�
 redis 注入说明:脚本注入与 conftest 的 fake_redis 注入的是同一模块属性 redis_client._redis,
 本文件以 conftest 夹具为准,用例只测脚本函数与 HTTP 层,不与脚本注入互踩。
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

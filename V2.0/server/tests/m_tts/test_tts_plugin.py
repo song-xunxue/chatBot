@@ -4,7 +4,6 @@ tts_reply 插件 + 插件参数端点单测(M-tts,2026-08-04)
 + 情感开关 + 软失败(reply_sent 保持 False)+ 无 msg_id/stub 空产出 跳过 + 上传 base64_silk/file_type=3
 + REST params GET/PUT(get_plugin_params/set_plugin_params 薄包装)。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import base64

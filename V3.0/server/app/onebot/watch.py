@@ -18,7 +18,6 @@ ws_ok/login_ok/last_check_ts/offline_since_ts) → REST GET /system/napcat-statu
 
 循环容错:探测异常记 unknown(不误报 offline),循环体全捕获——监控自身永远不能把主服务拖死。
 
-作者: 李文煜
 日期: 2026-09-15
 """
 import asyncio

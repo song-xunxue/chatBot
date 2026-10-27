@@ -1,5 +1,4 @@
 % V3.0 评分驱动 RL 闭环(策略→行动→奖励→更新)
-% 作者: 李文煜
 \documentclass[border=3mm]{standalone}
 \usepackage{ctex}
 \usepackage{tikz}
@@ -35,7 +34,7 @@
 ]
 
 % ================= π 策略 =================
-\node[pol] (pi) {$\pi$ \; 策略 Policy\\[2pt]\footnotesize 决定"清浔怎么说话"};
+\node[pol] (pi) {$\pi$ \; 策略 Policy\\[2pt]\footnotesize 决定"角色怎么说话"};
 \node[sub, below=0.12cm of pi] (pi1) {PersonaCard 人设卡(personality/speech\_style/catchphrase...)};
 \node[sub, below=0.08cm of pi1] (pi2) {记忆上下文 memory\_block(召回注入) + 心情 prompt\_hint};
 \node[sub, below=0.08cm of pi2] (pi3) {OUTPUT\_CONTRACT 输出契约(句号铁律/诚实约束/禁舞台指示)};

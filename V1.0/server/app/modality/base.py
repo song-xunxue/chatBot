@@ -4,7 +4,6 @@
 AudioArtifact / ImageArtifact 数据载体。具体实现（stub / siliconflow 等）经 registry 按名实例化。
 对应 F-P-01(TTS) / F-P-02(image) / F-P-03(sticker)。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

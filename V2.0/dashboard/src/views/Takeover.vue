@@ -4,7 +4,6 @@
  * LLM 没拦住/看不到 pending/切页丢状态)+ onMounted 自动 load + 5s 轮询 + 主动发送(不需用户先发)。
  * takeover 模式开启时:webhook 拦截 LLM(用户消息入 pending 队列不进 pipeline),
  * 管理员可代答(消费 pending)或主动发(无 pending 直接推)。去 oid 输入框。
- * 作者: 李文煜
  */
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import {

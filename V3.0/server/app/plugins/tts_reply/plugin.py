@@ -9,7 +9,6 @@ on_message_out(优先级 300,早于 continuous_send 400):回复文本 → send_v
                   True = 先文本(msg_seq=1)再语音(msg_seq=2)
 软失败:send_voice_reply 返 None → reply_sent 保持 False,webhook 发文本兜底。
 
-作者: 李文煜
 日期: 2026-08-04
 
 2026-08-04

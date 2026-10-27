@@ -4,7 +4,6 @@ stage_persona_inject 把人设 model.provider/model 写入 ctx(非空才覆盖;�
 #6:写缝隙 rest_persona.bind_model 原子校验(model 必须带 provider)→ 从源头杜绝孤立 model,
 故 store 的启动迁移已删(此处不再测迁移,改测写缝隙原子约束)。
 
-作者: 李文煜
 日期: 2026-07-02
 """
 import pytest

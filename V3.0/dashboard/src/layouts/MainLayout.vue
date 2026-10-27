@@ -4,7 +4,6 @@
  * 左侧栏(logo + 在线状态点 + 菜单胶囊高亮 + 底部版本/时钟)+ 顶栏(标题/全局 oid/登出)
  * + 掉线浮动胶囊(drop-in)+ 内容区路由过渡(page-fade)。
  * 菜单:人设/历史/记忆/心情/插件/系统/对话控制(评分已并入对话历史)。
- * 作者: 李文煜
  */
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -29,7 +28,7 @@ const menuOptions: MenuOption[] = [
 ]
 
 const activeKey = computed(() => (route.name as string) || 'history')
-const title = computed(() => (route.meta.title as string) || '清浔 3.0 管理面板')
+const title = computed(() => (route.meta.title as string) || 'chatbotV3.0 管理面板')
 
 // 底部小时钟(NapCat 风格侧栏脚注)
 const clock = ref('')
@@ -60,7 +59,7 @@ function logout() {
       <!-- logo 区:呼吸状态点(在线绿/掉线红)+ 标题 -->
       <div class="logo card-hover">
         <span class="dot" :class="{ 'dot-off': offline, 'pulse-dot': !offline }"></span>
-        <span class="logo-text">清浔 <span class="logo-ver">3.0</span></span>
+        <span class="logo-text">chatbot <span class="logo-ver">3.0</span></span>
       </div>
       <n-menu :value="activeKey" :options="menuOptions" :indent="18" class="menu" @update:value="onSelect" />
       <!-- 脚注:版本 + 实时时钟 -->
@@ -80,7 +79,7 @@ function logout() {
       <!-- 掉线浮动胶囊(drop-in 动画;消息正在丢失的强提示) -->
       <div v-if="offline" class="offline-capsule drop-in">
         <span class="dot dot-off pulse-dot" style="width:8px;height:8px"></span>
-        <b>清浔 QQ 已掉线,消息正在丢失!</b>
+        <b>QQ 已掉线,消息正在丢失!</b>
         <span class="offline-detail">{{ detail }} —— 打开 NapCat WebUI(6080)扫码重登;二维码刷新失败时重启 napcat-v4 容器</span>
       </div>
       <n-layout-content content-style="padding:20px" :native-scrollbar="false">

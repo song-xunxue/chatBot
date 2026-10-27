@@ -2,7 +2,6 @@
 OpenAICompatProvider SSE 流式解析测试（httpx MockTransport，不触网）
 验证 stream_chat 的 delta 解析、[DONE] 终止、非 data 行跳过，以及非流式 chat
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

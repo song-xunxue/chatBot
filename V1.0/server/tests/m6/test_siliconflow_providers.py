@@ -2,7 +2,6 @@
 硅基流动 Vision/ASR Provider mock 测试：验证请求 URL/鉴权/payload 构造 + 响应解析。
 回填 M6.2 缺口（之前只测 stub 路径，未 mock 真实 provider 的 httpx 调用）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

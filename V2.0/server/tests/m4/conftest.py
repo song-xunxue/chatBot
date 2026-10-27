@@ -2,7 +2,6 @@
 M4 测试公共夹具:fakeredis + 可控 mock LLM provider(consolidate/编码用)。
 复用根 conftest 的 _no_real_llm(autouse 清空 key)。
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

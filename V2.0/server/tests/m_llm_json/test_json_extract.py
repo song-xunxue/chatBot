@@ -3,7 +3,6 @@ llm/json_extract 单测(架构 #3 收口):从含噪 LLM 输出提取首个 JSON 
 覆盖:纯净 / 前后噪声 / ```代码块包裹 / predicate 过滤(含 score 非数跳过)/ 无效输入 /
 对象与数组并存时各自取首个 / 空串。
 
-作者: 李文煜
 日期: 2026-07-04
 """
 from llm.json_extract import extract_json_array, extract_json_object

@@ -2,7 +2,6 @@
 
 > 2026-09-11 · 基于 deep-research workflow(118 份已验证结果,含 3 票对抗验证)+ zread 一手仓库侦察
 > 所有关键主张均经反方验证(refuted 仅 2 条,已剔除);来源链接见文末
-> 作者: 李文煜
 
 ## 0. 一页纸结论
 
@@ -54,7 +53,7 @@ Qwen 官方明确支持 vLLM/SGLang 建 OpenAI 兼容端点、本地推荐 Ollam
 |---|---|---|
 | **RoleLLM**(ACL 2024 Findings) | RoCIT(LoRA rank8)微调 LLaMA-7B/ChatGLM2-6B,角色扮演达到 GPT-4 提示词(RoleGPT)可比水平;中文 RoleGLM 全指标略超 RoleGPT;"embeds role-specific knowledge into their weights" | 7B 级 LoRA 微调 ≈ 前沿提示词,路线成立的直接实证;学术数据规模 168k 样本/100 角色(每角色~1.7k) |
 | **CharacterBot**(ACL 2025 Findings) | 纯传记/对话数据只能注入**表层**人格;预训练任务+3 微调任务+CharLoRA(Qwen2.5-7B)能复现**语言风格+思想模式**,自适配指标超 GPT-4o(0.880 vs 0.734) | "深层人格必须进参数"的学术论据;提示词天花板存在 |
-| **Neeko**(EMNLP 2024) | 每角色独立 LoRA 块动态加载;7B LoRA 训练仅 13.49GB/1.72h(A100)vs 全参 107.84GB/48.55h;"FT 系整体优于 ICL/RAG"(优势 0.02-0.15,幅度有限) | "清浔=挂在 Qwen3 底座上的一个 LoRA"形态可行;多角色可扩展;注意对现代前沿模型的优势不保证 |
+| **Neeko**(EMNLP 2024) | 每角色独立 LoRA 块动态加载;7B LoRA 训练仅 13.49GB/1.72h(A100)vs 全参 107.84GB/48.55h;"FT 系整体优于 ICL/RAG"(优势 0.02-0.15,幅度有限) | "角色=挂在 Qwen3 底座上的一个 LoRA"形态可行;多角色可扩展;注意对现代前沿模型的优势不保证 |
 | 灾难性遗忘综述(arXiv 2501.13669) | 窄域微调会覆盖通用能力;缓解=参数重要性正则/通用数据回放/小学习率 | 风险与对策都有手册 |
 
 ### 3.2 从业者经验(火山引擎角色扮演微调 + 社区)
@@ -89,7 +88,7 @@ DPO 偏好对:      同一上下文 —— corrected(理想) vs 原回复(被纠
 | 路线 | 证据 | 硬件现实 |
 |---|---|---|
 | 在线 GRPO | TRL GRPOTrainer 支持**自定义 reward 函数**(你的评分逻辑直接接入);TRL+vLLM colocate 单卡可跑(0.5B 演示) | 研究级配置 32×H200(8B);Unsloth 称 24GB 可跑 Qwen3 级 QLoRA GRPO |
-| 在线 DPO(OAIF) | TRL OnlineDPOTrainer(实验性):**prompt-only 数据集**+LLM 裁判,**裁判指令可控**("按清浔人设评优"直接写进 judge prompt);原生 PEFT | 官方验证 8×H100;消费级不现实 |
+| 在线 DPO(OAIF) | TRL OnlineDPOTrainer(实验性):**prompt-only 数据集**+LLM 裁判,**裁判指令可控**("按V3.0-local 人设评优"直接写进 judge prompt);原生 PEFT | 官方验证 8×H100;消费级不现实 |
 | **离线 DPO** | 一次性静态偏好对 | ❌ 效果差:比在线低 45-57%(AlpacaEval 口径) |
 | **semi-online 迭代 DPO** ⭐ | **效果 ≈ 在线 GRPO**(论文核心发现);每轮用更新后的模型重新收集偏好;DPO 比 GRPO 省显存(每步只需一对回复) | **单次训练就是普通 DPO 的算力**,迭代循环而已 |
 
@@ -134,7 +133,7 @@ DPO 偏好对:      同一上下文 —— corrected(理想) vs 原回复(被纠
 |---|---|---|---|
 | **A. 解耦+基线** | local provider 接入(Ollama on 4060);同一批上下文跑 云端 GLM vs 本地 Qwen3-8B-Q4,用现有评分系统盲测对比 | 0 成本 | 确认本地基座人设契合基线分;接口解耦完成 |
 | **B. 数据管线** | 对话历史+score/correction/manual/roleplay 队列 → 导出 alpaca JSONL(SFT 集+DPO 偏好对);面板加"导出训练数据"按钮 | 小 | 可复现的数据集生成器(V3.0 变成数据飞轮) |
-| **C. 首次微调** | 云租 4090:Qwen3-8B QLoRA SFT(金样本)→DPO(纠正对);合并导出;本地部署;评分盲测 A/B(vs 未微调) | 几块钱+1天 | "清浔 LoRA v1";量化人设增益 |
+| **C. 首次微调** | 云租 4090:Qwen3-8B QLoRA SFT(金样本)→DPO(纠正对);合并导出;本地部署;评分盲测 A/B(vs 未微调) | 几块钱+1天 | "人设 LoRA v1";量化人设增益 |
 | **D. 迭代闭环** | 每 N 周重复 B→C(semi-online DPO 形态);稳定后可选:GRPO 在线微调(裁判=人设评审 prompt) | 常态化 | 人格真正"长在参数里",评分闭环→训练闭环 |
 
 阶段 A/B 纯软件工作可直接在 V3.0 做;C/D 涉及训练环境(建议新建 V3.0/training/ 目录承载,与 server 解耦)。

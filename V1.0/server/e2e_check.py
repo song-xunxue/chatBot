@@ -6,7 +6,6 @@
 
 运行：python e2e_check.py（用 mychat conda 环境）
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

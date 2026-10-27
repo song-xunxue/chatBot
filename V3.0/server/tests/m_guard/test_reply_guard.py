@@ -3,7 +3,6 @@ QQ 回复安全守卫单测(2026-07-02,架构 #3)
 钉死不变量:"原始错误文本绝不流到 QQ 用户"。错误签名(堆栈/限流/内部URL/异常类名/旧 bug 串)→降级兜底;
 正常回复 + 已优雅化的用户向兜底(如"图片解析失败")原样放行。
 
-作者: 李文煜
 日期: 2026-07-02
 """
 from adapter.reply_guard import sanitize_reply, looks_like_error

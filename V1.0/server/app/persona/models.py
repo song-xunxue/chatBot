@@ -5,7 +5,6 @@ Profile/Preferences/Relationship/DialogueExample），
 统一人设的数据载体，供 store/renderer/importer/rest 使用。
 对应 docs/03 §5 人设接口、docs/09 §3.1、docs/10 §4（V1.1 M9 扩字段）。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

@@ -3,7 +3,6 @@
 覆盖:AI 静默开关 / 手动静默期(set_silence TTL 时间窗+is_silenced+清除)/ msgseq / TTS 配置。
 原 FIFO 队列测试已随队列删减移除。
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-09-13

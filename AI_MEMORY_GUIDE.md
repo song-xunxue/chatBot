@@ -9,9 +9,9 @@
 
 ## 0. 30 秒速览
 
-- **项目**：单人开发的拟人化 AI 伴侣「清浔」——真实 QQ 号聊天机器人 + 评分驱动自我迭代 + 人设微调训练数据飞轮。
-- **作者**：李文煜（git author 名 `song-xunxue`）。项目类型（非作业），2026-06-15 启动。
-- **当前主线**：**V3.0 本地双栈**（清浔 V3.0-local 8091 + 大肥鱼 Vdafeiyu 8081，2026-10-26 起；`V3.0/` 目录冻结、云端容器组仍在），正处于「训练阶段 C 的数据积累期」：手动聊天沉淀金样本 → 攒 100+ 条 → QLoRA 训 v0 → 部署回本地 Ollama。
+- **项目**：单人开发的拟人化 AI 伴侣（主号人设）——真实 QQ 号聊天机器人 + 评分驱动自我迭代 + 人设微调训练数据飞轮。
+- 项目类型（非作业），2026-06-15 启动（署名规范：项目文件不写作者，git author 名 `song-xunxue`）。
+- **当前主线**：**V3.0 本地双栈**（V3.0-local 8091 + 大肥鱼 Vdafeiyu 8081，2026-10-26 起；`V3.0/` 目录冻结、云端容器组仍在），正处于「训练阶段 C 的数据积累期」：手动聊天沉淀金样本 → 攒 100+ 条 → QLoRA 训 v0 → 部署回本地 Ollama。
 - **三代并存**：`V1.0/`（归档只读，FastAPI+PySide6 桌面版）→ `V2.0/`（QQ 官方机器人，容器已停但代码保留并行演进）→ `V3.0/`（现役）。
 - **最新 commit**：`8b595bc`（2026-10-01，语音 1s 截断修复），分支 `v2.0`（**注意：V3.0 的所有开发都提交在名为 v2.0 的分支上**），双远程 Gitee(origin)+GitHub(github) 同步。
 - **测试基线**：V3.0 后端 505 个测试函数（提交口径 508 项全绿，含参数化）+ 前端 16 测；V2.0 后端 489 + 前端 14。
@@ -21,7 +21,7 @@
 
 ## 1. 项目是什么
 
-「清浔」是一个以**拟人化**为最高目标的 AI 伴侣系统，服务单一用户（QQ 主号 2690468347「浔的昳」）。演进的大方向始终是三步：
+本项目是一个以**拟人化**为最高目标的 AI 伴侣系统，服务单一用户（QQ 主号）。演进的大方向始终是三步：
 
 1. **聊得像人**（V1/V2 奠定）：人设卡、四级记忆、心情起伏、分段连发、思考延迟、语音、表情包；
 2. **自我迭代**（V2/V3 核心）：每条 AI 回复被 LLM 对照人设打分（0-100）+ 人工改分/纠正/手动回复，高分正样本、低分负样本 → **反推**回人设与记忆（人在环确认）；
@@ -52,12 +52,13 @@
 
 ## 3. 当前状态快照（2026-10-27 更新，动手前先核实）
 
-- **⚠️ 双栈同步铁律（2026-10-27 用户立规，所有 AI 遵守）**：清浔（V3.0-local）与大肥鱼（Vdafeiyu）**共架构处（server 核心、共有插件、launcher/看护脚本、共用公共件 `scripts/launcher-common.ps1`）的任何改动必须双向同步落地，只改一栈视为未完成**；单栈专属功能（V3.0-local 的 dream/worldbook、Vdafeiyu 的人设/dist）免同步；汇报须注明「两栈已同步」或「单栈专属」。
-- **两条技术线与分支结构（2026-10-27 定名+分支化，两平台 refs 全同步）**：`v3.0`=主分支（冻结基线+共用件+文档）／`v3.0-local`=**local 版（清浔）**全功能演进栈（696 测）／`vdafeiyu`=**大肥鱼特化版**（603 测，dashboard/dist 无源码系唯一面板资产已例外入库）。**「推送/更新 git」默认=Gitee 先+GitHub 后双平台**；仓库默认分支仍为 master（V1.0 存档），网页首页看不到现行工作属正常。**大肥鱼线下一步主线：与 DSH 体系对接（未完成；dsh-qq-bridge 配置在 `C:\Users\26904\.dsh\qq-bridge-config.json`，当前总开关 false）**。给栈目录建分支必须用 plumbing（temp-index+commit-tree），checkout 会把工作区里的栈目录删掉；`vdafeiyu` 分支名与 `Vdafeiyu` 目录在 Windows 大小写不敏感下歧义，引用须用 `refs/heads/` 全称。
-- **本地双栈为当前主战场**（2026-10-26 起）：清浔栈 V3.0-local（服务 8091 / redis 6390 / NapCat 6099，QQ 1145077465，conda mychat，计划任务 ChatBotLocalServer + ChatBotLocalWatchdog 每 2 分钟看护）+ 大肥鱼栈 `Vdafeiyu/`（服务 8081 / redis 6380 / NapCat HTTP 3000，QQ 3682822273，一键启动 `Vdafeiyu/scripts/start-dafeiyu.ps1`，NapCat 掉线看护=计划任务 NapCat-Watchdog 跑精确匹配版 keepalive；redis/server 看护=计划任务 DafeiyuStackWatchdog 每 2 分钟跑 `Vdafeiyu/scripts/watch-stack.ps1`，2026-10-26 晚建）。TTS 9880 两栈共用。两栈源码关系：Vdafeiyu = V3.0-local **去掉 dream/worldbook 两批次** + 独立人设（persona/default.py），其余逐字节一致；**Vdafeiyu 无 dashboard/src，dist 绝不能从 V3.0-local 拷贝**（含日记/世界书页，后端无路由必坏）。桌面「ChatBot启动器」文件夹七件套+双栈关闭器（2026-10-26~27，制作脚本 `scripts/make_launchers.ps1` 幂等）。
-- **双栈整体审查与修复（2026-10-26 傍晚，9-agent workflow 对抗复核）**：①high 已修——旧 napcat-keepalive.ps1 按进程名无差别强杀双栈 QQ + 重启 vbs 断链（当日 15:37-16:22 肇事 11 次，双号重扫+清浔触发账号风控 168），已改为精确匹配（`-q 3682822273` + napcat-dafeiyu 目录）+ 拉起走 start-dafeiyu.ps1，napcat-autostart.ps1/start-napcat-silent.vbs 危险残留已删；②high 已修——.gitignore 补 `Vdafeiyu/` `.local/`（此前 `git add -A` 会卷 443 文件含双号登录态/聊天数据）；③V3.0/ 工作区 13 改+16 新证实为 V3.0-local 严格子集，已提交 v3.0 分支定格冻结基线；④medium 12 项 2026-10-26 晚已全部修复（V3.0-local 690 测全绿）；low 4 项 2026-10-27 修复（日志轮转+UTF-8/dream tmp 残骸/docs09 删除语义），双栈同步生效。清浔 168 风控 2026-10-27 用户已手机验证解除；大肥鱼扫码 2026-10-26 晚完成。
+- **⚠️ 双栈同步铁律（2026-10-27 用户立规，所有 AI 遵守）**：V3.0-local与大肥鱼（Vdafeiyu）**共架构处（server 核心、共有插件、launcher/看护脚本、共用公共件 `scripts/launcher-common.ps1`）的任何改动必须双向同步落地，只改一栈视为未完成**；单栈专属功能（V3.0-local 的 dream/worldbook、Vdafeiyu 的人设/dist）免同步；汇报须注明「两栈已同步」或「单栈专属」。
+- **两条技术线与分支结构（2026-10-27 定名；同日傍晚整合为单一活动分支）**：**唯一活动分支 `v3.0`** = V3.0 冻结基线 + 双栈整树（`V3.0-local/`=**local 版**全功能演进栈 696 测；`Vdafeiyu/`=**大肥鱼特化版** 603 测，dashboard/dist 无源码系唯一面板资产例外入库）+ 共用件 + 文档，**与本地工作区一一镜像**（此前的 `v3.0-local`/`vdafeiyu` 独立栈分支已删除合并）；`master`/`v2.0`/`dev/v1.1` 为历史存档分支，仓库默认分支已切 `v3.0`。**「推送/更新 git」默认=Gitee 先+GitHub 后双平台**；git 提交不加 Co-Authored-By 尾注。**大肥鱼线下一步主线：与 DSH 体系对接（未完成；dsh-qq-bridge 配置在 `C:\Users\26904\.dsh\qq-bridge-config.json`，当前总开关 false）**。
+- **⚠️ 隐私红线（2026-10-27 用户立规，所有 AI 遵守）**：仓库任何内容**不出现真实姓名、人设角色的本名及其变体（含主号昵称）、人设对用户的专属称谓**（存量已全量清除，测试 fixture 用 角色/主人/小明 等中性词；面板品牌=「chatbotV3.0 管理面板」/「大肥鱼 管理面板」）；`.env`/`server/data/`（聊天·人设·金样本）/`.data/`（redis 快照）/`logs/`/`node_modules/`/`.local/`（QQ 登录态）任何分支不入库。
+- **本地双栈为当前主战场**（2026-10-26 起）：V3.0-local 栈 V3.0-local（服务 8091 / redis 6390 / NapCat 6099，QQ 1145077465，conda mychat，计划任务 ChatBotLocalServer + ChatBotLocalWatchdog 每 2 分钟看护）+ 大肥鱼栈 `Vdafeiyu/`（服务 8081 / redis 6380 / NapCat HTTP 3000，QQ 3682822273，一键启动 `Vdafeiyu/scripts/start-dafeiyu.ps1`，NapCat 掉线看护=计划任务 NapCat-Watchdog 跑精确匹配版 keepalive；redis/server 看护=计划任务 DafeiyuStackWatchdog 每 2 分钟跑 `Vdafeiyu/scripts/watch-stack.ps1`，2026-10-26 晚建）。TTS 9880 两栈共用。两栈源码关系：Vdafeiyu = V3.0-local **去掉 dream/worldbook 两批次** + 独立人设（persona/default.py），其余逐字节一致；**Vdafeiyu 无 dashboard/src，dist 绝不能从 V3.0-local 拷贝**（含日记/世界书页，后端无路由必坏）。桌面「ChatBot启动器」文件夹七件套+双栈关闭器（2026-10-26~27，制作脚本 `scripts/make_launchers.ps1` 幂等）。
+- **双栈整体审查与修复（2026-10-26 傍晚，9-agent workflow 对抗复核）**：①high 已修——旧 napcat-keepalive.ps1 按进程名无差别强杀双栈 QQ + 重启 vbs 断链（当日 15:37-16:22 肇事 11 次，双号重扫+接管号触发账号风控 168），已改为精确匹配（`-q 3682822273` + napcat-dafeiyu 目录）+ 拉起走 start-dafeiyu.ps1，napcat-autostart.ps1/start-napcat-silent.vbs 危险残留已删；②high 已修——.gitignore 补 `Vdafeiyu/` `.local/`（此前 `git add -A` 会卷 443 文件含双号登录态/聊天数据）；③V3.0/ 工作区 13 改+16 新证实为 V3.0-local 严格子集，已提交 v3.0 分支定格冻结基线；④medium 12 项 2026-10-26 晚已全部修复（V3.0-local 690 测全绿）；low 4 项 2026-10-27 修复（日志轮转+UTF-8/dream tmp 残骸/docs09 删除语义），双栈同步生效。接管号 168 风控 2026-10-27 用户已手机验证解除；大肥鱼扫码 2026-10-26 晚完成。
 - **proactive_reply 晚安事故修复（2026-10-27，详情见 Claude 记忆 proactive-fabrication-incident）**：用户报「晚安消息回复不适合」——真凶非 reply_enhance（双栈默认关），是 proactive_reply 按对象配置放宽（quiet_hours 改 02:00-09:30 放出深夜段）+开场白编造共同记忆（「说好早点睡的」）+对道别零感知（晚安后 7h40m 静默，静默段一结束 09:40 即补发）。修复：①晚安感知门控（`is_farewell` 词表+`farewell_aware` 参数默认 true，对方末条为道别语→静默直到再开口）；②开场白指令加禁编造约束；三件套双栈镜像同步，V3.0-local 696 测/Vdafeiyu 603 测全绿，双栈 13:18/13:20 无窗重启生效。潜伏未修：晚安块已被 proxy 新块挤出 2-block×20 条窗口、reply_enhance 休眠地雷（accumulate 若启用有无 TTL/空轮双写/跨夜时差三类坑）。
-- **遗留待办（2026-10-27 用户报障）**：①「记忆/人设/场景设置丢失」**已解决**——真身分别是 V3 云文件人设卡与 V2 云 redis 记忆，全包迁移进 6390 已验证（详见 Claude 记忆 cloud-data-migration-2026-10-27；金样本 103 条同时入 training）；②continuous_send 分段失效**已解决**——根因是清浔栈从未置 `mychat:plugin:continuous_send:enabled`（default_enabled=false 总闸常闭），已开闸；策略升级备选（DSH 按空行拆+固定间隔 / AstrBot 标点正则拆+按字数对数间隔模拟打字）待用户点头再改。
+- **遗留待办（2026-10-27 用户报障）**：①「记忆/人设/场景设置丢失」**已解决**——真身分别是 V3 云文件人设卡与 V2 云 redis 记忆，全包迁移进 6390 已验证（详见 Claude 记忆 cloud-data-migration-2026-10-27；金样本 103 条同时入 training）；②continuous_send 分段失效**已解决**——根因是V3.0-local 栈从未置 `mychat:plugin:continuous_send:enabled`（default_enabled=false 总闸常闭），已开闸；策略升级备选（DSH 按空行拆+固定间隔 / AstrBot 标点正则拆+按字数对数间隔模拟打字）待用户点头再改。
 - **工作目录已切 V3.0-local**（2026-10-26 起）：`V3.0-local/` 为从 V3.0 完整移植的本地演进分支（基线 599 测全绿，含 dream/worldbook 后 **685 测全绿**），**`V3.0/` 目录冻结不再改动**（冻结基线已入库 v3.0 分支）；云端部署仍为 V3.0 容器组（见下）。V3.0-local 与 Vdafeiyu 均在 .gitignore 内、未入库。
 - **世界书式记忆批次（2026-10-26，未提交，685 测全绿 = 625+60；`V3.0-local/docs/09` §8 实施记录）**：`memory/worldbook|worldbook_store|worldbook_runtime.py` + REST `/api/v1/worldbook/entries CRUD|stats|rebuild` + 面板世界书页（桌面侧栏+移动第 9 tab）+ 迁移脚本 `scripts/migrate_worldbook.py`（--dry-run）。**`MEMORY_MODE=legacy` 默认未切**（legacy 拼装有逐字回归测试锁定，验收后再切 worldbook）；记忆写入/遗忘全路径自动同步条目（_upsert_fact_dedup/mark_forgotten 收口，diary 按 tags 分流 dream/diary）；注入锚点在 stage_build_messages 拼装（5 position），兜底 topup 复用 coordinator.retrieve 且 hit_mids 回填维持评分回流；Redis 键 `mychat:wb:*`（条目 hash/ids zset/by_key/by_ref 反向索引/stats）；坑：redis hset 不收 bool/list——to_redis 转 int/JSON，from_dict 双向容错。
 - **dream 做梦与日记批次（2026-10-26，未提交，625 测全绿 = 599+26）**：第 3 个插件 `plugins/dream/`（on_tick pri 130，凌晨 dream_hour 对"昨天"生成一段梦+第一人称日记，**默认关**、绝不发 QQ 消息）；落盘 `server/data/diary/YYYY-MM-DD.json` + Redis 索引 `mychat:diary:index`(zset)/缓存 `mychat:diary:{date}`；精炼版走 `MemoryCoordinator.upsert_facts_batch` 写事件记忆（**source=diary**，emotion 必须传 0.0 不能空串）；按 dream_tone 给 mood ±dream_mood_delta 偏移（clamp 不为负）；REST `/api/v1/diary/list|{date}|run`；面板桌面"日记"侧栏 + 移动第 8 tab（Diary.vue/DiaryMobile.vue，tokens.css 工具类首个消费者）；文档 `V3.0-local/docs/10-做梦与日记.md`。测试坑：dream 模块测试须单路径导入 `plugins.dream.*`（双 sys.path 会造双模块实例，monkeypatch DIARY_DIR 打偏 + 误写真实 data 目录）；`_persona_brief` 走 `get_default_persona` 会真写 persona 文件，测试须预种 persona 绑定。
@@ -188,7 +189,7 @@ V3.0/server/app/
 - **三要素**（借鉴 angel_memory）：`content` + `reason`（为什么值得记）+ `tags`（≤5）；面板可编辑。LLM prompt 只注 content（省 token）。
 - **useful_score（0~1）用进废退**：本轮被召回的记忆随本轮评分集体 ±0.1（≥85 强化/<60 衰减，`_apply_score_to_recalled`）；手动档 tier≥0 与 locked 跳过。
 - **三档衰减**（`forgetting.should_forget`）：T2（useful_score≥0.7）永不 / T1（≥0.3）评分驱动 / T0 自然衰减（retain_score=0.4·重要+0.3·近期+0.15·访问+0.15·情感，72h 半衰期，被召回重置=间隔重复）。后台 `forget_tick` 每 6h（软遗忘→上限 200 淘汰→物理清理→睡眠巩固）。
-- **防幻觉铁律**：抽取 prompt 强制「只把 user 说的话当事实源」——根治「椰子鸡幻觉自我固化」（AI 编的承诺被抽成长期记忆→召回→再强化）。人称用第一人称视角（「我叫清浔」「煜君喜欢我」），绝不用「用户」疏离称呼（`persona.user_alias`="煜君"）。
+- **防幻觉铁律**：抽取 prompt 强制「只把 user 说的话当事实源」——根治「椰子鸡幻觉自我固化」（AI 编的承诺被抽成长期记忆→召回→再强化）。人称用第一人称视角（「我叫(角色)」「主人喜欢我」），绝不用「用户」疏离称呼（`persona.user_alias`="主人"）。
 
 ### 5.5 心情系统
 mood∈[0,1]（0.5 中性），默认 5 档（开心/愉悦/平静/低落/难过，各档含 kaomoji/score_bias/prompt_hint，Redis 可 CRUD）。关键词词表 ±step、独立 asyncio 循环向中性衰减。作用：①prompt_hint 影响语气 ②score_bias 补偿评分（心情好宽容/差苛刻才拟人）③面板曲线可视化。
@@ -256,7 +257,7 @@ ssh ... 'cd ~/ChatBot-V3 && tar xzf v3.tgz --strip-components=1 && sudo bash scr
 ### 7.4 本地 Windows 工具链（语音/本地 LLM/训练）
 | 组件 | 位置 | 说明 |
 |---|---|---|
-| GPT-SoVITS | `E:\GPT-SoVITS`（api_v2 :9880，dania 清浔模型） | 桌面「清浔 3.0.lnk」启动器一键拉起 api_v2+frpc+心跳；**与 V2.0 启动器共享隧道，不能同时跑** |
+| GPT-SoVITS | `E:\GPT-SoVITS`（api_v2 :9880，dania 语音模型） | 桌面「TTS 启动器」启动器一键拉起 api_v2+frpc+心跳；**与 V2.0 启动器共享隧道，不能同时跑** |
 | frpc | `V3.0/tts-tools/frp/` | 两条隧道：9880 GSV / 11434 Ollama；frps 在云服务器 :7000 |
 | Ollama | `D:\ollama`（zip 版，qwen3:8b 5.2GB） | **重启后须手动启动 serve**；OLLAMA_MODELS=D:\ollama\models |
 | 训练 | conda `llmtrain` + `V3.0/training/` | HF 缓存 D:\llmtrain-cache；HF_ENDPOINT=hf-mirror.com；产物 outputs/ 永久存档不入库 |
@@ -294,7 +295,7 @@ ssh ... 'cd ~/ChatBot-V3 && tar xzf v3.tgz --strip-components=1 && sudo bash scr
 
 ## 9. 工程规范与协作约定（对 AI 助手的行为要求）
 
-- **代码头部**：项目类型风格（功能说明 + 作者 `李文煜` + 日期 yyyy-mm-dd + 变更日志）；注释/文档全中文。
+- **代码头部**：项目类型风格（功能说明 + 日期 yyyy-mm-dd + 变更日志，**不写作者**）；注释/文档全中文。
 - **事前确认**：每个里程碑/模块动手编码前，先出方案（做什么/改哪些文件/取舍）给用户确认再动代码；调研读码不算。
 - **事后汇报**：每完成一部分，说明「做了什么 + 实现什么功能」；长任务每 ~10 分钟汇报进度。
 - **推送完即存档**：每次 git 推送后主动更新项目记忆（进度/commit 号）。

@@ -4,7 +4,6 @@
  *   2. 改为 mock 底层 axios，并提供"驱动拦截器"的伪实例，
  *      使 client.ts 的 request 拦截器(token 注入)与 response 拦截器(401 跳转)真实执行。
  *   3. 为 V1.1/V1.2 新封装补端点 URL + method + body 断言。
- * 作者: 李文煜
  * 日期: 2026-06-25
  *
  * 2026-06-25

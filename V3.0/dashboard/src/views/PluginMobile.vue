@@ -6,7 +6,6 @@
  * ③ GPT-SoVITS 就绪检测折叠置底(四态徽标常显 / 强制重测 / 展开态 15s 心跳轮询,后台隐藏时暂停)
  * 逻辑与 PC 端完全一致(useObject 共享 oid + 相同 API),仅 template 按窄屏重组:
  * 删写死宽度→全宽、按钮 size large(touch≥44px)、表单 label 上置、列表行改卡片堆叠。
- * 作者: 李文煜
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {

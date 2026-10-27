@@ -6,7 +6,6 @@
   3. coordinator.retrieve 真 BM25 召回(关加权随机,确定性便于观察)
 单测用 mock provider,此处验真 GLM JSON 输出 + BM25 召回相关性。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 import sys

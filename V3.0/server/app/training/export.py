@@ -16,7 +16,6 @@ QLoRA SFT + DPO(人设微调进参数,详见 docs/04 调研报告)。
 
 输出:server/data/training/qingxun_{sft|dpo}_{yyyyMMdd_HHmmss}.jsonl + latest 统计。
 
-作者: 李文煜
 日期: 2026-09-12
 
 2026-09-15

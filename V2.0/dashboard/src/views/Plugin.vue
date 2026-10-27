@@ -3,7 +3,6 @@
  * 插件管理(V2.0 M7 + M-tts 2026-08-04):原生 + .star 列表 + 启用/禁用 + 热重载 + 参数配置。
  * 参数配置为 M-tts 新增的泛化能力:凡 plugin.yaml 声明 config_schema 的插件自动渲染表单
  * (音色下拉/语速/gain/开关等),单人设 object_id 取 useObject 全局 oid。顺带让 continuous_send 等也可配。
- * 作者: 李文煜
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {

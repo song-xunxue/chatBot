@@ -3,7 +3,6 @@
  * 系统配置页(M7):LLM provider 配置状态(只读)+ 重载配置 + QQ 机器人凭证管理 + 清空所有数据(2026-07-05)。
  * QQ 凭证持久化 Redis(后端),保存后立即生效(下次 webhook 用新凭证换 token/验签,无需重启)。
  * 清空所有数据:删运行时数据(对话/记忆/训练样本/评分/mood值/代答),保留人设+配置,需输入"清空"确认。
- * 作者: 李文煜
  */
 import { ref, onMounted } from 'vue'
 import { NCard, NSpace, NButton, NTag, NSpin, NEmpty, NInput, NModal, useMessage } from 'naive-ui'

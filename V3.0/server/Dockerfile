@@ -1,5 +1,4 @@
 # MyChat V2.0 服务端 Docker 镜像
-# 作者: 李文煜
 # 日期: 2026-07-01
 #
 # 说明: QQ 官方机器人后端(FastAPI + uvicorn + pynacl 验签 + httpx REST)

@@ -2,7 +2,6 @@
 表情包库（M6.3）：本地导入/列出/选用，存于 client/data/stickers/。
 StickerManager 管理文件；StickerPickerDialog 网格选择 + 导入。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

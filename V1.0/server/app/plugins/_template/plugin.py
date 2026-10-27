@@ -2,7 +2,6 @@
 插件开发模板 —— 复制本目录、改 name 与钩子实现即可（本目录以 _ 开头，不会被自动加载）。
 演示：on_after_llm 在回复末尾追加标签（读取 config_schema.tag 默认值，可按对象覆盖）。
 
-作者: 李文煜
 日期: 2026-06-24
 """
 from plugins.base import Plugin, HookResult

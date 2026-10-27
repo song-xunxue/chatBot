@@ -1,6 +1,5 @@
 name: persona_evolve
 version: 0.1.0
-author: 李文煜
 description: 人格反推——采集用户删除的不符人格回复作为负样本（V1.1：反推合并由 reverse_infer 模块负责，本插件仅采集）
 display_name: 人格反推
 category: 人设与进化

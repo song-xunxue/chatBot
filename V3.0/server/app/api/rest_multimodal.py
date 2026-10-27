@@ -5,7 +5,6 @@
 路由(prefix /api/v1):
   POST /multimodal/vision   上传图片(UploadFile)→ {description}(软失败返 error,不抛 500)
 
-作者: 李文煜
 日期: 2026-07-01
 
 2026-07-01

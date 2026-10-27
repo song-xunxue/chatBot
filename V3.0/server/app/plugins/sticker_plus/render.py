@@ -5,7 +5,6 @@ sticker_plus 文字表情包渲染(PIL 在底图上叠字,仿 DSH 的 meme_rende
 并注册描述,返回 [表情包: 描述] token——插件发送与 REST /api/v1/sticker/render(面板调试)
 共用本模块;文件名 = render_{md5(文字+底图名)[:16]}.png,同文字同底图幂等覆盖(天然去重)。
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

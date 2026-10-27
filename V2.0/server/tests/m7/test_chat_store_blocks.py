@@ -2,7 +2,6 @@
 chat_store.list_blocks 单测(M7):block 第一层浏览。
 测空会话/单 block(含 msg_count)/多 block 倒序/limit 截断。
 
-作者: 李文煜
 日期: 2026-06-30
 """
 import time as _time

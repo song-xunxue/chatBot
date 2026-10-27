@@ -2,7 +2,6 @@
 人设模块
 对外导出 PersonaCard 数据结构与 store/renderer/importer API。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

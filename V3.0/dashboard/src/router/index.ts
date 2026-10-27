@@ -1,7 +1,6 @@
 /**
  * 路由 + access_token 鉴权守卫(V2.0 M7)
  * 菜单:人设/历史/记忆/心情/插件/系统/代人代答(训练样本已并入对话历史,2026-07-07)。
- * 作者: 李文煜
  */
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 

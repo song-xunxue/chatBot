@@ -2,7 +2,6 @@
 管道钩子集成测试：run_stream 在 on_message_in / on_before_llm / on_after_llm 触发插件钩子。
 镜像 test_e2e_memory 的 provider mock 模式（patch stages.get_provider）；关闭记忆以聚焦钩子。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

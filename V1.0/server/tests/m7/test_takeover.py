@@ -3,7 +3,6 @@
 service 层（fake_redis）：开关 / open_pending 单 active / resolve / clear
 REST 层（client）：toggle / status / answer 410。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

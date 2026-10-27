@@ -3,7 +3,6 @@
 插件列表/详情、全局开关 enable/disable、按对象配置 GET/PUT、reload。
 复用 access_token 鉴权（Header X-Access-Token 或 query token）。对应 docs/05 §9。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

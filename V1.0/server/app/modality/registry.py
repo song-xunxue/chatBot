@@ -3,7 +3,6 @@
 当前内置 stub；真实 provider（siliconflow 等）待 Q-10 确认后用 register_tts/register_image 注册。
 get_* 对未知名/空名回退 stub，保证链路不崩。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

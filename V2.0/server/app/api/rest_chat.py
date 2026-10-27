@@ -10,7 +10,6 @@
   DELETE /chat/messages/{mid}            软删(→ status=deleted;ai/proxy + 有 score → 联动写 neg)
   POST   /chat/blocks/{block_id}/close   手动关闭 block(close_reason=manual)
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from fastapi import APIRouter, Body, Depends, HTTPException, Query

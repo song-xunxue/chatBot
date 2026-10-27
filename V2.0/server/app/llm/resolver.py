@@ -6,7 +6,6 @@ owns "按任务解析 provider 名 + 是否可用 + 实例化"——统一此前
 解析链(全任务统一):override(调用方显式传入)→ 任务专用设定 → 全局 chat_provider;
 key 未配则 resolve_provider 返 None(调用方据此降级,不抛)。
 
-作者: 李文煜
 日期: 2026-07-02
 """
 from llm.registry import get_provider, available_providers

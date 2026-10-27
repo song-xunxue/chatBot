@@ -3,7 +3,6 @@ rest_system QQ 凭证管理单测(QQ 凭证面板化):
 GET 掩码(不返 secret 明文)/ PUT 写 Redis + 清 token + settings 更新 + 重建客户端 / 必填校验 /
 _apply_credential_overrides merge(Redis 覆盖 env)。
 
-作者: 李文煜
 日期: 2026-07-05
 """
 import json

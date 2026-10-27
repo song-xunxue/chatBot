@@ -2,7 +2,6 @@
 LLM Provider 注册表测试
 验证 get_provider 的实例化/key 注入/大小写/未知异常，available_providers 的有/无 key 分支
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

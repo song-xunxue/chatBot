@@ -2,7 +2,6 @@
 拟人化集成测试(2026-07-07):端到端验证 user_alias 自动学 + roleplay→long_term 抽取用别名。
 跨函数链路(chat_store→coordinator→persona_store / rest 端点→roleplay_extract→encoder),非单函数 mock。
 
-作者: 李文煜
 日期: 2026-07-07
 """
 from types import SimpleNamespace
@@ -34,13 +33,13 @@ async def test_on_turn_complete_learns_alias_e2e(fake_redis):
     链路:chat_store.append_message(写)→store.get_working_span(读 chat_history)→
     user_alias 正则→persona_store.set_persona(更新)。"""
     card = await _seed_persona(fake_redis)   # user_alias 空
-    await chat_store.append_message(fake_redis, "u1", sender="user", content="你可以叫我煜君")
+    await chat_store.append_message(fake_redis, "u1", sender="user", content="你可以叫我主人")
     # llm=None 使 extract/summarize 返回空;1 条消息 turn_count=0,episodic/extract 不触发,只跑自动学
     ctx = SimpleNamespace(object_id="u1", persona_card=card, created_ts=0, last_score=-1.0)
     coord = MemoryCoordinator(fake_redis, llm_provider=None)
     await coord.on_turn_complete(ctx)
     updated = await persona_store.get_persona(fake_redis, "ptest")
-    assert updated.user_alias == "煜君"
+    assert updated.user_alias == "主人"
 
 
 async def test_on_turn_complete_no_alias_no_change(fake_redis):
@@ -56,12 +55,12 @@ async def test_on_turn_complete_no_alias_no_change(fake_redis):
 
 async def test_extract_endpoint_uses_alias_e2e(fake_redis, make_provider, monkeypatch):
     """端到端:roleplay 抽取时 user_alias 传入 encoder prompt(记忆用拟人称呼)。
-    链路:seed persona(user_alias=煜君)→录 roleplay→POST extract 端点→
-    roleplay_extract 取 persona.user_alias→extract_facts_batch(label=煜君)→mock LLM 收到 prompt 含'煜君'。
-    验证:prompt 含'煜君' + long_term 写入 source=roleplay。"""
-    await _seed_persona(fake_redis, user_alias="煜君")
+    链路:seed persona(user_alias=主人)→录 roleplay→POST extract 端点→
+    roleplay_extract 取 persona.user_alias→extract_facts_batch(label=主人)→mock LLM 收到 prompt 含'主人'。
+    验证:prompt 含'主人' + long_term 写入 source=roleplay。"""
+    await _seed_persona(fake_redis, user_alias="主人")
     mock_llm = make_provider(
-        '[{"content":"煜君喜欢动漫","importance":0.8,"emotion":0.5,"category":"preference"}]')
+        '[{"content":"主人喜欢动漫","importance":0.8,"emotion":0.5,"category":"preference"}]')
     coord = MemoryCoordinator(fake_redis, llm_provider=mock_llm)
 
     async def _get_coord():
@@ -80,9 +79,9 @@ async def test_extract_endpoint_uses_alias_e2e(fake_redis, make_provider, monkey
                           headers={"X-Access-Token": "t-token"})
         assert r.status_code == 200
         assert r.json()["written"] == 1
-    # 验证 mock LLM 收到的 prompt 含"煜君"(user_alias 传到了 encoder prompt)
+    # 验证 mock LLM 收到的 prompt 含"主人"(user_alias 传到了 encoder prompt)
     prompt_text = mock_llm.last_messages[0].content
-    assert "煜君" in prompt_text
+    assert "主人" in prompt_text
     # 验证 long_term 写入 + source=roleplay
     items = await mem_store.get_all_long_term(fake_redis, "u1")
     assert any("动漫" in m.content and m.source == "roleplay" for m in items)

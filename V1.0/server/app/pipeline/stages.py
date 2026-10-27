@@ -4,7 +4,6 @@ M2 实现：load_history(取历史) / persona_inject(占位) / build_messages(�
          llm_stream(流式调 LLM) / save(存历史)
 占位（M3/M4 填）：人设系统化、记忆检索、插件钩子 —— 当前 persona_inject 用固定 prompt。
 
-作者: 李文煜
 日期: 2026-06-19
 
 2026-06-19

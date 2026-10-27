@@ -2,7 +2,6 @@
 ws.py 的 ai_done payload 构造测试：文本 / 富内容 rich / 状态 state.mood。
 _build_ai_done_payload 抽为模块级函数便于单测（客户端据此渲染图像/语音/心情）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

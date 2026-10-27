@@ -14,7 +14,6 @@
   GET    /mood/{object_id}/history    mood 历史曲线(近 N 点,旧→新正序)
   POST   /mood/{object_id}/calc       评分试算(score_base + mood → mood_bias 均值 + score)
 
-作者: 李文煜
 日期: 2026-06-30
 """
 from fastapi import APIRouter, Body, Depends, HTTPException, Query

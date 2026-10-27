@@ -7,7 +7,6 @@ V1.1 M9：扩展支持 profile/preferences/relationship/example_dialogue 新字�
   同时兼容 inner.profile.* 嵌套与 inner.age/gender/... 顶层扁平两种写法。
 对应 docs/09 §3.2、docs/10 §4。
 
-作者: 李文煜
 日期: 2026-06-23
 
 2026-06-23

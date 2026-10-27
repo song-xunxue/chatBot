@@ -3,7 +3,6 @@
 Star:所有 .star 插件基类,__init_subclass__ 自动注册到本地 registry。
 Context:V2.0 能力子集(redis/settings),StarLoader 实例化时注入。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 

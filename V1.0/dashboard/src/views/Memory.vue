@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
  * 记忆查看（V1.2 美化）：统计 + 类别筛选(预选) + 时间格式化 + 彩色类别标签 + 卡片式 + 手动遗忘。
- * 作者: 李文煜
  */
 import { ref, computed } from 'vue'
 import { NCard, NSpace, NInput, NButton, NStatistic, NGrid, NGi, NTag, NEmpty, NSelect, NPopconfirm, useMessage } from 'naive-ui'

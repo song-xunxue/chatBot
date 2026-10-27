@@ -3,7 +3,6 @@
 MemoryItem(长期)/ EpisodicEntry(情景摘要)/ CoreFact(核心)/
 RecallResult / ForgetConfig / Layer / Category。
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

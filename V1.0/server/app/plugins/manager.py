@@ -9,7 +9,6 @@
   按对象配置    mychat:plugin_cfg:{object_id}:{name}    = JSON({enabled, params})
 解析规则（is_enabled_for）：全局（总闸）关 → False；全局开 → 取按对象 enabled 位（未设置则 True）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

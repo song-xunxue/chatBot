@@ -4,7 +4,6 @@ core 层激活单测(2026-07-07 记忆优化阶段3):
 2. core 段排在 long_term 前(核心更靠前,权重高)
 3. _upsert_core_fact 写 core + 相同 content 去重
 
-作者: 李文煜
 日期: 2026-07-07
 """
 from memory.coordinator import MemoryCoordinator

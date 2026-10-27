@@ -3,7 +3,6 @@
 覆盖:send_proactive(落 proxy+下发)/record_manual_reply(直接落库+恒正样本+静默窗+心情;
 绝不下发 QQ)。原队列代答链(resolve/batch/skip/clear/drain)测试已随队列删减移除。
 
-作者: 李文煜
 日期: 2026-06-30
 
 2026-09-13

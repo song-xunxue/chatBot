@@ -3,7 +3,6 @@
  * 60s 轮询 GET /system/napcat-status,offline 时布局层红色横幅常驻——
  * 09-08~15 QQ 登录态失效静默丢 8 天数据的教训,面板必须一打开就能看到"消息正在丢失"。
  * 失败静默(未登录/token 失效不误报横幅)。
- * 作者: 李文煜
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getNapcatStatus } from '@/api'

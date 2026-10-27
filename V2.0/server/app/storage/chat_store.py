@@ -12,7 +12,6 @@ M2 实现:
   - roleplay 简化为独立 List(离散样本不需 block 分组,block 化留 M8)
   - set_score 预留(M3 评分系统调用,字段已在 append_message 留空)
 
-作者: 李文煜
 日期: 2026-06-27
 
 2026-06-27

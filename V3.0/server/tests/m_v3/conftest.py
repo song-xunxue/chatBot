@@ -1,7 +1,6 @@
 """
 V3.0 适配器/OneBot 测试公共夹具(仿 m4/conftest)。
 
-作者: 李文煜
 日期: 2026-08-16
 """
 import pytest

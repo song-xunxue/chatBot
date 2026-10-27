@@ -8,7 +8,6 @@ conhost 委派下会闪蓝窗;经 pythonw + CREATE_NO_WINDOW,子进程控制台�
   Execute   = C:\\Users\\26904\\anaconda3\\envs\\mychat\\pythonw.exe
   Arguments = "D:\\code\\Git_Local\\ChatBot\\scripts\\silent_run.pyw" "<目标.ps1>"
 
-作者: 李文煜
 日期: 2026-10-27
 """
 import subprocess

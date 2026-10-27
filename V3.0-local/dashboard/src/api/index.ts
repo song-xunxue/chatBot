@@ -1,0 +1,203 @@
+/**
+ * REST API 封装(V2.0 M7):人设 / 聊天历史 / 评分 / 心情 / 记忆 / 插件 / 系统 / 日记(dream) / 世界书(worldbook)。
+ * 对接 V2.0 服务端 rest_persona / rest_chat / rest_score / rest_mood / rest_memory / rest_plugin / rest_system。
+ * 鉴权由 client.ts 拦截器自动注入 X-Access-Token(Header)。
+ */
+import { api } from './client'
+
+// —— 人设 persona ——
+export const listPersonas = () => api.get('/api/v1/persona').then((r) => r.data)
+export const getPersona = (id: string) => api.get(`/api/v1/persona/${id}`).then((r) => r.data)
+export const updatePersona = (id: string, body: any) => api.put(`/api/v1/persona/${id}`, body).then((r) => r.data)
+export const exportPersona = (id: string) => api.get(`/api/v1/persona/${id}/export`).then((r) => r.data)
+export const bindPersonaModel = (id: string, body: any) =>
+  api.put(`/api/v1/persona/${id}/model`, body).then((r) => r.data)
+export const snapshotPersona = (id: string) => api.post(`/api/v1/persona/${id}/snapshot`).then((r) => r.data)
+export const rollbackPersona = (id: string, version_no: number) =>
+  api.post(`/api/v1/persona/${id}/rollback`, { version_no }).then((r) => r.data)
+
+// —— 聊天历史 chat(block 三层)——
+export const listSessions = (limit = 50) =>
+  api.get('/api/v1/chat/sessions', { params: { limit } }).then((r) => r.data)
+export const listRecentBlocks = (limit = 80) =>
+  api.get('/api/v1/chat/recent_blocks', { params: { limit } }).then((r) => r.data)
+export const listBlocks = (oid: string, limit = 100) =>
+  api.get(`/api/v1/chat/${oid}/blocks`, { params: { limit } }).then((r) => r.data)
+export const listMessages = (oid: string, params: { block_id?: string; limit?: number } = {}) =>
+  api.get(`/api/v1/chat/${oid}/messages`, { params }).then((r) => r.data)
+export const getMessage = (mid: string) => api.get(`/api/v1/chat/messages/${mid}`).then((r) => r.data)
+export const deleteMessage = (mid: string) =>
+  api.delete(`/api/v1/chat/messages/${mid}`).then((r) => r.data)
+export const closeBlock = (bid: string, reason = 'manual') =>
+  api.post(`/api/v1/chat/blocks/${bid}/close`, { reason }).then((r) => r.data)
+// 消息批注(2026-09-15:评分理由+暗含意思/习惯用语;任意 sender 含 user 消息;存 score_note)
+export const setMessageNote = (mid: string, note: string) =>
+  api.patch(`/api/v1/chat/messages/${mid}/note`, { note }).then((r) => r.data)
+export const deleteBlock = (bid: string) =>
+  api.delete(`/api/v1/chat/blocks/${bid}`).then((r) => r.data)
+export const clearHistory = (oid: string) =>
+  api.delete(`/api/v1/chat/${oid}/history`).then((r) => r.data)
+
+// —— 评分 score(M3 + M7 samples)——
+export const getScore = (mid: string) => api.get(`/api/v1/chat/messages/${mid}/score`).then((r) => r.data)
+export const setScore = (mid: string, score_base: number, score_note?: string,
+                         corrected?: string, corrected_score?: number) =>
+  api.patch(`/api/v1/chat/messages/${mid}/score`, { score_base, score_note, corrected, corrected_score })
+    .then((r) => r.data)
+export const getHealth = (oid: string, window = 0) =>
+  api.get(`/api/v1/chat/${oid}/health`, { params: { window } }).then((r) => r.data)
+export const getSamples = (oid: string, kind = 'negative') =>
+  api.get(`/api/v1/score/samples/${oid}`, { params: { kind } }).then((r) => r.data)
+export const reverseInferDryRun = (oid: string, body: any = {}) =>
+  api.post(`/api/v1/score/reverse_infer/${oid}/dry_run`, body).then((r) => r.data)
+export const reverseInferApply = (oid: string, token: string) =>
+  api.post(`/api/v1/score/reverse_infer/${oid}/apply`, { confirm_token: token }).then((r) => r.data)
+
+// —— 心情 mood ——
+export const getMood = (oid: string) => api.get(`/api/v1/mood/${oid}`).then((r) => r.data)
+export const setMood = (oid: string, mood: number) => api.put(`/api/v1/mood/${oid}`, { mood }).then((r) => r.data)
+export const getMoodHistory = (oid: string, limit = 100) =>
+  api.get(`/api/v1/mood/${oid}/history`, { params: { limit } }).then((r) => r.data)
+export const listMoodKinds = () => api.get('/api/v1/mood/kinds').then((r) => r.data)
+export const upsertMoodKind = (body: any) => api.post('/api/v1/mood/kinds', body).then((r) => r.data)
+export const putMoodKind = (key: string, body: any) => api.put(`/api/v1/mood/kinds/${key}`, body).then((r) => r.data)
+export const deleteMoodKind = (key: string) => api.delete(`/api/v1/mood/kinds/${key}`).then((r) => r.data)
+export const getMoodParams = () => api.get('/api/v1/mood/params').then((r) => r.data)
+export const setMoodParams = (body: any) => api.put('/api/v1/mood/params', body).then((r) => r.data)
+export const moodCalc = (oid: string, body: any) => api.post(`/api/v1/mood/${oid}/calc`, body).then((r) => r.data)
+
+// —— 日记 diary(2026-10-26 dream 插件:dream 插件出品的梦境/日记;列表/详情/立即补做)——
+// 列表与详情不需要 oid(全局唯一);run 为手动补做,oid 指定给哪个会话生成
+export const getDiaryList = (limit = 30) =>
+  api.get('/api/v1/diary/list', { params: { limit } }).then((r) => r.data)
+export const getDiary = (date: string) => api.get(`/api/v1/diary/${date}`).then((r) => r.data)
+export const runDiary = (body: { date?: string; object_id?: string }) =>
+  api.post('/api/v1/diary/run', body).then((r) => r.data)
+
+// —— 世界书 worldbook(2026-10-26:条目 CRUD + 统计 + 从记忆/日记重建自动条目)——
+// 全局维度,不依赖 oid;entries 支持 source/enabled/limit 过滤(空=不过滤)
+export const getWorldbookEntries = (params: { source?: string; enabled?: boolean; limit?: number } = {}) =>
+  api.get('/api/v1/worldbook/entries', { params }).then((r) => r.data)
+export const createWorldbookEntry = (body: {
+  title: string; content: string; keys: string[]; key_regex?: string;
+  secondary_keys?: string[]; mode: 'trigger' | 'always';
+  order?: number; position?: string; probability?: number; cooldown_minutes?: number;
+}) => api.post('/api/v1/worldbook/entries', body).then((r) => r.data)
+export const updateWorldbookEntry = (id: string, body: any) =>
+  api.put(`/api/v1/worldbook/entries/${id}`, body).then((r) => r.data)
+export const deleteWorldbookEntry = (id: string) =>
+  api.delete(`/api/v1/worldbook/entries/${id}`).then((r) => r.data)
+export const getWorldbookStats = () => api.get('/api/v1/worldbook/stats').then((r) => r.data)
+// 重建耗时 1-3s(从现有记忆/日记重建自动条目),返回 {created, disabled, oids}
+export const rebuildWorldbook = (body: any = {}) =>
+  api.post('/api/v1/worldbook/rebuild', body).then((r) => r.data)
+
+// —— 记忆 memory ——
+export const getMemory = (oid: string, layer = 'all', category = '', limit = 100) =>
+  api.get(`/api/v1/memory/${oid}`, { params: { layer, category, limit } }).then((r) => r.data)
+export const getMemoryStats = (oid: string) => api.get(`/api/v1/memory/${oid}/stats`).then((r) => r.data)
+export const forgetOneMemory = (oid: string, mid: string) =>
+  api.delete(`/api/v1/memory/${oid}/${mid}`).then((r) => r.data)
+export const restoreMemory = (oid: string, mid: string) =>
+  api.post(`/api/v1/memory/${oid}/${mid}/restore`).then((r) => r.data)
+export const lockMemory = (oid: string, mid: string, locked = true) =>
+  api.post(`/api/v1/memory/${oid}/${mid}/lock`, { locked }).then((r) => r.data)
+export const updateMemory = (oid: string, mid: string, body: {
+  content?: string; category?: string; importance?: number;
+  reason?: string; tags?: string[]; useful_score?: number; tier?: number;
+}) => api.patch(`/api/v1/memory/${oid}/${mid}`, body).then((r) => r.data)
+// 手动新增长期记忆(2026-08-13:由用户完善角色记忆,source=manual)
+export const createMemory = (oid: string, body: {
+  content: string; category?: string; importance?: number;
+  reason?: string; tags?: string[]; useful_score?: number; tier?: number; locked?: boolean;
+}) => api.post(`/api/v1/memory/${oid}`, body).then((r) => r.data)
+export const batchForgetMemory = (oid: string, body: any = {}) =>
+  api.post(`/api/v1/memory/${oid}/forget`, body).then((r) => r.data)
+
+// —— 插件 plugin(原生 + .star)——
+export const listPlugins = () => api.get('/api/v1/plugin').then((r) => r.data)
+export const getPlugin = (name: string) => api.get(`/api/v1/plugin/${name}`).then((r) => r.data)
+export const enablePlugin = (name: string) => api.post(`/api/v1/plugin/${name}/enable`).then((r) => r.data)
+export const disablePlugin = (name: string) => api.post(`/api/v1/plugin/${name}/disable`).then((r) => r.data)
+export const reloadPlugin = (name: string) => api.post(`/api/v1/plugin/${name}/reload`).then((r) => r.data)
+export const reloadStar = (name: string) => api.post(`/api/v1/plugin/star/${name}/reload`).then((r) => r.data)
+// 插件参数(M-tts 2026-08-04:面板 config_schema 表单读写;单人设 object_id=全局 oid)
+export const getPluginParams = (name: string, oid: string) =>
+  api.get(`/api/v1/plugin/${name}/params`, { params: { object_id: oid } }).then((r) => r.data)
+export const setPluginParams = (name: string, oid: string, params: Record<string, any>) =>
+  api.put(`/api/v1/plugin/${name}/params`, params, { params: { object_id: oid } }).then((r) => r.data)
+
+// —— TTS 音色预览(M-tts 2026-08-04:面板试听,返 mp3 blob → Audio.play)——
+export const previewTTS = (voice: string, text?: string) =>
+  api.post('/api/v1/tts/preview', { voice, text }, { responseType: 'blob' }).then((r) => r.data)
+
+// —— TTS 自定义音色(声音克隆,M-tts:上传音/视频→硅基流动 zero-shot 克隆→uri)——
+export const uploadVoice = (file: File, customName: string, text: string, startSec = 0, durSec = 0) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('customName', customName)
+  form.append('text', text)
+  form.append('start_sec', String(startSec))
+  form.append('dur_sec', String(durSec))
+  return api.post('/api/v1/tts/voice/upload', form).then((r) => r.data)
+}
+export const listVoices = () => api.get('/api/v1/tts/voice/list').then((r) => r.data)
+export const deleteVoice = (uri: string) => api.post('/api/v1/tts/voice/delete', { uri }).then((r) => r.data)
+export const getActiveVoice = (oid: string) =>
+  api.get('/api/v1/tts/voice/active', { params: { object_id: oid } }).then((r) => r.data)
+export const setActiveVoice = (oid: string, uri: string | null) =>
+  api.put('/api/v1/tts/voice/active', { uri }).then((r) => r.data)
+
+// —— GPT-SoVITS 就绪状态(M-tts-2,2026-08-10:心跳缓存优先;展开懒检测+轮询)——
+// force=true 跳心跳强探(手动「重新检测」);probe=false 只读心跳不探测(折叠态/轮询,零 frp 开销)
+export const getGPTSoVITSStatus = (force = false, probe = true) =>
+  api.get('/api/v1/tts/gptsovits/status', { params: { force, probe } }).then((r) => r.data)
+
+// —— 系统 system ——
+export const getSystemConfig = () => api.get('/api/v1/system/config').then((r) => r.data)
+export const reloadSystem = () => api.post('/api/v1/system/reload').then((r) => r.data)
+export const resetAllData = () =>
+  api.post('/api/v1/system/reset', { confirm: '清空' }).then((r) => r.data)
+// NapCat 掉线监控状态(2026-09-15:布局层 60s 轮询,offline 红色横幅"消息正在丢失")
+export const getNapcatStatus = () => api.get('/api/v1/system/napcat-status').then((r) => r.data)
+
+// —— 训练前置工具(2026-09-12:人设盲测基准 / 训练数据导出)——
+export const benchmarkPersona = (oid: string, body: { provider_a: string; provider_b: string; n?: number }) =>
+  api.post(`/api/v1/training/${oid}/benchmark`, body).then((r) => r.data)
+export const exportTraining = (oid: string, body: { min_score?: number } = {}) =>
+  api.post(`/api/v1/training/${oid}/export`, body).then((r) => r.data)
+
+// —— 对话控制 takeover(2026-09-13 队列删减:AI 静默开关+主动发送)——
+export const toggleTakeover = (oid: string, enabled: boolean) =>
+  api.post(`/api/v1/takeover/${oid}/toggle`, { enabled }).then((r) => r.data)
+export const getTakeoverStatus = (oid: string) =>
+  api.get(`/api/v1/takeover/${oid}/status`).then((r) => r.data)
+export const sendTakeover = (oid: string, content: string) =>
+  api.post(`/api/v1/takeover/${oid}/send`, { content }).then((r) => r.data)
+// 代答 TTS 开关(M-tts 2026-08-04:两开关 enable/send_text_also;voice 参数复用 tts_reply 插件 config)
+export const getTakeoverTTSConfig = (oid: string) =>
+  api.get(`/api/v1/takeover/${oid}/tts_config`).then((r) => r.data)
+export const setTakeoverTTSConfig = (oid: string, enable: boolean, send_text_also: boolean) =>
+  api.put(`/api/v1/takeover/${oid}/tts_config`, { enable, send_text_also }).then((r) => r.data)
+
+// —— roleplay 训练样本(M8 + 2026-07-05 多会话+评分)——
+export const listRoleplaySessions = (oid: string) =>
+  api.get(`/api/v1/roleplay/${oid}/sessions`).then((r) => r.data)
+export const newRoleplaySession = (oid: string) =>
+  api.post(`/api/v1/roleplay/${oid}/sessions`).then((r) => r.data)
+export const deleteRoleplaySession = (blockId: string) =>
+  api.delete(`/api/v1/roleplay/blocks/${blockId}`).then((r) => r.data)
+export const addRoleplay = (oid: string, body: { role: string; content: string; score_base?: number }) =>
+  api.post(`/api/v1/roleplay/${oid}/messages`, body).then((r) => r.data)
+export const addRoleplayBatch = (oid: string, items: { role: string; content: string; score_base?: number }[]) =>
+  api.post(`/api/v1/roleplay/${oid}/messages/batch`, { items }).then((r) => r.data)
+export const listRoleplay = (oid: string, params: { block_id?: string; limit?: number } = {}) =>
+  api.get(`/api/v1/roleplay/${oid}/messages`, { params }).then((r) => r.data)
+export const updateRoleplay = (oid: string, mid: string, content: string) =>
+  api.put(`/api/v1/roleplay/${oid}/messages/${mid}`, { content }).then((r) => r.data)
+export const setRoleplayScore = (oid: string, mid: string, score_base: number) =>
+  api.patch(`/api/v1/roleplay/${oid}/messages/${mid}/score`, { score_base }).then((r) => r.data)
+export const deleteRoleplay = (oid: string, mid: string) =>
+  api.delete(`/api/v1/roleplay/${oid}/messages/${mid}`).then((r) => r.data)
+export const extractRoleplay = (oid: string, blockId?: string) =>
+  api.post(`/api/v1/roleplay/${oid}/extract`, blockId ? { block_id: blockId } : {}).then((r) => r.data)

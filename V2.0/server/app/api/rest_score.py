@@ -10,7 +10,6 @@
   POST  /score/reverse_infer/{object_id}/dry_run 反推预览(返回 diff + confirm_token)
   POST  /score/reverse_infer/{object_id}/apply   反推落库(凭 confirm_token)
 
-作者: 李文煜
 日期: 2026-06-28
 
 2026-06-28

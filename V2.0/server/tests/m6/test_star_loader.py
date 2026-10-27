@@ -3,7 +3,6 @@ StarLoader 单测:加载 mock .star 插件 → Star 实例化(initialize)→ @co
 ON_MESSAGE_IN(匹配触发+STOP)、@on_llm_request 适配 ON_BEFORE_LLM(改 prompt)、
 @llm_tool 注册 ToolRegistry(execute 调原 handler)。加载失败隔离。
 
-作者: 李文煜
 日期: 2026-06-28
 """
 from pipeline.context import MessageContext

@@ -1,6 +1,5 @@
 /**
  * 路由 + access_token 鉴权守卫
- * 作者: 李文煜
  */
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 

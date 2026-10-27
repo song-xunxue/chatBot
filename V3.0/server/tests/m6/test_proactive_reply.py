@@ -4,7 +4,6 @@ proactive_reply 插件单测
 on_tick 全链(命中发送+记状态/各门拦截/自然日切换计数归零/软失败不外抛/use_tts 透传);
 generate_opener 组装口径(人设渲染+mood hint+契约压轴+最近对话+指令);plugin.yaml 默认关闭。
 
-作者: 李文煜
 日期: 2026-10-25
 
 2026-10-25

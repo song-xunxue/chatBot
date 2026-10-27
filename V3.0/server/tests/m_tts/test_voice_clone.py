@@ -3,7 +3,6 @@
 覆盖:resolve_voice(克隆 uri 优先/回退预设)+ preview 放开克隆 uri 白名单 + 活跃音色 get/set 端点
 + upload(音频,mock 硅基流动)+ list(代理)。视频提取(_extract_audio_clip)依赖 ffmpeg,部署后人工验证。
 
-作者: 李文煜
 日期: 2026-08-04
 """
 import io

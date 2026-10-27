@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
  * 人设管理：列表 / 新建 / 编辑 / 删除 / 导入 persona_*.json（rest_persona）
- * 作者: 李文煜
  */
 import { ref, h, onMounted } from 'vue'
 import {

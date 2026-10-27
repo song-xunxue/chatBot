@@ -2,7 +2,6 @@
 记忆编辑单测(2026-07-06):store.update_long_term + rest PATCH /memory/{oid}/{mid}。
 手动修正错误记忆(如人称混淆)。store 层直传 fake_redis;rest 层 httpx ASGITransport。
 
-作者: 李文煜
 日期: 2026-07-06
 """
 import pytest

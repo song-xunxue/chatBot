@@ -3,7 +3,6 @@
 对应 M7 面板的 Model / History / Roleplay 页面；Roleplay 页消费 M4.4 persona_evolve 提案，
 闭合"人格反推→人工确认"环（提案不自动改写人设）。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

@@ -4,7 +4,6 @@
 - ASR：OpenAI-Whisper 兼容 /audio/transcriptions（multipart 上传音频）
 均复用 settings.siliconflow_api_key，base_url 与 llm/siliconflow 一致。
 
-作者: 李文煜
 日期: 2026-06-24
 
 2026-06-24

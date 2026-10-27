@@ -25,7 +25,6 @@ V1.0 用扁平 List(mychat:chat:{oid}),V2.0 用 block 三层(会话→blocks→m
 说明:V2.0 默认部署用独立新 redis(mychat-redis-v2),无 V1.0 数据需迁,故通常无需运行本脚本。
       仅当要保留 V1.0 旧对话历史时,把 --v1-redis 指向旧 redis(V1.0 的 mychat-redis)执行。
 
-作者: 李文煜
 日期: 2026-07-01
 """
 import argparse

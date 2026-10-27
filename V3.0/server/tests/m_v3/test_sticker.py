@@ -5,7 +5,6 @@
 2. adapter/onebot send_text:token → image 段(base64)、未匹配保留字面、纯文本不受影响
 3. 批注:chat_store.set_note + REST PATCH /chat/messages/{mid}/note(含 user 消息)
 
-作者: 李文煜
 日期: 2026-09-15
 """
 import base64
