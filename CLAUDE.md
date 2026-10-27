@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 这是一个 **Python 聊天机器人项目**（V1.0 已归档 / V2.0 已下线 / V3.0 在用真实聊天记录攒数据做个人风格微调；**V3.0/ 目录已冻结，现行演进在 `V3.0-local/`（清浔）与 `Vdafeiyu/`（大肥鱼）两个本地栈**）。PyCharm/IntelliJ 模块名为 `Mychat`（见 `.idea/Mychat.iml`，类型 `PYTHON_MODULE`）。
 
-`D:\code\Git_Local\ChatBot` **就是 git 仓库根**（父目录 `D:\code\Git_Local` 只是各项目克隆的父目录，本身不是仓库）：当前分支 `v3.0`（V3.0 冻结基线与后续工作在此，无上游），`v2.0` 为 V2.0 线上存档分支（跟踪 `github/v2.0`，同点 8b595bc），双远程 `origin`=Gitee、`github`=GitHub。`V3.0-local/`、`Vdafeiyu/`、`.local/` 均在 .gitignore 内不入库。
+`D:\code\Git_Local\ChatBot` **就是 git 仓库根**（父目录 `D:\code\Git_Local` 只是各项目克隆的父目录，本身不是仓库）：工作分支 `v3.0`（V3.0 冻结基线+双栈共用件+文档；跟踪 `origin/v3.0`），`v2.0` 为 V2.0 线上存档分支，双远程 `origin`=Gitee、`github`=GitHub（**「推送/更新 git」默认双平台都要，先 origin 后 github**）。**2026-10-27 起两栈分支化入库**：`v3.0-local`=清浔栈整树（696 测基线）、`vdafeiyu`=大肥鱼栈整树（603 测，dist 例外收入）；两栈目录在 v3.0 工作区仍是 ignored 状态（物理文件不动，栈分支用 plumbing 建勿 checkout）；`.local/`（QQ 登录态）绝不入库，`.env`/`server/data/`（聊天数据）/`.data/`（redis 快照）/`logs/` 在任何分支都不入库。
 
 构建本项目时，参考实现为 **AstrBot**（见根目录 `Reference` 文件）：
 
