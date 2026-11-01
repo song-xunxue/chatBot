@@ -3,14 +3,19 @@
 # 变更日志：
 #   2026-10-27 首版:禁 DafeiyuStackWatchdog/NapCat-Watchdog(否则 2-5 分钟自动复活)→
 #               精确杀大肥鱼 NapCat 链 → 杀 8081 → 杀 6380;配套 start-dafeiyu.ps1 会重新启用看护
+#   2026-11-01 改:①QQ 主进程先优雅关闭(taskkill 无 /F 走 WM_CLOSE 登录态保留)12s 仍活
+#               才强杀兜底(node/宿主等辅助进程不持登录态,仍直接强杀);②redis 改先
+#               shutdown save 优雅落盘再兜底强杀(防丢未快照数据);③start 脚本已按
+#               用户立规(两栈不自启动)删除 Enable 看护段,本脚本禁用行为保持不变
 # 注意：6380 若是早前在终端前台跑的那只 redis,杀掉后窗口留空(已隐藏无感);下次启动由
-#       watch-stack 无窗拉起,顺带完成迁移
+#       启动器无窗拉起
 $Root = 'D:\code\Git_Local\ChatBot'
 . (Join-Path $Root 'scripts\launcher-common.ps1')
 
 $Log   = Join-Path $Root 'Vdafeiyu\logs\stop.log'
 $NapDir = 'C:\Users\26904\.dsh\napcat-dafeiyu\app\napcat'
 $QQ     = '3682822273'
+$RedisCli = 'C:\Users\26904\.dsh\runtime\redis8\Redis-8.10.2-Windows-x64-msys2\redis-cli.exe'
 
 $mtx = Enter-StackLock 'Dafeiyu'
 if (-not $mtx) { Write-SvcLog $Log 'lock' '其它大肥鱼启动/关闭器正在运行,本实例退出'; exit 0 }
@@ -26,29 +31,56 @@ try {
         } catch { Write-SvcLog $Log 'task' "禁用 $task 失败(可能不存在): $($_.Exception.Message)" }
     }
 
-    # 2.杀大肥鱼 NapCat 链(精确匹配:QQ 带 -q 号 / NapCatWinBootMain·node 含目录;taskkill /T 连子进程)
-    $alive = Get-NapcatProcs $NapDir $QQ
-    foreach ($t in $alive) {
-        Write-SvcLog $Log 'kill' ("清理 {0} PID={1}" -f $t.Name, $t.ProcessId)
+    # 2.停大肥鱼 NapCat 链(精确匹配:QQ 带 -q 号 / NapCatWinBootMain·node 含目录)
+    # 2026-11-01 改:QQ 主进程先优雅(taskkill 无 /F=WM_CLOSE,登录态保留)12s 仍活才强杀兜底;
+    #               node/宿主等辅助进程不持登录态,维持直接强杀
+    $alive = @(Get-NapcatProcs $NapDir $QQ)
+    $qqProcs  = @($alive | Where-Object { $_.Name -eq 'QQ.exe' })
+    $auxProcs = @($alive | Where-Object { $_.Name -ne 'QQ.exe' })
+    foreach ($t in $auxProcs) {
+        Write-SvcLog $Log 'kill' ("清理辅助进程 {0} PID={1}" -f $t.Name, $t.ProcessId)
         taskkill /PID $t.ProcessId /T /F 2>&1 | Out-Null
     }
-    if (-not $alive) { Write-SvcLog $Log 'kill' '无 NapCat 进程' }
-
-    # 3.按端口杀 server 8081 与 redis 6380(监听者即目标,不误伤)
-    foreach ($pair in @(@(8081, 'server'), @(6380, 'redis'))) {
-        $port, $tag = $pair
-        $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-        $killed = $false
-        foreach ($c in $conns) {
-            $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
-            if ($p) {
-                Write-SvcLog $Log 'kill' ("清理 $tag PID=" + $p.Id)
-                taskkill /PID $p.Id /T /F 2>&1 | Out-Null
-                $killed = $true
-            }
-        }
-        if (-not $killed) { Write-SvcLog $Log 'kill' "$tag($port) 未在监听" }
+    foreach ($t in $qqProcs) {
+        Write-SvcLog $Log 'kill' ("优雅关闭 QQ PID={0}(等 12s,登录态保留)" -f $t.ProcessId)
+        taskkill /PID $t.ProcessId 2>&1 | Out-Null
     }
+    foreach ($t in $qqProcs) {
+        if (Get-Process -Id $t.ProcessId -ErrorAction SilentlyContinue) {
+            Write-SvcLog $Log 'kill' ("QQ 优雅未退出,强杀兜底 PID={0}" -f $t.ProcessId)
+            taskkill /PID $t.ProcessId /T /F 2>&1 | Out-Null
+        }
+    }
+    if (-not $alive) { Write-SvcLog $Log 'kill' '无 NapCat 进程' }
+    Start-Sleep -Seconds 2
+
+    # 3.停 server 8081 与 redis 6380(2026-11-01 改:redis 先 shutdown save 优雅落盘,失败再强杀兜底)
+    $conns = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue
+    $killed = $false
+    foreach ($c in $conns) {
+        $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+        if ($p) {
+            Write-SvcLog $Log 'kill' ("清理 server PID=" + $p.Id)
+            taskkill /PID $p.Id /T /F 2>&1 | Out-Null
+            $killed = $true
+        }
+    }
+    if (-not $killed) { Write-SvcLog $Log 'kill' "server(8081) 未在监听" }
+
+    & $RedisCli -p 6380 shutdown save 2>&1 | Out-Null
+    Write-SvcLog $Log 'kill' 'redis 已发 shutdown save(优雅落盘)'
+    Start-Sleep -Seconds 3
+    $conns = Get-NetTCPConnection -LocalPort 6380 -State Listen -ErrorAction SilentlyContinue
+    $killed = $false
+    foreach ($c in $conns) {
+        $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+        if ($p) {
+            Write-SvcLog $Log 'kill' ("redis 未响应优雅关闭,强杀兜底 PID=" + $p.Id)
+            taskkill /PID $p.Id /T /F 2>&1 | Out-Null
+            $killed = $true
+        }
+    }
+    if (-not $killed) { Write-SvcLog $Log 'kill' "redis(6380) 已优雅停止或未在监听" }
 
     Start-Sleep -Seconds 5
     $left = @()

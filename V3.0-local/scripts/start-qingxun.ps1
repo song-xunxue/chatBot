@@ -3,6 +3,8 @@
 # 变更日志：
 #   2026-10-26 首版：Start-Process -WindowStyle Hidden（不经 cmd / vbs / WMI）；幂等；可选 TTS
 #   2026-10-26 修：参数改成一整行、路径显式加引号（QQ 路径含空格被拆开过）
+#   2026-11-01 改：①删除"0.5 恢复看护任务"段（用户立规两栈不自启动，启动器不再 Enable 计划任务）；
+#               ②尾部新增自检汇总（redis PING/server+onebot/NapCat WebUI/Ollama/TTS 逐项核验）
 # 用法：
 #   双击桌面「chatbot 启动器」，可重复执行。要带语音就加 -WithTts。
 # 日志：
@@ -36,10 +38,8 @@ if (-not $mtx) {
 }
 try {
 
-# 0.5 恢复看护任务(2026-10-27 加:关闭器 stop-qingxun.ps1 会禁用它们,启动时配套恢复)
-foreach ($task in @('ChatBotLocalServer', 'ChatBotLocalWatchdog')) {
-    try { Enable-ScheduledTask -TaskName $task -ErrorAction Stop | Out-Null } catch {}
-}
+# 0.5 看护任务恢复段已删(2026-11-01 用户立规:两栈不自启动,启动器不得 Enable 计划任务;
+#     手动启动即本次拉起,不挂看护。要临时恢复看护请手动 Enable-ScheduledTask)
 
 # 1.Redis 6390
 if (Test-SvcPort 6390) {
@@ -138,6 +138,19 @@ if (-not $online) {
     }
     exit 2
 }
+
+# 6.自检汇总(2026-11-01 加:启动后逐组件核验,缺哪个一目了然;可选组件只提示不阻塞)
+Write-SvcLog $LogPath 'check' '--- 自检汇总 ---'
+$pong = (& $RedisCli -p 6390 ping 2>$null) -join ''
+Write-SvcLog $LogPath 'check' $(if ($pong -match 'PONG') { 'redis 6390    : OK' } else { 'redis 6390    : FAIL(未通)' })
+try {
+    $h = (Invoke-WebRequest 'http://127.0.0.1:8091/health' -UseBasicParsing -TimeoutSec 3).Content
+    if ($h -match '"onebot_connected":\s*true') { Write-SvcLog $LogPath 'check' 'server 8091   : OK(onebot 已连)' }
+    else { Write-SvcLog $LogPath 'check' 'server 8091   : 服务在但 onebot 未连' }
+} catch { Write-SvcLog $LogPath 'check' 'server 8091   : FAIL(未响应)' }
+Write-SvcLog $LogPath 'check' $(if (Test-SvcPort 6099) { 'NapCat 6099   : OK' } else { 'NapCat 6099   : FAIL' })
+Write-SvcLog $LogPath 'check' $(if (Test-SvcPort 11434) { 'Ollama 11434  : OK' } else { 'Ollama 11434  : 未启动(需要本地 LLM 时手动起)' })
+Write-SvcLog $LogPath 'check' $(if (Test-SvcPort 9880) { 'TTS 9880      : OK' } else { 'TTS 9880      : 未启动(需要语音时 -WithTts 或手动起)' })
 Write-SvcLog $LogPath 'done' '=== V3.0-local 全部就绪 ==='
 exit 0
 }

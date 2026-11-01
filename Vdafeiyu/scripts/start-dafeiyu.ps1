@@ -3,6 +3,8 @@
 # 变更日志：
 #   2026-10-26 首版：Start-Process -WindowStyle Hidden（不经 cmd / vbs / WMI）；幂等；防 fakeredis
 #   2026-10-26 修：参数改成一整行、路径显式加引号（QQ 路径含空格被拆开过）
+#   2026-11-01 改：①删除"0.5 恢复看护任务"段（用户立规两栈不自启动，启动器不再 Enable 计划任务）；
+#               ②尾部新增自检汇总（redis PING/server+onebot/NapCat HTTP 3000 逐项核验）
 # 用法：
 #   双击桌面「大肥鱼 启动器」，可重复执行。
 # 日志：
@@ -35,10 +37,8 @@ if (-not $mtx) {
 }
 try {
 
-# 0.5 恢复看护任务(2026-10-27 加:关闭器 stop-dafeiyu.ps1 会禁用它们,启动时配套恢复)
-foreach ($task in @('DafeiyuStackWatchdog', 'NapCat-Watchdog')) {
-    try { Enable-ScheduledTask -TaskName $task -ErrorAction Stop | Out-Null } catch {}
-}
+# 0.5 看护任务恢复段已删(2026-11-01 用户立规:两栈不自启动,启动器不得 Enable 计划任务;
+#     手动启动即本次拉起,不挂看护。要临时恢复看护请手动 Enable-ScheduledTask)
 
 # 1.Redis 6380
 if (Test-SvcPort 6380) {
@@ -107,6 +107,17 @@ if (-not $online) {
     }
     exit 2
 }
+
+# 5.自检汇总(2026-11-01 加:启动后逐组件核验,缺哪个一目了然)
+Write-SvcLog $LogPath 'check' '--- 自检汇总 ---'
+$pong = (& $RedisCli -p 6380 ping 2>$null) -join ''
+Write-SvcLog $LogPath 'check' $(if ($pong -match 'PONG') { 'redis 6380    : OK' } else { 'redis 6380    : FAIL(未通)' })
+try {
+    $h = (Invoke-WebRequest 'http://127.0.0.1:8081/health' -UseBasicParsing -TimeoutSec 3).Content
+    if ($h -match '"onebot_connected":\s*true') { Write-SvcLog $LogPath 'check' 'server 8081   : OK(onebot 已连)' }
+    else { Write-SvcLog $LogPath 'check' 'server 8081   : 服务在但 onebot 未连' }
+} catch { Write-SvcLog $LogPath 'check' 'server 8081   : FAIL(未响应)' }
+Write-SvcLog $LogPath 'check' $(if (Test-SvcPort 3000) { 'NapCat 3000   : OK' } else { 'NapCat 3000   : FAIL(HTTP 未监听)' })
 Write-SvcLog $LogPath 'done' '=== 大肥鱼 全部就绪 ==='
 exit 0
 }

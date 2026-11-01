@@ -50,8 +50,12 @@
 
 ---
 
-## 3. 当前状态快照（2026-10-27 更新，动手前先核实）
+## 3. 当前状态快照（2026-11-01 更新，动手前先核实）
 
+- **⚠️ 自启动已全部禁用（2026-11-01 用户立规）**：4 计划任务（ChatBotLocalServer/ChatBotLocalWatchdog/NapCat-Watchdog/DafeiyuStackWatchdog）全部 Disabled + 启动文件夹 NapCat-Dafeiyu.lnk 已删 + **start 脚本的「恢复看护任务」段已删**（此前 stop 禁用后 start 会重新 Enable=变相自启）。**重启后两栈不自启、无看护兜底**，手动走桌面启动器；stop 脚本禁用行为保留（防复活）。
+- **watch.py 断线自愈（2026-11-01 双栈同步新增）**：起因=大肥鱼 10-27 17:52 WS 断线**静默 5 天**（QQ 进程活而 NapCat WS 客户端死亡，keepalive 门控误判「待扫码」不动作，1358 次告警无人自愈）。现 `check_once` 检测 WS 断线持续 ≥300s → 跑各栈 `scripts/heal-napcat.ps1`（优雅关 QQ→**绝不强杀**守登录态→幂等启动器拉起快速登录→确认 onebot 重连），600s 退避、3 次上限后升级 ERROR 等人工；login 形态（须扫码）不插手。配置 `napcat_heal_*`（config.py §18.1，.env 可关）。**坑：CheckLoginStatus 对 QQNT 自动快速登录返 isLogin=False 但 loginError=「已登录」= 实际在线**（`_interpret_login_status` 已修正，否则面板挂假红幅）；NapCat WebUI OB11Config API 对自动登录形态返 Not Login 不可用。自愈实战待自然验证。
+- **proactive 对话结束状态感知（2026-11-01 双栈同步）**：`Message` 加 `ts` 字段（get_history 透传）→ `generate_opener` 沉默 ≥2h 注入 `[对话状态]` 块（时长/末条归属/禁责问规矩）+ 指令常驻「严禁质问或抱怨对方不回复」「优先延续上面最后聊到的话题」——解「几天不回→你为什么不回我」责问式开场白。登录瞬间离线消息批次竞态丢失（NapCat 内部）无法根治，ws_client 4 处静默 return 已补诊断日志。
+- **测试基线更新（2026-11-01）**：V3.0-local **708 测全绿**（696+7 heal+5 状态感知）、Vdafeiyu **616 测全绿**（603+12 同批+1 rest_plugin schema 同步）；`rest_plugin.py` 的 `_validate_params`（10-26 只进清浔的预期外差异）已同步大肥鱼；大肥鱼 .env 补 LOCAL_LLM_*3 键 + NAPCAT_WEBUI_*2 键 + NAPCAT_HEAL_SCRIPT（清浔补 3 键）；大肥鱼 proactive 已 SET plugin_cfg llm_provider=deepseek（曾因缺配置 208 次 UnsupportedProtocol 软失败）。双栈 server 已重启生效，napcat-status 双绿。
 - **⚠️ 双栈同步铁律（2026-10-27 用户立规，所有 AI 遵守）**：V3.0-local与大肥鱼（Vdafeiyu）**共架构处（server 核心、共有插件、launcher/看护脚本、共用公共件 `scripts/launcher-common.ps1`）的任何改动必须双向同步落地，只改一栈视为未完成**；单栈专属功能（V3.0-local 的 dream/worldbook、Vdafeiyu 的人设/dist）免同步；汇报须注明「两栈已同步」或「单栈专属」。
 - **两条技术线与分支结构（2026-10-27 定名；同日傍晚整合为单一活动分支）**：**唯一活动分支 `v3.0`** = V3.0 冻结基线 + 双栈整树（`V3.0-local/`=**local 版**全功能演进栈 696 测；`Vdafeiyu/`=**大肥鱼特化版** 603 测，dashboard/dist 无源码系唯一面板资产例外入库）+ 共用件 + 文档，**与本地工作区一一镜像**（此前的 `v3.0-local`/`vdafeiyu` 独立栈分支已删除合并）；`master`/`v2.0`/`dev/v1.1` 为历史存档分支，仓库默认分支已切 `v3.0`。**「推送/更新 git」默认=Gitee 先+GitHub 后双平台**；git 提交不加 Co-Authored-By 尾注。**大肥鱼线下一步主线：与 DSH 体系对接（未完成；dsh-qq-bridge 配置在 `C:\Users\26904\.dsh\qq-bridge-config.json`，当前总开关 false）**。
 - **⚠️ 隐私红线（2026-10-27 用户立规，所有 AI 遵守）**：仓库任何内容**不出现真实姓名、人设角色的本名及其变体（含主号昵称）、人设对用户的专属称谓**（存量已全量清除，测试 fixture 用 角色/主人/小明 等中性词；面板品牌=「chatbotV3.0 管理面板」/「大肥鱼 管理面板」）；`.env`/`server/data/`（聊天·人设·金样本）/`.data/`（redis 快照）/`logs/`/`node_modules/`/`.local/`（QQ 登录态）任何分支不入库。
