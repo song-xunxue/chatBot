@@ -216,6 +216,15 @@ class Settings(BaseSettings):
     napcat_webui_base: str = ""         # NapCat WebUI 地址(如 http://host.docker.internal:6080)
     napcat_webui_token: str = ""        # WebUI token(空=跳过 QQ 登录态探测,仅监控 WS 连接态)
 
+    # 18.1 NapCat 断线自愈(2026-11-01):大肥鱼 10-27 17:52 WS 断线静默 5 天的教训——QQ 进程
+    #    活着但 NapCat WS 客户端死亡,外部看护门控误判"待扫码"不动作。server 侧按断线时长
+    #    主动治愈:跑自愈脚本(优雅关 QQ→绝不强杀守登录态→幂等启动器拉起→快速登录重连)。
+    napcat_heal_enable: bool = True     # 自愈总开关(仅 WS 断线形态;QQ 登录态失效须扫码不归它管)
+    napcat_heal_first_delay_sec: int = 300   # 断线持续多久后首次自愈(秒;给 NapCat 自身重连留窗口)
+    napcat_heal_retry_interval_sec: int = 600  # 相邻两次自愈尝试的最小间隔(秒,退避防打桩)
+    napcat_heal_max_attempts: int = 3   # 单个离线周期最多自愈次数(超过=升级 ERROR 告警等人工)
+    napcat_heal_script: str = ""        # 自愈脚本绝对路径(scripts/heal-napcat.ps1;空=禁用自愈)
+
 
 # 全局配置单例
 settings = Settings()

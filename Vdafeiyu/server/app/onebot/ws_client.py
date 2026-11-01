@@ -267,6 +267,9 @@ async def _handle_event(data: dict) -> None:
     2026-09-07:message_sent(自身发送上报,reportSelfMessage 开启后)单独分流。"""
     sid = str(data.get("self_id", ""))
     if settings.onebot_self_id and sid != settings.onebot_self_id:
+        # 2026-11-01 补日志(排查诊断):原静默 return——"你发消息没回"类问题曾无从区分
+        # 是消息没到达还是被这里吞掉(大肥鱼 5 天断线取证时踩过)
+        logger.info("onebot 事件忽略(非接管号) sid=%s pt=%s", sid, data.get("post_type"))
         return   # 非接管号(双号场景另一号连入),忽略
     pt = data.get("post_type")
     if pt == "meta_event":
@@ -275,13 +278,20 @@ async def _handle_event(data: dict) -> None:
         return
     if pt == "message_sent":
         if data.get("message_type") != "private":
+            logger.info("onebot 事件忽略(message_sent 非私聊) message_type=%s",
+                        data.get("message_type"))
             return   # 自己发的群聊消息,不在私聊代答场景
         await _handle_manual_sent(data)
         return
     if pt != "message" or data.get("message_type") != "private":
+        # 2026-11-01 补日志:非私聊/异常消息类型静默丢弃曾是盲区——NapCat 版本间
+        # 上报字段差异(如 message_type 缺失)会导致全量丢消息且零痕迹
+        logger.info("onebot 事件忽略(非私聊消息) pt=%s message_type=%s",
+                    pt, data.get("message_type"))
         return   # 只处理私聊(与 V2.0 webhook 场景一致)
     user_id = str(data.get("user_id", ""))
     if not user_id:
+        logger.info("onebot 事件忽略(缺 user_id) pt=%s", pt)
         return
     text, media = _extract_content(data)
     msg_id = str(data.get("message_id", ""))
