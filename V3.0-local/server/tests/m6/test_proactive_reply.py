@@ -16,6 +16,12 @@ generate_opener 组装口径(人设渲染+mood hint+契约压轴+最近对话+�
 变更说明：
   1. 晚安事故修复配套:is_farewell 纯函数/on_tick 道别静默+再开口解除+farewell_aware
      可关/指令含禁编造约束 断言;manifest 增 farewell_aware 键校验
+
+2026-11-01
+变更说明：
+  1. 对话结束状态感知配套(双栈同步):get_history 带 ts 的 Message → generate_opener
+     沉默 2h+ 注入[对话状态]块(小时/天级+末条归属+禁责问规矩)/沉默 <2h 或无 ts 不注入/
+     指令常驻约束(禁责问+优先延续话题)断言
 """
 from datetime import datetime
 from pathlib import Path
@@ -519,3 +525,76 @@ def test_manifest_default_disabled_and_hooks():
     for key in ("quiet_hours", "daily_max", "min_gap_minutes", "idle_minutes",
                 "prob", "use_tts", "llm_provider", "farewell_aware"):
         assert key in m.config_schema, key
+
+
+# ================ 对话结束状态感知(2026-11-01,双栈同步) ================
+
+def _patch_history_with_ts(monkeypatch, msgs):
+    """替换 get_history 返回指定消息列表(状态感知测试专用;ts 毫秒)"""
+    async def fake_history(redis, oid, *, max_blocks=None, max_messages=None):
+        return msgs
+    monkeypatch.setattr(proactive.chat_store, "get_history", fake_history)
+
+
+def _ms_ago(seconds):
+    """距 _now() 秒数对应的毫秒时间戳(与插件同口径的 naive datetime)"""
+    return int(proactive._now().timestamp() * 1000) - int(seconds * 1000)
+
+
+async def _gen_with(monkeypatch, history):
+    """公共链路:注入依赖+历史 → 跑 generate_opener → 返回 (provider, 开场白)"""
+    _patch_gen_deps(monkeypatch)
+    _patch_history_with_ts(monkeypatch, history)
+    provider = _FakeProvider()
+    monkeypatch.setattr(proactive, "resolve_provider", lambda task, override="": provider)
+    text = await generate_opener(None, "10001", "local")
+    return provider, text
+
+
+async def test_opener_state_line_after_hours(monkeypatch):
+    """沉默 3h 且末条是 bot 自己 → 注入[对话状态]块(小时级+归属你+禁责问规矩+延续引导)"""
+    provider, _ = await _gen_with(monkeypatch, [
+        Message(role="user", content="早上好", ts=_ms_ago(3 * 3600 + 60)),
+        Message(role="assistant", content="早呀", ts=_ms_ago(3 * 3600)),
+    ])
+    instr = provider.calls[0][-1].content
+    assert "[对话状态]" in instr
+    assert "3 小时" in instr
+    assert "你说的" in instr                 # 末条 assistant=bot 自己
+    assert "绝不质问" in instr
+    assert "另起炉灶" in instr
+
+
+async def test_opener_state_line_days_user_last(monkeypatch):
+    """沉默 3 天且末条是用户 → 天级时长+「对方说的」(末条 user=对方)"""
+    provider, _ = await _gen_with(monkeypatch, [
+        Message(role="user", content="讲了个笑话", ts=_ms_ago(3 * 86400)),
+    ])
+    instr = provider.calls[0][-1].content
+    assert "3 天" in instr and "对方说的" in instr
+
+
+async def test_opener_no_state_line_when_recent(monkeypatch):
+    """沉默 30 分钟(<2h 阈值) → 不注入状态块(正常语境不过度引导)"""
+    provider, _ = await _gen_with(monkeypatch, [
+        Message(role="user", content="在吗", ts=_ms_ago(30 * 60)),
+    ])
+    assert "[对话状态]" not in provider.calls[0][-1].content
+
+
+async def test_opener_no_state_line_without_ts(monkeypatch):
+    """历史无 ts(0=未知:旧数据/旧 mock 形态) → 不注入且不报错(向后兼容)"""
+    provider, text = await _gen_with(monkeypatch, [
+        Message(role="user", content="早上好"),
+        Message(role="assistant", content="早呀"),
+    ])
+    assert text != ""
+    assert "[对话状态]" not in provider.calls[0][-1].content
+
+
+async def test_opener_instruction_ban_urge_always(monkeypatch):
+    """指令常驻约束(2026-11-01):禁责问+优先延续话题,不依赖状态块(任何沉默时长都在)"""
+    provider, _ = await _gen_with(monkeypatch, [])   # 空历史也带常驻约束
+    instr = provider.calls[0][-1].content
+    assert "严禁质问或抱怨对方不回复" in instr
+    assert "优先延续上面最后聊到的话题" in instr

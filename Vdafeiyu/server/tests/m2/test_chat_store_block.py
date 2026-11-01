@@ -12,6 +12,10 @@ chat_store block 三层单测:append/get_history/sender→role 映射/UUID mid/
 变更说明：
   1. 新增 ts 驱动块簿记回归(审查修复):归档旧 ts 并入当前块不拆块不倒挂/静默按消息 ts
      判定新块 start_ts=消息 ts/has_history
+
+2026-11-01
+变更说明：
+  1. get_history 补透传 Message.ts(毫秒;generate_opener 算沉默时长用)——本测断言同步带 ts
 """
 import time as _time
 
@@ -27,9 +31,10 @@ async def test_append_and_get_history(fake_redis):
     mid_a = await chat_store.append_message(fake_redis, "u1", sender="ai", content="你也好", ts=base + 1)
     assert mid_u != mid_a   # UUID mid 唯一
     history = await chat_store.get_history(fake_redis, "u1")
+    # 2026-11-01:Message 补 ts 字段,get_history 透传毫秒时间戳(数据类相等比较含 ts)
     assert history == [
-        Message(role="user", content="你好"),
-        Message(role="assistant", content="你也好"),   # ai → assistant
+        Message(role="user", content="你好", ts=base),
+        Message(role="assistant", content="你也好", ts=base + 1),   # ai → assistant
     ]
 
 

@@ -16,9 +16,13 @@ from typing import AsyncIterator
 
 @dataclass
 class Message:
-    """OpenAI 风格对话消息:role(user/assistant/system) + content"""
+    """OpenAI 风格对话消息:role(user/assistant/system) + content
+    ts: 消息时间戳(毫秒;0=未知)——2026-11-01 补:generate_opener 用它算沉默时长
+    (历史无时间标注是「编造共同记忆」事故根因之一);provider 序列化只取 role/content,
+    ts 不会进 API 请求,纯 server 内部使用。"""
     role: str       # "system" | "user" | "assistant"
     content: str
+    ts: int = 0     # 毫秒时间戳;0=未知(旧调用方缺省不受影响)
 
 
 @dataclass

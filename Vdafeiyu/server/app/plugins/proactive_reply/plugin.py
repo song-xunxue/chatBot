@@ -21,6 +21,12 @@ proactive_reply 插件(主动消息·主动搭话)
      其再开口(此前 01:59 道晚安后 09:30 静默段一结束就补发"早上好"被投诉扰人);
   2. 开场白指令加禁编造约束(此前凭空编"说好早点睡的""说好要啃高数"被用户三轮对质)。
      两改动同步镜像到 Vdafeiyu 同路径文件(保持逐字节一致)。
+
+2026-11-01
+变更说明:
+  1. 对话结束状态感知(双栈同步):generate_opener 依 Message.ts(get_history 已补)计算
+     沉默时长与末条归属,沉默 2h 以上在指令注入[对话状态]块——解"几天不回→你为什么
+     不回我"责问式开场白(用户 2026-11-01 指认);指令本体加硬禁责问+优先延续上次话题。
 """
 import logging
 import random
@@ -157,13 +163,34 @@ async def generate_opener(redis, oid: str, provider_name: str = "local") -> str:
     # 注入当前时辰(time_aware 同款纯函数),否则模型对"当前时段"只能瞎猜
     now = _now()
     time_hint = f"{season_label(now.month)}季·{time_of_day(now.hour)} {now.strftime('%H:%M')}"
+    # 对话结束状态感知(2026-11-01 三件优化):末条谁说的+沉默多久——「几天不回→你为什么
+    # 不回我」责问式开场白的直接解药。Message.ts 由 get_history 补齐(历史无时间标注曾是
+    # 编造共同记忆的事故根因之一);沉默 2h 内属正常语境不注入,避免过度引导。
+    state_line = ""
+    last = history[-1] if history else None
+    if last and last.ts:
+        gap_sec = max(0, int(now.timestamp() * 1000) - last.ts) // 1000
+        if gap_sec >= 7200:
+            gap_txt = f"{gap_sec // 86400} 天" if gap_sec >= 86400 else f"{gap_sec // 3600} 小时"
+            who = "你" if last.role == "assistant" else "对方"
+            preview = (last.content or "").strip().replace("\n", " ")[:30]
+            state_line = (
+                f"\n[对话状态] 上一条消息是{who}说的(「{preview}」),之后已经安静了 {gap_txt}。\n"
+                "规矩:对方一直没回你也绝不质问、不抱怨、不提「为什么不回我/怎么不理我」;"
+                "就像刚想起一件事那样自然开口,优先接着上面最后的话题轻描淡写地继续,"
+                "不要生硬另起炉灶。"
+            )
     instruction = (
         f"[主动搭话] 现在是{time_hint},不是对话进行中,是你主动先给对方发一条消息开个话头。\n"
         "结合你的心情、当前时段和最近聊过的话题,写一句自然的开场消息。\n"
         "要求:20 到 60 个字;只输出这一句话本身;可以找话题或关心对方,但不要连环提问;"
         "严禁编造没发生过的约定或回忆——「说好的」「你答应过」这类说法,除非它真实出现在上面的对话里;"
+        "严禁质问或抱怨对方不回复(「为什么不回我」「怎么不理我」这类一律禁止);"
+        "优先延续上面最后聊到的话题,不要凭空另起炉灶;"
         "不调用任何工具;绝不能出现「我作为AI」「作为助手」这类说法。"
     )
+    if state_line:
+        instruction += state_line
     messages = [Message(role="system", content=system_prompt)]
     messages.extend(history)                       # 最近对话(时间正序,旧→新)
     messages.append(Message(role="user", content=instruction))

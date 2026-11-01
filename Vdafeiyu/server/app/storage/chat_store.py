@@ -299,8 +299,11 @@ async def get_history(redis: Redis, object_id: str, *,
     # 按 ts 排序,取最近 max_messages 条
     items.sort(key=lambda d: int(d.get("ts", 0) or 0))
     items = items[-max_messages:]
+    # 2026-11-01:Message 补带 ts(毫秒)——generate_opener 用末条 ts 算沉默时长,
+    # 做「对话结束状态感知」(防几天不回→责问式开场白);provider 序列化不取 ts,零副作用
     return [Message(role=_SENDER_TO_ROLE.get(d.get("sender", ""), "user"),
-                    content=d.get("content", "")) for d in items]
+                    content=d.get("content", ""),
+                    ts=int(d.get("ts", 0) or 0)) for d in items]
 
 
 async def list_messages(redis: Redis, object_id: str, *,

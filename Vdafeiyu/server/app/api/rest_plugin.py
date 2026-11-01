@@ -126,13 +126,48 @@ async def get_plugin_params(name: str, object_id: str):
     return await mgr.get_params(name, object_id)
 
 
+def _validate_params(mgr, name: str, params: dict) -> None:
+    """按插件 config_schema 做 type + min/max 服务端校验(审查修复:原版只验 dict,
+    面板以外的调用方可把 keep_days 写成 0/负数,一次清理即物理删光全部日记)。
+    规则:schema 未声明的键放行(兼容存量);值为 None 放行(=回退默认,面板会存 null);
+    options 不强校验(避免破坏存量自定义值);违例抛 400"""
+    # get_manifest 缺失时跳过校验(旧测试替身/极简 manager 兼容,schema 空等价全放行)
+    get_mf = getattr(mgr, "get_manifest", None)
+    mf = get_mf(name) if callable(get_mf) else None
+    schema = getattr(mf, "config_schema", None) or {}
+    for key, val in (params or {}).items():
+        spec = schema.get(key)
+        if not spec or val is None:
+            continue
+        t = str(spec.get("type", "")).lower()
+        if t == "number":
+            # bool 是 int 子类,先排除(面板把开关存成 true 会混过数值校验)
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                raise HTTPException(status_code=400, detail=f"参数 {key} 须为数字")
+            lo, hi = spec.get("min"), spec.get("max")
+            if lo is not None and val < lo:
+                raise HTTPException(status_code=400, detail=f"参数 {key} 不能小于 {lo}")
+            if hi is not None and val > hi:
+                raise HTTPException(status_code=400, detail=f"参数 {key} 不能大于 {hi}")
+        elif t == "bool":
+            if not isinstance(val, bool):
+                raise HTTPException(status_code=400, detail=f"参数 {key} 须为布尔")
+        elif t == "string":
+            if not isinstance(val, str):
+                raise HTTPException(status_code=400, detail=f"参数 {key} 须为字符串")
+
+
 @router.put("/plugin/{name}/params", dependencies=[Depends(verify_token)])
 async def set_plugin_params(name: str, object_id: str, params: dict = Body(...)):
     """写插件在某对象的参数(整 params 替换;enabled 位不变)。
-    params 必须为 dict(违例 400)。供面板表单保存。"""
+    params 必须为 dict(违例 400),且逐键按 config_schema 校验类型与 min/max(违例 400)。
+    供面板表单保存。"""
     mgr = get_plugin_manager()
     if mgr is None or name not in mgr.list_loaded():
         raise HTTPException(status_code=404, detail="native plugin not found")
+    if not isinstance(params, dict):
+        raise HTTPException(status_code=400, detail="params 必须是字典")
+    _validate_params(mgr, name, params)
     try:
         await mgr.set_object_config(name, object_id, enabled=None, params=params)
     except ValueError:
