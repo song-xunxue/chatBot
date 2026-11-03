@@ -87,3 +87,4 @@ V3.0/training/unsloth_compiled_cache/
 
 # NapCat 本体与 QQ 登录态(2026-10-26:passkey/token/二维码等敏感凭证,绝不入库)
 .local/
+backups/
