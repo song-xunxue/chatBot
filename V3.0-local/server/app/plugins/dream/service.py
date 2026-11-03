@@ -16,6 +16,17 @@
   2. 审查修复:should_dream 放宽为 now.hour>=dream_hour(错点补跑);新增
      _prune_diary_facts 写前删旧 diary 事实(目标日换新+keep_days 过期同步,防累积
      挤占长期记忆上限)
+
+2026-11-01
+变更说明:
+  1. 日记管理批次(面板可编辑/增删/手动写):①entry 统一带 kind 字段(dream梦/
+     journal日常日记/manual手写,存量无 kind 视为 dream);②run_journal——每晚
+     journal_hour 默认 22 点首个 tick 以她的第一人称总结当天聊天写一篇日常日记,
+     落盘+事件记忆(source=journal),独立 done 键防重;③extract_entry_facts——
+     日记→事件记忆提炼收口(先删该日旧事实三种 source 再按 kind 写入),供
+     写完/面板编辑后/手动重提炼共用;④save_manual_entry——面板手写日记落盘+提炼;
+     ⑤should_journal 纯函数;⑥_prune_diary_facts 参数化 sources(删日记时三种
+     source 一并清,保记忆与日记一致)
 """
 import logging
 import re
@@ -38,10 +49,15 @@ logger = logging.getLogger(__name__)
 # 参数默认值(与 plugin.yaml config_schema 保持一致;REST 手动跑在插件未加载时用这套兜底)
 DEFAULT_PARAMS: dict = {
     "dream_hour": 4,
+    "journal_hour": 22,   # 2026-11-01:日常日记时刻(小时),该小时内首个 tick 总结当天写日记
     "dream_mood_delta": 0.05,
     "keep_days": 90,
     "llm_provider": "deepseek",
 }
+
+# 日记事件记忆的三种来源(= entry.kind;2026-11-01 日记管理批次:
+# dream=做梦生成/journal=日常日记/manual=面板手写,换新与删除按此清)
+_DIARY_SOURCES = ("diary", "journal", "manual")
 
 # 素材配额
 _MAX_MEMORY_ITEMS = 10      # 昨日长期记忆最多取几条
@@ -157,11 +173,13 @@ def _fact_date(item) -> str | None:
     return None
 
 
-async def _prune_diary_facts(redis, oid: str, target: date, keep_days: int) -> None:
+async def _prune_diary_facts(redis, oid: str, target: date, keep_days: int,
+                             sources: tuple = ("diary",)) -> None:
     """写新事实前删旧 diary 事实(审查修复):①目标日旧条——重跑以新换旧不累积
     (coordinator 相似度去重对不同梦文本无效,反复补做会挤占 memory_longterm_max_facts
     上限);②超 keep_days 过期条——与日记文件清理同步,免得日记删了事实永存。
-    全程软失败;date 标签缺失的 diary 条目不删"""
+    2026-11-01 参数化 sources(日记管理批次):重提炼按该日记 kind 清;面板删除日记时
+    传三种 source 一并清(保记忆与日记一致)。全程软失败;date 标签缺失的条目不删"""
     try:
         target_str = target.strftime("%Y-%m-%d")
         try:
@@ -171,14 +189,52 @@ async def _prune_diary_facts(redis, oid: str, target: date, keep_days: int) -> N
         cutoff = (target - timedelta(days=keep_days)).strftime("%Y-%m-%d")
         items = await mem_store.get_all_long_term(redis, oid, include_forgotten=True)
         stale = [m.id for m in items
-                 if str(getattr(m, "source", "") or "") == "diary"
+                 if str(getattr(m, "source", "") or "") in sources
                  and (d := _fact_date(m)) is not None
                  and (d == target_str or d < cutoff)]
         if stale:
             await mem_store.delete_long_term(redis, oid, stale)
-            logger.info("dream 清理旧 diary 事实 %d 条(目标日 %s 换新 + 过期<%s)", len(stale), target_str, cutoff)
+            logger.info("dream 清理旧日记事实 %d 条(source=%s 目标日 %s 换新 + 过期<%s)",
+                        len(stale), "/".join(sources), target_str, cutoff)
     except Exception:
-        logger.exception("dream 清理 diary 事实失败 oid=%s(软失败)", oid)
+        logger.exception("dream 清理日记事实失败 oid=%s(软失败)", oid)
+
+
+async def extract_entry_facts(redis, oid: str, entry: dict, keep_days: int = 90) -> None:
+    """把一篇日记(entry)提炼成事件记忆(2026-11-01 日记管理批次的提炼收口):
+    先删该日旧事实(_DIARY_SOURCES 三种一起清——同一日期只会存在一种 kind 的日记,
+    换 kind 重写时旧来源残留也一并扫掉),再按 entry.kind 构造事实写入:
+    - dream:沿用原两条(梦+日记),内容格式与 2026-10-26 版逐字一致
+    - journal/manual:一条日记事件(source=journal|manual,tags 带 kind+日期)
+    供 写完日记/面板编辑保存/手动重提炼 三个入口共用;全程软失败(提炼失败不影响日记本体)"""
+    try:
+        kind = str(entry.get("kind", "") or "dream")
+        date_str = str(entry.get("date", "") or "")
+        target = date.fromisoformat(date_str)
+        await _prune_diary_facts(redis, oid, target, keep_days, sources=_DIARY_SOURCES)
+        diary_text = str(entry.get("diary", "") or "")
+        events = entry.get("key_events") or []
+        coord = MemoryCoordinator(redis, llm_provider=None)   # 无状态批量写,照 tools/builtin.py 用法
+        if kind == "dream":
+            dream = str(entry.get("dream", "") or "")
+            facts = [
+                {"content": f"我做了一个梦:{dream}", "category": "event", "source": "diary",
+                 "importance": 0.6, "emotion": 0.0, "tags": ["dream", date_str], "reason": "做梦生成"},
+                {"content": f"日记({date_str}):" + (";".join(events) if events else diary_text[:100]),
+                 "category": "event", "source": "diary", "importance": 0.55, "emotion": 0.0,
+                 "tags": ["diary", date_str], "reason": "做梦生成"},
+            ]
+        else:
+            source = kind if kind in _DIARY_SOURCES else "diary"
+            facts = [
+                {"content": f"日记({date_str}):" + (";".join(events) if events else diary_text[:100]),
+                 "category": "event", "source": source, "importance": 0.5, "emotion": 0.0,
+                 "tags": [kind, date_str], "reason": "日记提炼"},
+            ]
+        await coord.upsert_facts_batch(oid, facts)
+        logger.info("日记事实提炼完成 oid=%s date=%s kind=%s %d 条", oid, date_str, kind, len(facts))
+    except Exception:
+        logger.exception("日记事实提炼失败 oid=%s(软失败,日记本体不受影响)", oid)
 
 
 # ================ prompt 组装 ================
@@ -320,9 +376,11 @@ async def run_dream(redis, oid: str, target: date, params: dict) -> dict | None:
         return None
     dream, diary, tone, events = parsed["dream"], parsed["diary"], parsed["tone"], parsed["key_events"]
 
-    # 3.落盘 + 索引 + 缓存
+    # 3.落盘 + 索引 + 缓存(kind=dream:2026-11-01 起存量/新梦统一带类型字段,
+    #   与 journal 日常日记/manual 面板手写在同一日记库共存)
     entry = {
         "date": date_str,
+        "kind": "dream",
         "dream": dream,
         "diary": diary,
         "mood_curve": mood_curve,
@@ -333,22 +391,9 @@ async def run_dream(redis, oid: str, target: date, params: dict) -> dict | None:
     }
     await dream_storage.save_entry(redis, entry, keep_days)
 
-    # 4.精炼版写事件记忆:先删旧 diary 事实(目标日换新+过期清理,防累积),再走既有
-    # coordinator 路径写入。emotion 传 0.0 而非空串:coordinator 建新条目时
-    # float(fact["emotion"]) 遇空串会抛 ValueError
-    try:
-        await _prune_diary_facts(redis, oid, target, keep_days)
-        coord = MemoryCoordinator(redis, llm_provider=None)   # 无状态批量写,照 tools/builtin.py 用法
-        facts = [
-            {"content": f"我做了一个梦:{dream}", "category": "event", "source": "diary",
-             "importance": 0.6, "emotion": 0.0, "tags": ["dream", date_str], "reason": "做梦生成"},
-            {"content": f"日记({date_str}):" + (";".join(events) if events else diary[:100]),
-             "category": "event", "source": "diary", "importance": 0.55, "emotion": 0.0,
-             "tags": ["diary", date_str], "reason": "做梦生成"},
-        ]
-        await coord.upsert_facts_batch(oid, facts)
-    except Exception:
-        logger.exception("dream 写事件记忆失败 oid=%s(软失败,日记本体已落盘)", oid)
+    # 4.精炼版写事件记忆(2026-11-01 收口到 extract_entry_facts:删旧三种 source+按 kind
+    #   写入;emotion 传 0.0——coordinator float() 遇空串会抛 ValueError)
+    await extract_entry_facts(redis, oid, entry, keep_days)
 
     # 5.mood 偏移:负梦也不推成负数(clamp [0,1];set_mood 自带 clamp+写历史点)
     try:
@@ -366,4 +411,137 @@ async def run_dream(redis, oid: str, target: date, params: dict) -> dict | None:
 
     logger.info("dream 完成 oid=%s date=%s tone=%s 梦=%d字 日记=%d字",
                 oid, date_str, tone, len(dream), len(diary))
+    return entry
+
+
+# ================ 日常日记(2026-11-01 日记管理批次) ================
+
+def should_journal(now: datetime, journal_hour: int, done_date: str | None) -> bool:
+    """是否该写日常日记(纯函数,同 should_dream 口径):已过当日 journal_hour(now.hour >=)
+    且今天还没写过。目标日=今天(与 dream 的"昨天"不同:日常日记总结的就是当天)。
+    >= 判定支持错点补跑;done 键防重,每天最多一次"""
+    if now.hour < int(journal_hour):
+        return False
+    return str(done_date or "").strip() != now.date().strftime("%Y-%m-%d")
+
+
+def _build_journal_user_prompt(target: date, memory_lines: list[str], mood_curve: list[dict],
+                               chat_text: str, last_diary: str) -> str:
+    """journal user prompt:素材同做梦四类,但口径是"今天"(不是昨天),写日常日记而非梦境"""
+    day_label = target.strftime("%Y年%m月%d日")
+    mem_txt = "\n".join(f"- {x}" for x in memory_lines) if memory_lines else "(今天没有新记住的事)"
+    curve_txt = (", ".join(f"{float(p['value']):.2f}" for p in mood_curve if p.get("value") is not None)
+                 if mood_curve else "(今天没有心情记录)")
+    chat_block = chat_text if chat_text else "(今天没有聊天记录)"
+    diary_block = last_diary if last_diary else "(前一天没有写日记)"
+    return (
+        f"以下是 {day_label}(今天)的素材,请据此以你的第一人称写一篇今天的日常日记。\n\n"
+        f"【今天新记住的事】\n{mem_txt}\n\n"
+        f"【今天的心情曲线(0到1,按时间先后)】\n{curve_txt}\n\n"
+        f"【今天的聊天记录(节选)】\n{chat_block}\n\n"
+        f"【前一天的日记(节选)】\n{diary_block}"
+    )
+
+
+async def _generate_journal(redis, oid: str, target: date, memory_lines: list[str],
+                            mood_curve: list[dict], chat_text: str, last_diary: str,
+                            llm_provider: str) -> dict | None:
+    """调 LLM 写日常日记并解析校验(输出 JSON {diary, key_events})。
+    provider 不可用/调用异常/解析失败/diary 为空 → 返回 None"""
+    provider = resolve_provider("chat", override=llm_provider)
+    if provider is None:
+        logger.warning("journal provider 不可用 name=%s,跳过本次写日记", llm_provider)
+        return None
+    brief = await _persona_brief(redis, oid)
+    system = _build_system_prompt(brief) + (
+        "\n\n[本次任务] 写一篇日常日记(不是梦):以你的第一人称回顾今天——聊过什么、"
+        "心情如何、有什么小事值得记下。200 到 400 个字,口吻自然像随手写下的,不要列举式流水账。"
+        '只输出一个 JSON 对象:{"diary": "日记正文", "key_events": ["关键事件1", "关键事件2"]} '
+        "(key_events 2 到 5 条,没有就给空数组);不调用任何工具;绝不能出现「我作为AI」这类说法。"
+    )
+    messages = [
+        Message(role="system", content=system),
+        Message(role="user", content=_build_journal_user_prompt(
+            target, memory_lines, mood_curve, chat_text, last_diary)),
+    ]
+    try:
+        resp = await provider.chat(messages)
+    except Exception as e:
+        logger.warning("journal LLM 调用失败(跳过本次): %s", e)
+        return None
+    text = (resp.text if resp else "") or ""
+    data = extract_json_object(text)
+    if not isinstance(data, dict):
+        logger.warning("journal LLM 输出解析不出 JSON(前100字=%s)", text[:100])
+        return None
+    diary = _strip_quotes(data.get("diary"))
+    if not diary:
+        logger.warning("journal diary 为空,丢弃")
+        return None
+    raw_events = data.get("key_events")
+    events: list[str] = []
+    if isinstance(raw_events, list):
+        events = [e for e in (_strip_quotes(x) for x in raw_events if isinstance(x, str)) if e]
+    return {"diary": diary, "key_events": events[:_MAX_KEY_EVENTS]}
+
+
+async def run_journal(redis, oid: str, target: date, params: dict) -> dict | None:
+    """写一篇日常日记(2026-11-01):收集当天素材 → LLM 以她的第一人称总结今天 →
+    落盘(kind=journal)→ 事件记忆(source=journal)。不做 mood 偏移(日常日记是记录
+    不是情绪事件)。无素材/provider 不可用/生成失败 → 返回 None;成功返回 entry 全量"""
+    params = params or {}
+    keep_days = params.get("keep_days")
+    keep_days = DEFAULT_PARAMS["keep_days"] if keep_days is None else int(keep_days)
+    llm_name = str(params.get("llm_provider") or DEFAULT_PARAMS["llm_provider"])
+    date_str = target.strftime("%Y-%m-%d")
+
+    memory_lines = await _collect_memory_lines(redis, oid, target)
+    mood_curve = await _collect_mood_curve(redis, oid, target)
+    chat_text = await _collect_chat_text(redis, oid, target)
+    last_diary = await _collect_last_diary(redis, target)
+    if not (memory_lines or mood_curve or chat_text or last_diary):
+        logger.info("journal 无素材跳过 oid=%s date=%s(不调 LLM 不落盘)", oid, date_str)
+        return None
+
+    parsed = await _generate_journal(redis, oid, target, memory_lines, mood_curve,
+                                     chat_text, last_diary, llm_name)
+    if parsed is None:
+        return None
+    entry = {
+        "date": date_str,
+        "kind": "journal",
+        "diary": parsed["diary"],
+        "mood_curve": mood_curve,
+        "key_events": parsed["key_events"],
+        "object_id": oid,
+        "created_ts": int(time.time() * 1000),
+    }
+    await dream_storage.save_entry(redis, entry, keep_days)
+    await extract_entry_facts(redis, oid, entry, keep_days)
+    await dream_storage.cleanup(redis, keep_days)
+    logger.info("journal 完成 oid=%s date=%s 日记=%d字", oid, date_str, len(parsed["diary"]))
+    return entry
+
+
+async def save_manual_entry(redis, oid: str, target: date, diary_text: str,
+                            params: dict, key_events: list[str] | None = None) -> dict:
+    """面板手写日记(2026-11-01):构造 kind=manual entry 落盘+提炼事件记忆(source=manual)。
+    与 run_journal 不同:纯保存无 LLM 生成;同日期已有日记会被覆盖(响应带 overwritten 提示);
+    diary_text 空白由调用方(REST 层)拦截"""
+    params = params or {}
+    keep_days = params.get("keep_days")
+    keep_days = DEFAULT_PARAMS["keep_days"] if keep_days is None else int(keep_days)
+    date_str = target.strftime("%Y-%m-%d")
+    events = [e for e in (str(x).strip() for x in (key_events or [])) if e][:_MAX_KEY_EVENTS]
+    entry = {
+        "date": date_str,
+        "kind": "manual",
+        "diary": diary_text.strip(),
+        "key_events": events,
+        "object_id": oid,
+        "created_ts": int(time.time() * 1000),
+    }
+    await dream_storage.save_entry(redis, entry, keep_days)
+    await extract_entry_facts(redis, oid, entry, keep_days)
+    logger.info("manual 日记已保存 oid=%s date=%s %d字", oid, date_str, len(entry["diary"]))
     return entry

@@ -68,11 +68,22 @@ export const moodCalc = (oid: string, body: any) => api.post(`/api/v1/mood/${oid
 
 // —— 日记 diary(2026-10-26 dream 插件:dream 插件出品的梦境/日记;列表/详情/立即补做)——
 // 列表与详情不需要 oid(全局唯一);run 为手动补做,oid 指定给哪个会话生成
+// 2026-11-01 日记管理批次:run 支持 kind(dream梦|journal日常日记);新增 编辑/删除/手写/重提炼
 export const getDiaryList = (limit = 30) =>
   api.get('/api/v1/diary/list', { params: { limit } }).then((r) => r.data)
 export const getDiary = (date: string) => api.get(`/api/v1/diary/${date}`).then((r) => r.data)
-export const runDiary = (body: { date?: string; object_id?: string }) =>
+export const runDiary = (body: { date?: string; object_id?: string; kind?: 'dream' | 'journal' }) =>
   api.post('/api/v1/diary/run', body).then((r) => r.data)
+export const updateDiary = (
+  date: string,
+  body: { diary?: string; dream?: string; key_events?: string[]; dream_tone?: string; regen_memory?: boolean },
+) => api.put(`/api/v1/diary/${date}`, body).then((r) => r.data)
+export const deleteDiary = (date: string) =>
+  api.delete(`/api/v1/diary/${date}`).then((r) => r.data)
+export const createDiary = (body: { date: string; diary: string; object_id?: string; key_events?: string[] }) =>
+  api.post('/api/v1/diary', body).then((r) => r.data)
+export const regenDiaryMemory = (date: string) =>
+  api.post(`/api/v1/diary/${date}/memory`).then((r) => r.data)
 
 // —— 世界书 worldbook(2026-10-26:条目 CRUD + 统计 + 从记忆/日记重建自动条目)——
 // 全局维度,不依赖 oid;entries 支持 source/enabled/limit 过滤(空=不过滤)

@@ -15,6 +15,12 @@ done 键语义:无论 run_dream 成败,只要真正尝试过(过了 should_dream
 变更说明:
   1. 新建:DreamPlugin,on_tick(priority=130) 委托 service.run_dream + done 键防重
   2. 审查修复:should_dream 由 now.hour==dream_hour 放宽为 >=,支持错过整点补跑
+
+2026-11-01
+变更说明:
+  1. 日常日记定时触发:_maybe_journal——journal_hour(默认 22 点)后首个 tick 以她的
+     第一人称总结当天聊天写一篇日常日记(service.run_journal,kind=journal),
+     独立 done 键(mychat:journal:done:*)防重,与凌晨做梦互不影响;全程软失败不变
 """
 import logging
 from datetime import timedelta
@@ -26,17 +32,22 @@ logger = logging.getLogger(__name__)
 
 # done 键:oid+目标日 做过即置位(值=目标日串,TTL 3 天覆盖补跑窗口)
 _DONE_KEY = "mychat:dream:done:{oid}:{yyyymmdd}"
+_JOURNAL_DONE_KEY = "mychat:journal:done:{oid}:{yyyymmdd}"   # 2026-11-01 日常日记防重键
 _DONE_TTL = 3 * 86400
 
 
 class DreamPlugin(Plugin):
-    """做梦与日记:on_tick 门控 + 委托 service.run_dream(全程软失败)"""
+    """做梦与日记:on_tick 门控 + 委托 service.run_dream/run_journal(全程软失败)"""
 
     async def on_tick(self, ctx):
         try:
             await self._maybe_dream(ctx.object_id)
         except Exception:
             logger.exception("dream 处理异常 oid=%s(软失败,忽略本轮)", ctx.object_id)
+        try:
+            await self._maybe_journal(ctx.object_id)
+        except Exception:
+            logger.exception("journal 处理异常 oid=%s(软失败,忽略本轮)", ctx.object_id)
         return HookResult.CONTINUE
 
     async def _maybe_dream(self, oid: str) -> None:
@@ -56,3 +67,20 @@ class DreamPlugin(Plugin):
         await redis.set(done_key, target.strftime("%Y-%m-%d"), ex=_DONE_TTL)
         if entry is None:
             logger.info("dream 本次未产出(无素材/LLM不可用/解析失败),今日不重试 oid=%s", oid)
+
+    async def _maybe_journal(self, oid: str) -> None:
+        """日常日记定时触发(2026-11-01):journal_hour(默认 22)后首个 tick 总结当天写日记。
+        目标日=今天(区别于做梦的"昨天");独立 done 键防重,口径与 _maybe_dream 一致"""
+        redis = self.pctx.redis
+        params = await self.get_params(oid)
+        hour = params.get("journal_hour")
+        hour = service.DEFAULT_PARAMS["journal_hour"] if hour is None else int(hour)
+        now = service._now()
+        target = now.date()
+        done_key = _JOURNAL_DONE_KEY.format(oid=oid, yyyymmdd=target.strftime("%Y%m%d"))
+        if not service.should_journal(now, hour, await redis.get(done_key)):
+            return
+        entry = await service.run_journal(redis, oid, target, params)
+        await redis.set(done_key, target.strftime("%Y-%m-%d"), ex=_DONE_TTL)
+        if entry is None:
+            logger.info("journal 本次未产出(无素材/LLM不可用/解析失败),今日不重试 oid=%s", oid)

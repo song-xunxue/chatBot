@@ -432,6 +432,77 @@ def test_manifest_default_disabled_and_hooks():
     assert m.hook_names == ["on_tick"]
     assert m.hooks[0].priority == 130
     defaults = {k: v["default"] for k, v in m.config_schema.items()}
-    assert defaults == {"dream_hour": 4, "dream_mood_delta": 0.05,
+    assert defaults == {"dream_hour": 4, "journal_hour": 22, "dream_mood_delta": 0.05,
                         "keep_days": 90, "llm_provider": "deepseek"}
     assert defaults == svc.DEFAULT_PARAMS
+
+
+# ================ 日常日记 journal / 手写 manual(2026-11-01 日记管理批次) ================
+
+def _journal_llm_text(events: list | None = None) -> str:
+    """journal 假输出(带代码围栏,走 extract_json_object 剥围栏路径)"""
+    payload = {
+        "diary": "今天和他聊了好多,晚上他夸我温柔,心里甜甜的。",
+        "key_events": events if events is not None else ["被夸温柔", "聊到很晚"],
+    }
+    return "嗯,写好了:\n```json\n" + json.dumps(payload, ensure_ascii=False) + "\n```\n以上。"
+
+
+def test_should_journal_target_is_today():
+    """should_journal:>=journal_hour 放行/未到点拦截;目标日=今天(区别于做梦的昨天),
+    昨天的 done 键不挡今天"""
+    now = datetime(2026, 10, 26, 22, 30)
+    assert svc.should_journal(now, 22, None) is True
+    assert svc.should_journal(datetime(2026, 10, 26, 21, 59), 22, None) is False
+    assert svc.should_journal(now, 22, "2026-10-26") is False     # 今天已写过,判重命中
+    assert svc.should_journal(now, 22, "2026-10-25") is True      # done 是昨天的,不挡今天
+    assert svc.should_journal(datetime(2026, 10, 26, 23, 0), 23, None) is True   # 错点补跑口径
+
+
+async def test_run_journal_writes_entry_and_facts(fake_redis, tmp_path, monkeypatch):
+    """run_journal:kind=journal entry 落盘(kind 字段在文件里)+事件记忆 source=journal
+    且 tags 带日期标签(换新/过期清理定位用);不做 mood 偏移(日常日记是记录)"""
+    monkeypatch.setattr(dream_storage, "DIARY_DIR", tmp_path)
+    provider = _FakeProvider(_journal_llm_text())
+    _patch_llm(monkeypatch, provider)
+    await _seed_persona(fake_redis)
+    await _seed_material(fake_redis)
+    entry = await svc.run_journal(fake_redis, _OID, _TARGET, dict(_PARAMS))
+    assert entry is not None and entry["kind"] == "journal"
+    assert entry["diary"] and entry["key_events"] == ["被夸温柔", "聊到很晚"]
+    assert (tmp_path / "2026-10-25.json").is_file()
+    items = await mem_store.get_all_long_term(fake_redis, _OID, include_forgotten=True)
+    jf = [m for m in items if str(getattr(m, "source", "")) == "journal"]
+    assert jf, "journal 事件记忆未写入"
+    for m in jf:
+        assert _TARGET.strftime("%Y-%m-%d") in [str(t) for t in (getattr(m, "tags", None) or [])]
+    # mood 不偏移:mood 服务无历史点(素材里的 mood history 是曲线素材,不是偏移产物)
+    hist = await fake_redis.lrange("mychat:mood:10001:history", 0, -1)
+    assert len(hist) == 2                          # 只剩 _seed_material 种的两条
+
+
+async def test_run_journal_no_material_skips(fake_redis, tmp_path, monkeypatch):
+    """四类素材全空 → 直接跳过不调 LLM 不落盘(与 run_dream 同口径)"""
+    monkeypatch.setattr(dream_storage, "DIARY_DIR", tmp_path)
+    provider = _FakeProvider(_journal_llm_text())
+    _patch_llm(monkeypatch, provider)
+    assert await svc.run_journal(fake_redis, _OID, _TARGET, dict(_PARAMS)) is None
+    assert provider.calls == []
+    assert not (tmp_path / "2026-10-25.json").exists()
+
+
+async def test_save_manual_entry_and_facts(fake_redis, tmp_path, monkeypatch):
+    """save_manual_entry:kind=manual 落盘+事件记忆 source=manual;key_events 空白项被清;
+    同日期覆盖写(手写补记场景)"""
+    monkeypatch.setattr(dream_storage, "DIARY_DIR", tmp_path)
+    entry = await svc.save_manual_entry(fake_redis, _OID, _TARGET, "  手写的一篇日记。  ",
+                                        dict(_PARAMS), key_events=["事件A", "  ", "事件B"])
+    assert entry["kind"] == "manual" and entry["diary"] == "手写的一篇日记。"
+    assert entry["key_events"] == ["事件A", "事件B"]
+    assert (tmp_path / "2026-10-25.json").is_file()
+    items = await mem_store.get_all_long_term(fake_redis, _OID, include_forgotten=True)
+    mf = [m for m in items if str(getattr(m, "source", "")) == "manual"]
+    assert mf and _TARGET.strftime("%Y-%m-%d") in [str(t) for t in (getattr(mf[0], "tags", None) or [])]
+    # 覆盖:再存一次,文件仍是单份且内容换新
+    await svc.save_manual_entry(fake_redis, _OID, _TARGET, "改写后的日记", dict(_PARAMS))
+    assert "改写后的日记" in (tmp_path / "2026-10-25.json").read_text(encoding="utf-8")

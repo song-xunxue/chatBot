@@ -17,6 +17,12 @@ Redis:索引 mychat:diary:index(ZSET,member=日期串,score=YYYYMMDD 整数)+ �
 变更说明:
   1. low 项修复:原子写失败即删 .tmp 不留残骸;cleanup 增第 3 步扫 *.json.tmp 残骸
      (此前 tmp 无任何清理路径,进程被杀一次即永久残留)
+
+2026-11-01
+变更说明:
+  1. 日记管理批次:①load_summaries 摘要补 kind 字段(dream梦/journal日常日记/manual手写,
+     缺省 dream 兼容存量)供列表分组标签;②新增 delete_entry(文件+索引+缓存三清,
+     供面板删除;软失败不外抛)
 """
 import json
 import logging
@@ -129,8 +135,9 @@ async def list_dates(redis: Redis, limit: int = 30) -> list[str]:
 
 
 async def load_summaries(redis: Redis, limit: int = 30) -> list[dict]:
-    """按日期倒序逐日读 entry,产出摘要列表 [{"date","tone","excerpt"}]。
-    excerpt=diary 前 60 字,超长加"…";读不到的日期跳过(文件被手动删时不挡列表)。"""
+    """按日期倒序逐日读 entry,产出摘要列表 [{"date","tone","kind","excerpt"}]。
+    excerpt=diary 前 60 字,超长加"…";kind=日记类型(dream梦/journal日常/manual手写,
+    存量无 kind 视为 dream);读不到的日期跳过(文件被手动删时不挡列表)。"""
     out: list[dict] = []
     for date_str in await list_dates(redis, limit=limit):
         entry = await load_entry(redis, date_str)
@@ -138,8 +145,35 @@ async def load_summaries(redis: Redis, limit: int = 30) -> list[dict]:
             continue
         diary = str(entry.get("diary", "") or "")
         excerpt = diary[:60] + ("…" if len(diary) > 60 else "")
-        out.append({"date": date_str, "tone": entry.get("dream_tone", ""), "excerpt": excerpt})
+        out.append({"date": date_str, "tone": entry.get("dream_tone", ""),
+                    "kind": str(entry.get("kind", "") or "dream"), "excerpt": excerpt})
     return out
+
+
+async def delete_entry(redis: Redis, date_str: str) -> bool:
+    """删除单日日记(2026-11-01 日记管理批次):文件 unlink + ZREM 索引 + DEL 缓存三清。
+    返回是否确实删了东西(三者任一存在即算);date 格式非法直接 False;
+    各步软失败只 log(文件删了索引没删等半删状态,下次删除可再收敛)。"""
+    if not _DATE_FILE_RE.match(str(date_str or "")):
+        logger.warning("diary delete_entry 日期格式非法(%r),跳过", date_str)
+        return False
+    existed = False
+    try:
+        path = _entry_path(date_str)
+        if path.is_file():
+            path.unlink(missing_ok=True)
+            existed = True
+    except Exception:
+        logger.exception("diary delete_entry 删文件失败 date=%s(继续清索引/缓存)", date_str)
+    try:
+        n1 = await redis.zrem(_K_INDEX, date_str)
+        n2 = await redis.delete(_K_ENTRY.format(date=date_str))
+        existed = existed or bool(n1) or bool(n2)
+    except Exception:
+        logger.exception("diary delete_entry 清索引/缓存失败 date=%s(软失败)", date_str)
+    if existed:
+        logger.info("diary delete_entry 已删除 date=%s", date_str)
+    return existed
 
 
 async def cleanup(redis: Redis, keep_days: int, today: date | None = None) -> None:

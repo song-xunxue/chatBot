@@ -9,6 +9,7 @@ hooks:
   - { name: on_tick, priority: 130 }
 config_schema:
   dream_hour: { type: number, default: 4, min: 0, max: 23, step: 1, description: "做梦时刻(小时,0-23),该小时内首个 tick 触发,每天最多一次" }
+  journal_hour: { type: number, default: 22, min: 0, max: 23, step: 1, description: "日常日记时刻(小时,0-23),该小时后首个 tick 总结当天聊天写日记,每天最多一次" }
   dream_mood_delta: { type: number, default: 0.05, min: 0, max: 0.5, step: 0.01, description: "梦对次日心情的偏移量(正梦+,噩梦-,中性不动)" }
   keep_days: { type: number, default: 90, min: 7, max: 365, step: 1, description: "日记保留天数,过期文件与索引自动清理" }
   llm_provider:
