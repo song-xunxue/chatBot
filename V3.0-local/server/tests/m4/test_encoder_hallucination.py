@@ -58,8 +58,10 @@ async def test_extract_facts_batch_prompt_multiturn_antihallucination():
     await encoder.extract_facts_batch(msgs, llm)
     p = llm.captured
     assert "防幻觉" in p
-    # 多轮对话均喂入,且按 用户/角色(我) 标注
+    assert "称呼铁律" in p                      # 2026-11-03:称呼铁律前置(禁「用户/TA」系统腔)
+    assert "严禁出现「用户」「TA」" in p
+    # 多轮对话均喂入,且按 对方/角色(我) 标注(alias 空,label 兜底「对方」——行前缀口径)
     assert "我爱打篮球" in p
     assert "打球" in p
-    assert "用户:" in p and "角色(我):" in p
+    assert "对方:" in p and "角色(我):" in p
 

@@ -561,7 +561,8 @@ async def test_opener_state_line_after_hours(monkeypatch):
     assert "[对话状态]" in instr
     assert "3 小时" in instr
     assert "你说的" in instr                 # 末条 assistant=bot 自己
-    assert "绝不质问" in instr
+    assert "提一句就够" in instr           # 引导温柔提及,只禁连环追问
+    assert "只顾说自己的事" in instr        # 禁装作没事
     assert "另起炉灶" in instr
 
 
@@ -596,5 +597,7 @@ async def test_opener_instruction_ban_urge_always(monkeypatch):
     """指令常驻约束(2026-11-01):禁责问+优先延续话题,不依赖状态块(任何沉默时长都在)"""
     provider, _ = await _gen_with(monkeypatch, [])   # 空历史也带常驻约束
     instr = provider.calls[0][-1].content
-    assert "严禁质问或抱怨对方不回复" in instr
+    assert "严禁连环追问或兴师问罪" in instr
+    assert "可以温柔地提一句" in instr        # 允许温柔提及(11-03 纠偏)
+    assert "换个开法" in instr                # 反模板:别每次报备自己行程
     assert "优先延续上面最后聊到的话题" in instr

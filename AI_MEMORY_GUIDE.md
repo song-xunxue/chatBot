@@ -52,6 +52,7 @@
 
 ## 3. 当前状态快照（2026-11-01 更新，动手前先核实）
 
+- **日记管理批次（2026-11-01 晚，V3.0-local 单栈免同步，719 测全绿已生效）**：entry 带 `kind`（dream梦/journal日常/manual手写，存量视为 dream）；面板日记页可编辑/删除/手写新增（Diary.vue+DiaryMobile.vue，dist 已重建）；**日常日记 journal**——每晚 `journal_hour`(默认22) 后首个 tick 自动总结当天聊天写日记（`mychat:journal:done:*` 防重）+面板「写日常日记」按钮；记忆提炼收口 `extract_entry_facts`（编辑/保存/重提炼先删该日三种 source 事实再按 kind 写入，删除日记记忆跟随）。新端点：PUT/DELETE /diary/{date}、POST /diary、POST /diary/{date}/memory、run 带 kind。首晚 23:37 已自然触发实证（238 字）。Vdafeiyu 无 dream 体系，不涉及。
 - **⚠️ 自启动已全部禁用（2026-11-01 用户立规）**：4 计划任务（ChatBotLocalServer/ChatBotLocalWatchdog/NapCat-Watchdog/DafeiyuStackWatchdog）全部 Disabled + 启动文件夹 NapCat-Dafeiyu.lnk 已删 + **start 脚本的「恢复看护任务」段已删**（此前 stop 禁用后 start 会重新 Enable=变相自启）。**重启后两栈不自启、无看护兜底**，手动走桌面启动器；stop 脚本禁用行为保留（防复活）。
 - **watch.py 断线自愈（2026-11-01 双栈同步新增）**：起因=大肥鱼 10-27 17:52 WS 断线**静默 5 天**（QQ 进程活而 NapCat WS 客户端死亡，keepalive 门控误判「待扫码」不动作，1358 次告警无人自愈）。现 `check_once` 检测 WS 断线持续 ≥300s → 跑各栈 `scripts/heal-napcat.ps1`（优雅关 QQ→**绝不强杀**守登录态→幂等启动器拉起快速登录→确认 onebot 重连），600s 退避、3 次上限后升级 ERROR 等人工；login 形态（须扫码）不插手。配置 `napcat_heal_*`（config.py §18.1，.env 可关）。**坑：CheckLoginStatus 对 QQNT 自动快速登录返 isLogin=False 但 loginError=「已登录」= 实际在线**（`_interpret_login_status` 已修正，否则面板挂假红幅）；NapCat WebUI OB11Config API 对自动登录形态返 Not Login 不可用。自愈实战待自然验证。
 - **proactive 对话结束状态感知（2026-11-01 双栈同步）**：`Message` 加 `ts` 字段（get_history 透传）→ `generate_opener` 沉默 ≥2h 注入 `[对话状态]` 块（时长/末条归属/禁责问规矩）+ 指令常驻「严禁质问或抱怨对方不回复」「优先延续上面最后聊到的话题」——解「几天不回→你为什么不回我」责问式开场白。登录瞬间离线消息批次竞态丢失（NapCat 内部）无法根治，ws_client 4 处静默 return 已补诊断日志。

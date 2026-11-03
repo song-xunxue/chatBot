@@ -17,6 +17,7 @@
      sync_episodic 自动同步 + rebuild_auto 全量重建(迁移脚本/REST rebuild 共用)
 """
 import logging
+import re
 import time
 
 from redis.asyncio import Redis
@@ -41,6 +42,18 @@ _AUTO_DEFAULTS = {
     "dream":    {"order": 200, "probability": 0.5, "position": "after_memories"},
     "roleplay": {"order": 120, "probability": 0.8, "position": "before_memories"},
 }
+
+
+_VIEWPOINT_RE = re.compile(r"用户|TA")
+
+
+def normalize_viewpoint(text: str, alias: str = "") -> str:
+    """视角规范化(2026-11-03):记忆提炼上游在人设卡 user_alias 为空时产出过「用户/TA」
+    这类系统腔称呼,而世界书条目以「她」的视角注入 system prompt——系统词会污染她的口吻。
+    机械替换为「他」(alias 传入时用专属称呼),幂等;manual 手写条目入口不经过本函数。
+    2026-11-03 根因在 encoder prompt(已修),本函数为存量数据与漏网兜底"""
+    rep = (alias or "").strip() or "他"
+    return _VIEWPOINT_RE.sub(rep, text or "")
 
 
 def _now_ms() -> int:
@@ -272,8 +285,8 @@ async def sync_from_memory(redis: Redis, oid: str, item, *, force_new: bool = Fa
         ref = f"{oid}:{item.id}"
         exist = await find_by_ref(redis, wb_src, ref)
         if exist and not force_new:
-            exist.content = item.content
-            keys = worldbook.auto_keys(item.content)
+            exist.content = normalize_viewpoint(item.content)
+            keys = worldbook.auto_keys(exist.content)
             for t in getattr(item, "tags", []) or []:
                 if t and t not in keys:
                     keys.append(str(t))
@@ -282,14 +295,15 @@ async def sync_from_memory(redis: Redis, oid: str, item, *, force_new: bool = Fa
             exist.token_estimate = worldbook.estimate_tokens(item.content)
             exist.enabled = not getattr(item, "forgotten", False)
             return await upsert_entry(redis, exist)
-        keys = worldbook.auto_keys(item.content)
+        content = normalize_viewpoint(item.content)
+        keys = worldbook.auto_keys(content)
         for t in getattr(item, "tags", []) or []:
             if t and t not in keys:
                 keys.append(str(t))
         return await upsert_entry(redis, WbEntry(
             id=worldbook.new_entry_id(),
-            title=(item.content or "")[:16],
-            content=item.content or "",
+            title=content[:16],
+            content=content,
             keys=keys[:8],
             mode="trigger",
             order=default["order"],
@@ -312,6 +326,7 @@ async def sync_core_fact(redis: Redis, oid: str, fact) -> WbEntry | None:
         ref = f"core:{oid}:{getattr(fact, 'key', '')}"
         content = getattr(fact, "content", "") or ""
         exist = await find_by_ref(redis, "memory", ref)
+        content = normalize_viewpoint(content)
         if exist:
             exist.content = content
             exist.token_estimate = worldbook.estimate_tokens(content)
@@ -339,7 +354,7 @@ async def sync_episodic(redis: Redis, oid: str, entry) -> WbEntry | None:
     keys 取摘要自动关键词(docs §3:keys 取摘要关键词)"""
     try:
         ref = f"epi:{oid}:{getattr(entry, 'id', '')}"
-        summary = getattr(entry, "summary", "") or ""
+        summary = normalize_viewpoint(getattr(entry, "summary", "") or "")
         exist = await find_by_ref(redis, "summary", ref)
         if exist:
             exist.content = summary
