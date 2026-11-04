@@ -66,9 +66,11 @@ def test_renderer_replaces_user_label():
                        example_dialogue=[DialogueExample(user="在吗", character="在的")])
     prompt = render_system_prompt(card)
     assert "关于主人" in prompt
-    assert "与主人的关系" in prompt
+    assert "我和主人" in prompt             # 2026-11-03 自述化:段标题「我和{alias}」
     assert "主人:在吗" in prompt            # 示例对话用 alias
+    assert "我:在的" in prompt              # 示例对话角色侧自述「我:」
     assert "关于用户" not in prompt         # 不再用泛指"用户"
+    assert "下面是你的自我介绍" in prompt    # 自述化总起声明
 
 
 def test_renderer_fallback_user_label():

@@ -17,6 +17,13 @@
 2026-07-06
 变更说明：
   1. B-2 新增 OUTPUT_CONTRACT 常量 + render_system_prompt 末尾追加(根治"（轻声笑了）"类舞台指示)
+
+2026-11-03
+变更说明：
+  1. 人设自述化(用户拍板):渲染从第三人称"设定文档"改为第一人称自述——总起声明
+     「以下是你的自我介绍,以'我'指你自己」;段落标题改自述式(【我是谁·核心】【我的性格】等);
+     _render_profile 画像项改自述句(「我今年22岁」「我说话…」);示例对话「角色:」改「我:」;
+     字段值仍由人设卡原文渲染(内容本身的自述化在面板 Persona 页引导)
 """
 from persona.models import PersonaCard, DynamicState
 
@@ -56,23 +63,23 @@ def _truncate(s: str, limit: int = MAX_LINE_CHARS) -> str:
 
 
 def _render_profile(profile) -> str:
-    """人物画像段:只拼非空项,顿号连接"""
+    """人物画像段(2026-11-03 自述化):非空项拼成第一人称短句,分号连接"""
     items = []
     if profile.age:
-        items.append(f"年龄:{profile.age}")
+        items.append(f"我今年{profile.age}岁")
     if profile.gender:
-        items.append(f"性别:{profile.gender}")
+        items.append(f"我是{profile.gender}")
     if profile.occupation:
-        items.append(f"职业/身份:{profile.occupation}")
+        items.append(f"我的职业/身份是{profile.occupation}")
     if profile.race:
-        items.append(f"种族:{profile.race}")
+        items.append(f"我是{profile.race}")
     if profile.appearance:
-        items.append(f"外貌:{profile.appearance}")
+        items.append(f"我长得{profile.appearance}")
     if profile.speech_style:
-        items.append(f"说话风格:{profile.speech_style}")
+        items.append(f"我说话{profile.speech_style}")
     if profile.catchphrase:
-        items.append(f"口头禅:{profile.catchphrase}")
-    return "、".join(items)
+        items.append(f"我常把「{profile.catchphrase}」挂在嘴边")
+    return "；".join(items)
 
 
 def _render_preferences(prefs) -> str:
@@ -94,7 +101,8 @@ def _render_dialogue(examples: list, user_label: str = "用户") -> str:
         c = getattr(ex, "character", "") or ""
         if not u and not c:
             continue
-        lines.append(f"{user_label}:{_truncate(u)}\n角色:{_truncate(c)}")
+        # 2026-11-03 自述化:「角色:」改「我:」——示例对话以角色第一人称呈现
+        lines.append(f"{user_label}:{_truncate(u)}\n我:{_truncate(c)}")
     return "\n\n".join(lines)
 
 
@@ -109,33 +117,38 @@ def render_system_prompt(card: PersonaCard | None,
     parts = []
     # 2026-07-07 拟人化:用角色对用户的具体称呼(card.user_alias)代"用户",空则回退"用户"
     user_label = (card.user_alias or "").strip() or "用户"
+    # 2026-11-03 自述化总起:整份人设以第一人称"我"自述(角色本人视角),不再是设定文档
+    parts.append(
+        "下面是你的自我介绍——你就是这份介绍里的「我」,读完后请完全以这个身份生活与说话,"
+        "不要把它当成设定资料来复述。"
+    )
     if card.creator_notes:
-        parts.append(f"【核心人设指令】\n{card.creator_notes}")
+        parts.append(f"【我是谁·核心】\n{card.creator_notes}")
     if card.description:
-        parts.append(f"【背景设定】\n{card.description}")
+        parts.append(f"【我的背景】\n{card.description}")
     prof_txt = _render_profile(card.profile)
     if prof_txt:
-        parts.append(f"【人物画像】\n{prof_txt}")
+        parts.append(f"【我的画像】\n{prof_txt}")
     if card.personality:
-        parts.append(f"【性格】\n{card.personality}")
+        parts.append(f"【我的性格】\n{card.personality}")
     pref_txt = _render_preferences(card.preferences)
     if pref_txt:
-        parts.append(f"【喜好与厌恶】\n{pref_txt}")
+        parts.append(f"【我喜欢与不喜欢】\n{pref_txt}")
     # 关于用户(对话另一方描述,让人设熟悉用户)
     if card.user_description:
         parts.append(f"【关于{user_label}】\n{card.user_description}")
     # 与用户的关系(只渲染 relation;greeting 单独成段)
     if card.relationship and card.relationship.relation:
-        parts.append(f"【与{user_label}的关系】\n{card.relationship.relation}")
+        parts.append(f"【我和{user_label}】\n{card.relationship.relation}")
     # 开场白(单独成段,只渲染一次)
     if card.relationship and card.relationship.greeting:
-        parts.append(f"【开场白】\n{card.relationship.greeting}")
+        parts.append(f"【和{user_label}的开场白(仅参考,别照背)】\n{card.relationship.greeting}")
     if card.scenario:
-        parts.append(f"【场景示例】\n{card.scenario}")
+        parts.append(f"【可能的场景】\n{card.scenario}")
     if card.example_dialogue:
         dlg_txt = _render_dialogue(card.example_dialogue, user_label)
         if dlg_txt:
-            parts.append(f"【示例对话】\n{dlg_txt}")
+            parts.append(f"【我们说话的例子】\n{dlg_txt}")
     st = state or card.dynamic_state
     if st and (st.mood or st.status):
         parts.append(f"【当前状态】心情:{st.mood} 状态:{st.status} 精力:{st.energy:.1f}")

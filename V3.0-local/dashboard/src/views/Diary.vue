@@ -588,7 +588,7 @@ onMounted(loadList)
 }
 .modal-card {
   width: min(520px, 90vw);
-  background: var(--bg-card, #1e1e24);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: var(--sp-4);

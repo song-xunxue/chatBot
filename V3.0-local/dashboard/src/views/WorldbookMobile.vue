@@ -478,7 +478,7 @@ async function removeEntry() {
   gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--dim);
 }
 .m-actions {
   display: flex;

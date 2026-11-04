@@ -219,6 +219,15 @@ class Settings(BaseSettings):
     gptsovits_ref_audio: str = ""       # 参考音频绝对路径(GPT-SoVITS 服务端机器可访问)
     gptsovits_prompt_text: str = ""     # 参考音频对应文本(逐字准确,质量关键)
 
+    # 17.1 BreezeBlue 云端 TTS(2026-11-03 用户接入,key 走 .env 不入库):
+    #    POST {api_base}/text-to-speech/{voice_id},header xi-api-key,返回 mp3 二进制。
+    #    音色在 BreezeBlue 控制台设计保存(Voice ID),本端只透传;护栏=超长截断+每日次数。
+    breezeblue_api_base: str = "https://api.breeze.blue/v1"
+    breezeblue_api_key: str = ""        # xi-api-key(空=provider 不可用,降级 stub)
+    breezeblue_voice_id: str = ""       # 控制台设计的 Voice ID(如 voc_xxxx)
+    breezeblue_max_chars: int = 200     # 单次合成文本截断长度(控费用)
+    breezeblue_daily_limit: int = 40    # 每日合成次数上限(Free 套餐 400 credits≈40 条 50 字)
+
     # 18.NapCat 掉线监控(2026-09-15):09-08~15 QQ 登录态失效静默丢 8 天数据的教训。
     #    两级信号:①反向WS连接态 ②QQ 登录态(NapCat WebUI 探测;WS 活着但 QQ 离线
     #    = 事故形态,隧道在消息不到,最隐蔽)。状态供面板横幅轮询(/system/napcat-status)。

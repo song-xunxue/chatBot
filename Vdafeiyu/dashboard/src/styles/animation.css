@@ -1,0 +1,79 @@
+/**
+ * 流式浮动微交互(2026-09-16 面板暗色重设计,docs/05 计划书阶段1)
+ * 卡片悬浮上浮/路由过渡/消息渐入/告警 drop-in/状态点呼吸;
+ * 全部尊重 prefers-reduced-motion(系统关动效则静态呈现)。
+ */
+/* 卡片悬浮上浮 */
+.card-hover {
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-float);
+}
+
+/* 路由/内容过渡 */
+@keyframes page-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.page-fade {
+  animation: page-fade 0.15s ease-out both;
+}
+
+/* 对话流新消息渐入 */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.msg-in {
+  animation: msg-in 0.18s ease-out both;
+}
+
+/* 告警胶囊落下 */
+@keyframes drop-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+.drop-in {
+  animation: drop-in 0.2s ease-out both;
+}
+
+/* 在线状态点呼吸 */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* 路由过渡(vue <Transition name="page"> 搭配) */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.page-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-hover,
+  .card-hover:hover {
+    transform: none;
+  }
+  .msg-in,
+  .page-fade,
+  .drop-in,
+  .pulse-dot {
+    animation: none;
+  }
+  .page-enter-active,
+  .page-leave-active {
+    transition: none;
+  }
+}

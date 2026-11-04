@@ -29,14 +29,14 @@ const providers = ref<{ name: string; configured: boolean }[]>([])
 
 // —— 长文本字段定义(预览+展开编辑);speech_style/catchphrase 存 profile 嵌套,form 扁平化 ——
 const LONG_FIELDS: { field: string; label: string; hint: string }[] = [
-  { field: 'creator_notes', label: '创作备注(核心人设指令)', hint: '最核心的人设指令,决定 AI 行为准则(输出硬规矩写这里)' },
-  { field: 'personality', label: '性格', hint: '人物性格(反推常改此字段 → 渲染【性格】段)' },
-  { field: 'speech_style', label: '说话风格', hint: '语气/用词习惯(反推常改 → 渲染【人物画像】段)' },
-  { field: 'description', label: '描述(背景设定)', hint: '背景故事 / 世界观设定' },
-  { field: 'scenario', label: '场景示例', hint: '场景设定(反推可改 → 渲染【场景示例】段)' },
-  { field: 'user_description', label: '关于用户(你)', hint: '对话另一方(你)的特征,让人设更熟悉你' },
-  { field: 'user_alias', label: '对用户的称呼', hint: '角色怎么称呼对方(如"主人");自动从对话学,这里可手动改,renderer/记忆用它代"用户"更拟人' },
-  { field: 'catchphrase', label: '口头禅', hint: '标志性短语(渲染【人物画像】段)' },
+  { field: 'creator_notes', label: '我是谁·核心', hint: '用「我」的口吻写核心人设:我是谁、我要怎么和人说话(渲染【我是谁·核心】段)' },
+  { field: 'personality', label: '我的性格', hint: '用「我」的口吻写性格,如:我外表清冷,但其实很黏人(渲染【我的性格】段)' },
+  { field: 'speech_style', label: '我说话的风格', hint: '用「我」的口吻写语气/用词,如:我说话软软的,爱用叠词(渲染【我的画像】段)' },
+  { field: 'description', label: '我的背景', hint: '用「我」的口吻写背景故事,如:我在…长大,后来…(渲染【我的背景】段)' },
+  { field: 'scenario', label: '可能的场景', hint: '场景设定(渲染【可能的场景】段)' },
+  { field: 'user_description', label: '关于他(对话的你)', hint: '用「我」的口吻写对方,如:他喜欢熬夜,工作很忙(渲染【关于他】段)' },
+  { field: 'user_alias', label: '我对他的称呼', hint: '必填!角色怎么称呼对方(如「主人」,填真实称呼);记忆提炼/世界书/渲染全用它,空着会退「他」(2026-11-03 视角修复根因)' },
+  { field: 'catchphrase', label: '我的口头禅', hint: '标志性短语(渲染【我的画像】段「我常把…挂在嘴边」)' },
 ]
 
 // —— 长文本统一编辑弹窗 ——

@@ -48,7 +48,7 @@ async def test_pipeline_system_prompt_has_persona_and_mood(fake_redis, mock_prov
         pass
 
     sys_msg = next(m for m in mock_provider.last_messages if m.role == "system")
-    assert "核心人设指令" in sys_msg.content or "友善" in sys_msg.content   # 默认人设
+    assert "我是谁·核心" in sys_msg.content or "友善" in sys_msg.content   # 默认人设(2026-11-03 自述化标题)
     assert "心情" in sys_msg.content   # mood 注入
 
 

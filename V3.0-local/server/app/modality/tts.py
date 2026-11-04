@@ -170,6 +170,66 @@ class GPTSoVitsProvider(TTSProvider):
         return await asyncio.to_thread(self._sync_post, "tts", payload)
 
 
+# —— BreezeBlue 云端 TTS(2026-11-03 用户接入)——
+# 文档:https://docs.breezeblue.ai/api-reference/text-to-speech/convert-text-to-speech
+# POST {api_base}/text-to-speech/{voice_id}?output_format=mp3,header xi-api-key,返回 mp3 二进制。
+# 音色在 BreezeBlue 控制台设计保存(Voice ID),本端 voice 参数忽略(同 GPTSoVits 口径)。
+# 护栏(控费):单次文本截断 breezeblue_max_chars + 每日次数 breezeblue_daily_limit(redis 计数)。
+# 费用口径(官方博客 2026-10-29):中文每字 2 计费字符,1 credit=10 字符,$3/10000 credits;
+#   Free 套餐每天可领 400 credits≈40 条 50 字回复。失败抛异常,send_voice_reply 捕获回退文本。
+
+
+class BreezeBlueTTSProvider(TTSProvider):
+    """BreezeBlue 云端 TTS provider(用户 2026-11-03 接入,音色 voc_b86bfwct4cjn=大肥鱼专属)。"""
+    name = "breezeblue"
+
+    def __init__(self, api_key: str = "", voice_id: str = "", api_base: str = "",
+                 max_chars: int = 0, daily_limit: int = 0):
+        self.api_key = api_key or settings.breezeblue_api_key
+        self.voice_id = voice_id or settings.breezeblue_voice_id
+        self.api_base = (api_base or settings.breezeblue_api_base).rstrip("/")
+        self.max_chars = max_chars or settings.breezeblue_max_chars
+        self.daily_limit = daily_limit or settings.breezeblue_daily_limit
+
+    async def _guard_daily(self) -> None:
+        """每日次数护栏(redis INCR 按日计数,TTL 2 天自然清);超限抛 RuntimeError
+        (send_voice_reply 捕获回退文本)。redis 不可用时 cnt=None 护栏放行
+        (语音非关键路径,降级已有);注意超限判定在 try 外——redis 故障的异常
+        不得与「超限」共用异常通道(首版 except RuntimeError 混吞过)。"""
+        cnt = None
+        try:
+            from storage.redis_client import get_redis
+            redis = await get_redis()
+            day = time.strftime("%Y%m%d")
+            key = f"mychat:tts:breezeblue:count:{day}"
+            cnt = await redis.incr(key)
+            await redis.expire(key, 2 * 86400)
+        except Exception:
+            logger.warning("BreezeBlue 每日护栏计数失败(放行,不影响合成)", exc_info=True)
+        if cnt is not None and cnt > self.daily_limit:
+            raise RuntimeError(f"BreezeBlue 每日用量上限({self.daily_limit})已满,今日回退文字")
+
+    async def synthesize(self, text: str, voice: str = "", speed: float = 1.0,
+                         gain: float = 0.0, emotion: str = "", **kwargs) -> bytes:
+        if not self.api_key or not self.voice_id:
+            raise RuntimeError("BreezeBlue 未配 api_key/voice_id(.env BREEZEBLUE_API_KEY/BREEZEBLUE_VOICE_ID)")
+        text = (text or "").strip()
+        if not text:
+            return b""
+        if len(text) > self.max_chars:
+            text = text[:self.max_chars]   # 截断控费(长回复保留文字的口径由调用方决定)
+        await self._guard_daily()
+        headers = {"xi-api-key": self.api_key, "Content-Type": "application/json"}
+        # speed/gain/emotion/voice 本版忽略(BreezeBlue 语气走 voice instruction prompting,后续可接)
+        payload = {"text": text}
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{self.api_base}/text-to-speech/{self.voice_id}",
+                headers=headers, json=payload, params={"output_format": "mp3"})
+            resp.raise_for_status()
+            return resp.content
+
+
 # —— GPT-SoVITS 就绪状态检测(M-tts-2,2026-08-10:心跳缓存优先 + 懒探测,免重复打 frp 隧道)——
 # 心跳:本地启动器 api_v2 就绪后每 30s POST /tts/gptsovits/heartbeat 上报,服务端写 Redis TTL 90s。
 # status 查询:心跳未过期直接返不探测;过期/无心跳且 probe=True 才主动探测根路径。
@@ -248,10 +308,13 @@ async def check_gptsovits_status(redis=None, *, force: bool = False, probe: bool
 
 def get_tts(name: str = "") -> TTSProvider:
     """按名实例化 TTS provider;未知名 → settings.tts_provider,默认 siliconflow。
-    siliconflow 无 key / gptsovits 未配 → 降级 stub(链路不断,语音跳过,文本兜底)。"""
+    siliconflow 无 key / gptsovits 未配 → 降级 stub(链路不断,语音跳过,文本兜底)。
+    breezeblue(2026-11-03):无 key/voice_id → 同样降级 stub。"""
     n = (name or settings.tts_provider or "siliconflow").lower()
     if n == "gptsovits":
         return GPTSoVitsProvider()
+    if n == "breezeblue":
+        return BreezeBlueTTSProvider()
     if n == "siliconflow" and settings.siliconflow_api_key:
         return SiliconFlowTTSProvider()
     return StubTTSProvider()

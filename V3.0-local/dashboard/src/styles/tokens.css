@@ -34,10 +34,10 @@
   --f-2xl: 24px;
   --f-3xl: 32px;
 
-  /* 4.补色：暖色点缀(角色的"人味",用于强调/日记/心情页) */
-  --warm: #f2a3b3;
-  --warm-dim: rgba(242, 163, 179, 0.14);
-  --warm-glow: rgba(242, 163, 179, 0.22);
+  /* 4.补色：暖色点缀(角色的"人味",用于强调/日记/心情页;浅色=NextUI pink,深色见 html.dark 覆盖) */
+  --warm: #ec4899;
+  --warm-dim: rgba(236, 72, 153, 0.14);
+  --warm-glow: rgba(236, 72, 153, 0.22);
 
   /* 5.层级阴影(比 theme.css 更细的三档) */
   --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -50,11 +50,28 @@
   --dur-2: 0.2s;
 }
 
-/* 页面底：轻微径向光晕,让纯黑底不那么死 */
+/* 深色主题覆盖(html.dark 由 App.vue 切换) */
+html.dark {
+  --warm: #ff7fac;   /* NapCat dark 深底上用樱花粉更柔 */
+  --warm-dim: rgba(255, 127, 172, 0.14);
+  --warm-glow: rgba(255, 127, 172, 0.22);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --elev-3: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* 浅色阴影(粉调,深色用上方默认暗影) */
+:root {
+  --elev-1: 0 1px 2px rgba(236, 72, 153, 0.06);
+  --elev-2: 0 4px 12px rgba(236, 72, 153, 0.10);
+  --elev-3: 0 12px 32px rgba(236, 72, 153, 0.16);
+}
+
+/* 页面底：轻微径向光晕(浅色粉白/深色暗粉,随主题切换) */
 body {
   background:
-    radial-gradient(1200px 600px at 12% -10%, rgba(63, 198, 138, 0.06), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(242, 163, 179, 0.05), transparent 55%),
+    radial-gradient(1200px 600px at 12% -10%, rgba(236, 72, 153, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(255, 127, 172, 0.07), transparent 55%),
     var(--bg);
   background-attachment: fixed;
 }

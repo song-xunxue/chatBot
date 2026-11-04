@@ -1,0 +1,89 @@
+/**
+ * 面板主题变量(2026-11-03 双主题重构,对齐 NextNapCatWebUI 浅色设计):
+ *   :root      = 浅色(默认,粉色侧栏+白卡片+胶囊导航,截图取证自 NextNapCatWebUI 官方 screenshots)
+ *   html.dark  = 深色(原 2026-09-16 暗色系,主色 NapCat dark 玫粉 #f31260)
+ * 全部视图页的颜色统一走这些变量;切换主题只翻 html.dark 类 + naive 主题(App.vue)。
+ * 日期: 2026-09-16
+
+2026-11-03
+变更说明:
+  1. 双主题:浅色(Next 风格,NextUI pink #ec4899 系)为默认,深色收进 html.dark;
+     新增 --side-bg(侧栏底)/--dim(中性微底,编辑框等);硬编码暗值全部变量化
+ */
+:root {
+  /* 底色层级(浅色) */
+  --bg: #fdf6f9;                          /* 页面底(粉白) */
+  --card: #ffffff;                        /* 卡片面 */
+  --card-2: #fef3f8;                      /* 二级悬浮面(气泡/弹出) */
+  --border: rgba(236, 72, 153, 0.16);     /* 通用边框(粉调) */
+  --dim: rgba(0, 0, 0, 0.045);            /* 中性微底(输入框/代码块) */
+  --side-bg: #fbd9e9;                     /* 侧栏底(浅粉,Next 截图口径) */
+  /* 主色(NextUI pink) */
+  --accent: #ec4899;
+  --accent-hover: #f472b6;
+  --accent-dim: rgba(236, 72, 153, 0.12);
+  /* 文字 */
+  --text: #212636;
+  --text-dim: rgba(33, 38, 54, 0.58);
+  --text-faint: rgba(33, 38, 54, 0.36);
+  /* 语义色 */
+  --danger: #e11d48;
+  --danger-dim: rgba(225, 29, 72, 0.10);
+  --info: #0ea5e9;
+  --info-dim: rgba(14, 165, 233, 0.10);
+  --warning: #d97706;
+  --warning-dim: rgba(217, 119, 6, 0.12);
+  /* IM 气泡 */
+  --bubble-user: rgba(236, 72, 153, 0.10);
+  --bubble-bot: #f6f7f9;
+  --bubble-sys: rgba(0, 0, 0, 0.04);
+  /* 阴影(浅色带一点粉) */
+  --shadow-card: 0 4px 16px rgba(236, 72, 153, 0.08);
+  --shadow-float: 0 8px 24px rgba(236, 72, 153, 0.16);
+}
+
+html.dark {
+  --bg: #111114;
+  --card: #1a1a1f;
+  --card-2: #222228;
+  --border: rgba(255, 255, 255, 0.08);
+  --dim: rgba(255, 255, 255, 0.05);
+  --side-bg: #0c0c0e;
+  --accent: #f31260;
+  --accent-hover: #f54180;
+  --accent-dim: rgba(243, 18, 96, 0.16);
+  --text: rgba(255, 255, 255, 0.82);
+  --text-dim: rgba(255, 255, 255, 0.45);
+  --text-faint: rgba(255, 255, 255, 0.3);
+  --danger: #db3694;
+  --danger-dim: rgba(219, 54, 148, 0.14);
+  --info: #88c0d0;
+  --info-dim: rgba(136, 192, 208, 0.14);
+  --warning: #f0a935;
+  --warning-dim: rgba(240, 169, 53, 0.14);
+  --bubble-user: rgba(243, 18, 96, 0.16);
+  --bubble-bot: #222228;
+  --bubble-sys: rgba(255, 255, 255, 0.06);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+html,
+body,
+#app {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 通用卡片面(视图页外包容器用) */
+.panel-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+}
