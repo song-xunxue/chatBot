@@ -70,7 +70,9 @@ async def send_proactive(oid: str, body: dict = Body(default={})):
         raise HTTPException(status_code=400, detail="content required")
     _require_qq_oid(oid)
     redis = await get_redis()
-    return await takeover_svc.send_proactive(redis, oid, content)
+    # 2026-11-05 透传 use_tts(True/False 显式语音,None 沿用代答 TTS 配置)——原版漏传致面板主动发送永不带语音
+    use_tts = body.get("use_tts")
+    return await takeover_svc.send_proactive(redis, oid, content, use_tts=use_tts)
 
 
 # —— 代答 TTS 开关(M-tts,2026-08-04):两开关逻辑同 tts_reply 插件;voice/speed/gain 复用插件 config ——
