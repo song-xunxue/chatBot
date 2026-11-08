@@ -141,3 +141,7 @@ def register_builtin_tools(registry: ToolRegistry, *, web_search_enable: bool = 
     registry.register(ReverseInferTool())
     if web_search_enable:
         registry.register(WebSearchTool())
+    # 表达类工具(2026-11-08 能力工具化:发语音/发表情包,模型 tool-loop 自主调用)
+    from tools.expressive import SendStickerTool, SendVoiceTool
+    registry.register(SendVoiceTool())
+    registry.register(SendStickerTool())
