@@ -227,6 +227,7 @@ class Settings(BaseSettings):
     breezeblue_voice_id: str = ""       # 控制台设计的 Voice ID(如 voc_xxxx)
     breezeblue_max_chars: int = 200     # 单次合成文本截断长度(控费用)
     breezeblue_daily_limit: int = 40    # 每日合成次数上限(Free 套餐 400 credits≈40 条 50 字)
+    breezeblue_tail_silence: float = 1.2  # 语音尾部补静音秒数(结尾余韵,0=关;0.5 不够,2026-11-08 用户反馈"结尾还是太快")
 
     # 18.NapCat 掉线监控(2026-09-15):09-08~15 QQ 登录态失效静默丢 8 天数据的教训。
     #    两级信号:①反向WS连接态 ②QQ 登录态(NapCat WebUI 探测;WS 活着但 QQ 离线

@@ -47,6 +47,11 @@ V2.0 重点是 QQ 官方机器人(Webhook)接入,凭证只需 2 个:
 变更说明：
   1. 新增 local_llm_disable_think(默认 True):真正关闭 Qwen3 思考模式——优先 Ollama 原生
      /api/chat(think:false),失败回退 OpenAI 兼容路径 + 末条 user 消息注入 " /no_think"
+
+2026-10-26
+变更说明：
+  1. 世界书式记忆(docs/09):新增 memory_mode(legacy|worldbook,默认 legacy 行为不变)、
+     worldbook_budget(2000)/worldbook_max_entries(12)/worldbook_recall_topup(3)
 """
 from pathlib import Path
 
@@ -140,6 +145,12 @@ class Settings(BaseSettings):
     memory_embedding_provider: str = "glm"  # embedding provider(glm/空=禁用,降级纯 BM25)
     memory_embedding_model: str = "embedding-3"  # GLM embedding-3(2048 维)
     memory_embedding_sim_threshold: float = 0.85  # 语义去重 cosine 阈值(>= 视为重复,替 Jaccard)
+    # 世界书式记忆(docs/09,2026-10-26):legacy=现行全量摘要注入(默认,验收后再切) /
+    # worldbook=按命中注入+按预算裁剪(stage_memory_retrieve 分支,见 memory/worldbook*.py)
+    memory_mode: str = "legacy"
+    worldbook_budget: int = 2000         # 每轮注入 token 预算(超限裁剪,always 永不裁)
+    worldbook_max_entries: int = 12      # 每轮最多注入条数(硬顶,always 优先占位)
+    worldbook_recall_topup: int = 3      # memory 来源候选不足时向量兜底补的条数
 
     # 7.插件系统(M2 copy V1.0 plugins 基础设施用;M2 不加载业务插件,只保证 EventBus/钩子链路通)
     plugin_enabled: bool = True  # 插件系统总开关,False 时降级(不初始化、不触发任何钩子)
@@ -216,6 +227,7 @@ class Settings(BaseSettings):
     breezeblue_voice_id: str = ""       # 控制台设计的 Voice ID(如 voc_xxxx)
     breezeblue_max_chars: int = 200     # 单次合成文本截断长度(控费用)
     breezeblue_daily_limit: int = 40    # 每日合成次数上限(Free 套餐 400 credits≈40 条 50 字)
+    breezeblue_tail_silence: float = 1.2  # 语音尾部补静音秒数(结尾余韵,0=关;0.5 不够,2026-11-08 用户反馈"结尾还是太快")
 
     # 18.NapCat 掉线监控(2026-09-15):09-08~15 QQ 登录态失效静默丢 8 天数据的教训。
     #    两级信号:①反向WS连接态 ②QQ 登录态(NapCat WebUI 探测;WS 活着但 QQ 离线

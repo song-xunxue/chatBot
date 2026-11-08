@@ -81,13 +81,38 @@ async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, 
     tts_cfg = await takeover_store.get_tts_config(redis, oid)
     tts_on = bool(tts_cfg.get("enable")) if use_tts is None else bool(use_tts)
     if tts_on:
+        # 2026-11-08 修(用户实测撞出):content 带 [表情包: x] token 时,语音会把它当文字念出来
+        # 且图片不发。先剥离 token:图片照常经出站翻译层发(独立成条),剩余文本才走语音合成。
+        voice_parts = content
+        from storage import sticker_store as _ss
+        token_present = "[表情包:" in content or "[表情包：" in content
+        if token_present:
+            try:
+                # 图片段(token)经出站翻译层单独发图;剩余文本剥离后走语音(token 文字不该被念出来)
+                parts = _ss.split_reply_with_tokens(content)
+                token_txt = "".join(f"[表情包: {v}]" for k, v in parts if k == "sticker")
+                plain = "".join(v for k, v in parts if k == "text")
+                if token_txt.strip():
+                    from adapter import get_current_adapter as _gca
+                    _ad = await _gca()
+                    # 发 token 原文格式(翻译层正则匹配 [表情包: x] → find_sticker → base64 image 段)
+                    await _ad.send_text(oid, token_txt, msg_id=msg_id, msg_seq=msg_seq,
+                                        human_authored=True)
+                content = plain
+                voice_parts = plain
+            except Exception:
+                logger.warning("表情包 token 剥离失败,整条走语音(含 token 文字)", exc_info=True)
+                voice_parts = content
         voice, speed, gain, emo = await _read_tts_voice_params(oid)
         from modality.tts import resolve_voice, send_voice_reply
         voice = await resolve_voice(redis, oid, voice)   # 优先克隆 uri(面板「设为当前」),回退预设
-        vr = await send_voice_reply(oid, content, msg_id=msg_id, msg_seq=msg_seq,
+        if not voice_parts.strip():
+            # 已由图片+文本消息送达,无需语音
+            return {"delivered": True, "mode": "sticker+text"}
+        vr = await send_voice_reply(oid, voice_parts, msg_id="", msg_seq=msg_seq,
                                     voice=voice, speed=speed, gain=gain,
                                     emotion_enable=emo,
-                                    send_text_also=bool(tts_cfg.get("send_text_also", False)),
+                                    send_text_also=False,
                                     human_authored=True)  # admin 代答文本不过守卫
         if vr and vr.get("delivered"):
             return {"delivered": True, "mode": vr["mode"]}

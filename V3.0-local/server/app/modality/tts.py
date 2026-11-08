@@ -179,8 +179,34 @@ class GPTSoVitsProvider(TTSProvider):
 #   Free 套餐每天可领 400 credits≈40 条 50 字回复。失败抛异常,send_voice_reply 捕获回退文本。
 
 
+def _append_wav_silence(data: bytes, sec: float) -> bytes:
+    """wav 尾部追加静音帧(2026-11-08 结尾余韵:用户反馈 B 版"结尾太快很突然")。
+    PCM 补静音=纯字节操作(wave 标准库,零依赖):读参数 → 原帧+静音帧 → 重写。
+    8bit 静音=0x80(无符号中点),其余位深=0x00;解析失败(非 PCM wav)原样返回不炸。"""
+    import io as _io
+    import wave as _wave
+    try:
+        src = _wave.open(_io.BytesIO(data), "rb")
+        params = src.getparams()
+        frames = src.readframes(src.getnframes())
+        src.close()
+        nch, width, rate = params.nchannels, params.sampwidth, params.framerate
+        silence = (b"\x80" if width == 1 else b"\x00") * int(rate * sec) * nch * width
+        buf = _io.BytesIO()
+        out = _wave.open(buf, "wb")
+        out.setnchannels(nch)
+        out.setsampwidth(width)
+        out.setframerate(rate)
+        out.writeframes(frames + silence)
+        out.close()
+        return buf.getvalue()
+    except Exception:
+        logger.warning("wav 尾静音追加失败(原样返回): %.100s", data[:40])
+        return data
+
+
 class BreezeBlueTTSProvider(TTSProvider):
-    """BreezeBlue 云端 TTS provider(用户 2026-11-03 接入,音色 voc_b86bfwct4cjn=大肥鱼专属)。"""
+    """BreezeBlue 云端 TTS provider(用户 2026-11-03 接入,音色 voc_b86bfwct4cjn=清浔专属)。"""
     name = "breezeblue"
 
     def __init__(self, api_key: str = "", voice_id: str = "", api_base: str = "",
@@ -220,14 +246,29 @@ class BreezeBlueTTSProvider(TTSProvider):
             text = text[:self.max_chars]   # 截断控费(长回复保留文字的口径由调用方决定)
         await self._guard_daily()
         headers = {"xi-api-key": self.api_key, "Content-Type": "application/json"}
-        # speed/gain/emotion/voice 本版忽略(BreezeBlue 语气走 voice instruction prompting,后续可接)
+        # 2026-11-08 情感表演(用户反馈"太平淡"):emotion 参数对本 provider 语义=完整表演指令
+        # (infer_tts_instruction 生成,官方 voice-instruction-prompting 口径);
+        # voice_settings.guidance_scale=3(表现力档上限;2026-11-08 用户反馈 2 太收致平淡,官方范围 1-10)
+        # speed 原生支持(0.5-2.0 变速不变调;2026-11-08 用户要求 1.1 倍)——send_voice_reply 透传
         payload = {"text": text}
+        if emotion:
+            payload["instructions"] = emotion
+        vs: dict = {"guidance_scale": 3}
+        if speed and speed != 1.0:
+            vs["speed"] = max(0.5, min(2.0, float(speed)))
+        payload["voice_settings"] = vs
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
                 f"{self.api_base}/text-to-speech/{self.voice_id}",
-                headers=headers, json=payload, params={"output_format": "mp3"})
+                headers=headers, json=payload, params={"output_format": "wav"})
             resp.raise_for_status()
-            return resp.content
+            audio = resp.content
+        # 2026-11-08 结尾余韵(用户反馈"结尾太快很突然"):wav 尾部补静音帧。
+        # 走 wav 而非 mp3 的原因:wav 是 PCM,尾部补静音=纯字节操作(wave 标准库),零依赖。
+        tail = float(settings.breezeblue_tail_silence)
+        if tail > 0:
+            audio = _append_wav_silence(audio, tail)
+        return audio
 
 
 # —— GPT-SoVITS 就绪状态检测(M-tts-2,2026-08-10:心跳缓存优先 + 懒探测,免重复打 frp 隧道)——
@@ -320,6 +361,35 @@ def get_tts(name: str = "") -> TTSProvider:
     return StubTTSProvider()
 
 
+async def infer_tts_instruction(text: str) -> str:
+    """BreezeBlue 表演指令生成(2026-11-08 情感丰富化,官方 voice-instruction-prompting
+    「用你自己的 LLM 写指令」工作流的中文化+恋人场景定制):
+    LLM 通读台词,从 情境/意图/情感强度/节奏重音/身体状态 五维度挑 2-3 个,
+    输出 1-2 句中文表演指令(如「轻快雀跃的语气,像刚想到什么好主意,尾音上扬」)。
+    走 resolve_provider("tts_emotion");失败返空串(调用方降级无指令合成)。"""
+    llm = resolve_provider("tts_emotion")
+    if llm is None:
+        return ""
+    prompt = (
+        "为下面的台词写一条简短的 TTS 表演指令(与台词同语言,中文)。\n"
+        "场景:恋人之间的 QQ 语音消息;说话者是年轻女性角色,语气自然、像随手发的语音,"
+        "不是播音腔。听者是她在意的恋人。\n"
+        "从 情境/意图/情感强度/节奏重音/身体状态 里挑 2-3 个最有用的方向,用 1-2 句话写;"
+        "记得提到结尾要轻放缓、带一点余韵再收,不要戛然而止;"
+        "不要互相矛盾的指令,不要改变说话者身份,不要承诺具体时间点。只输出指令本身,不要解释。\n\n"
+        f"台词:{text}"
+    )
+    try:
+        resp = await llm.chat([Message(role="user", content=prompt)])
+    except Exception as e:
+        logger.warning("tts 表演指令生成失败,降级无指令合成: %s", e)
+        return ""
+    out = (resp.text or "").strip().strip("\"'“”").strip()
+    if len(out) > 120:
+        out = out[:120]   # 限长防 LLM 啰嗦
+    return out
+
+
 async def infer_tts_emotion(text: str) -> str:
     """LLM 通读回复文本推导情感语气(供 CosyVoice2 <|endofprompt|> 指令)。
 
@@ -376,8 +446,14 @@ async def send_voice_reply(oid: str, text: str, *, msg_id: str, msg_seq: int,
     from adapter import get_current_adapter   # V3.0:平台适配器(onebot=record 段 base64)
     adapter = await get_current_adapter()
     try:
-        emotion = await infer_tts_emotion(text) if emotion_enable else ""
-        audio = await get_tts().synthesize(text, voice, speed, gain, emotion, **tts_params)
+        tts = get_tts()
+        if getattr(tts, "name", "") == "breezeblue":
+            # 2026-11-08 修(用户反馈面板路径"有气无力"):BreezeBlue 的表演指令**无条件启用**——
+            # 这是该 API 的正确用法,无指令=平淡朗读;emotion_enable 开关只管 CosyVoice 情感短词口径
+            emotion = await infer_tts_instruction(text)
+        else:
+            emotion = await infer_tts_emotion(text) if emotion_enable else ""   # CosyVoice:短词 <|endofprompt|>
+        audio = await tts.synthesize(text, voice, speed, gain, emotion, **tts_params)
         if not audio:
             logger.info("TTS 空产出(stub/无 key),跳过语音 oid=%s", oid)
             return None

@@ -104,7 +104,7 @@ async def test_synthesize_truncates_and_posts_binary(monkeypatch, _bb_on):
     assert audio == b"ID3fake-mp3"
     assert len(captured["json"]["text"]) == 50          # 截断到 max_chars
     assert captured["headers"]["xi-api-key"] == "brz_test"
-    assert captured["params"] == {"output_format": "mp3"}
+    assert captured["params"] == {"output_format": "wav"}   # 2026-11-08:wav+尾静音(结尾余韵)
     assert f"/text-to-speech/voc_test" in captured["url"]
 
 
@@ -151,3 +151,23 @@ async def test_synthesize_empty_text_short_circuits(monkeypatch, _bb_on):
     p = BreezeBlueTTSProvider()
     assert await p.synthesize("   ") == b""
     assert captured == {}
+
+
+async def test_synthesize_speed_passthrough(monkeypatch, _bb_on):
+    """speed≠1.0 → voice_settings.speed 透传(2026-11-08 用户要求 1.1 倍;
+    BreezeBlue 原生 speed=变速不变调,0.5-2.0)"""
+    captured = {}
+    _patch_http(monkeypatch, captured)
+    p = BreezeBlueTTSProvider()
+    # 注入假 redis(真 redis 在线时护栏 INCR 跨测试累积会误拦)
+    from storage.redis_client import get_redis as _gr
+
+    async def fake_gr():
+        return _FakeRedis()
+
+    import storage.redis_client as rc
+    monkeypatch.setattr(rc, "get_redis", fake_gr)
+    await p.synthesize("语速测试", speed=1.1)
+    assert captured["json"]["voice_settings"]["speed"] == 1.1
+    await p.synthesize("正常语速", speed=1.0)
+    assert "speed" not in captured["json"]["voice_settings"]   # 1.0 不写(默认值)
