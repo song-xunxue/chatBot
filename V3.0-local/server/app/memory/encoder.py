@@ -35,8 +35,11 @@ async def summarize(messages: list, llm: LLMProvider | None, model: str = "",
     if not llm:
         return _heuristic_summary(messages)
     label = (user_alias or "").strip() or "用户"
+    # 2026-11-08 P0-2(摘要覆盖率 25%→100%):去掉 messages[-6:] 硬截——24 条 span 全量入摘要
+    # (每条 200 字限长控 token,总量 ~5KB 在 LLM 上下文内;原截断致 75% 对话永远进不了情景记忆)
     dialog = "\n".join(
-        f"{label if m.role == 'user' else '角色(我)'}: {m.content}" for m in messages[-6:])  # 最近几轮,控 token
+        f"{label if m.role == 'user' else '角色(我)'}: {str(m.content or '')[:200]}"
+        for m in messages)
     prompt = (f"请用一两句中文概括以下对话的关键信息(事实/偏好/事件),只输出概括,不要寒暄。\n"
               f"注意:只概括 {label}(user 一方)明确陈述的事实;角色(我)一方的承诺/虚构/假设若 {label} 未确认,"
               f"不要当成事实写进概括(防幻觉固化进情景记忆):\n" + dialog)
@@ -115,10 +118,12 @@ async def extract_facts_batch(messages: list, llm: LLMProvider | None,
     # 兜底"他"并在称呼铁律里明确禁「用户」「TA」,防复发
     label = (user_alias or "").strip() or "对方"
     addr = (user_alias or "").strip() or "他"   # 记录内容里对对方的称呼(alias 有值用专属称呼)
-    # 格式化多轮对话(最近 12 条控 token;user→label,assistant→角色)
+    # 格式化多轮对话(span 全量入抽取,每条 200 字限长控 token;user→label,assistant→角色)
+    # 2026-11-08 P0-2(review #4):去掉 [-12:] 硬截——P1-8 改真实轮计数后 span 可能超 12 条,
+    # 硬截会重演 A2 覆盖率漏洞;窗口大小由调用方(extract_n)决定,编码层不再二次截断
     dialog = "\n".join(
-        f"{label if m.role == 'user' else '角色(我)'}: {m.content}"
-        for m in messages[-12:] if getattr(m, "content", "")
+        f"{label if m.role == 'user' else '角色(我)'}: {str(m.content or '')[:200]}"
+        for m in messages if getattr(m, "content", "")
     )
     if not dialog.strip():
         return []

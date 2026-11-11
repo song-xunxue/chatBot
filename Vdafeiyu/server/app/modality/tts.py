@@ -206,7 +206,7 @@ def _append_wav_silence(data: bytes, sec: float) -> bytes:
 
 
 class BreezeBlueTTSProvider(TTSProvider):
-    """BreezeBlue 云端 TTS provider(用户 2026-11-03 接入,音色 voc_b86bfwct4cjn=清浔专属)。"""
+    """BreezeBlue 云端 TTS provider(用户 2026-11-03 接入,音色 voc_b86bfwct4cjn=6390 栈专属)。"""
     name = "breezeblue"
 
     def __init__(self, api_key: str = "", voice_id: str = "", api_base: str = "",

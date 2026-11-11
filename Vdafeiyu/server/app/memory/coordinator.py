@@ -14,6 +14,12 @@ per-oid 锁(RMW 一致性)、上限淘汰+物理清理、单例双检锁+初始�
 变更说明：
   1. 记忆优化阶段1/2/3:retrieve 加向量重排(BM25+embedding RRF)+ _upsert_fact_dedup 语义去重
      (cosine 替 Jaccard)+ extract 批量化(每 N 轮)+ 评分联动 importance + 激活 core 层(渲染+升级)
+
+2026-11-08
+变更说明：
+  1. 批次1止血(P0-1/P0-2/P0-3/P0-4,双栈同步):评分回流移出双重门控每轮必调;
+     episodic span ts 取窗口首尾真实 ts;core 写入 source_mid+上限淘汰;
+     useful_score 初始与 importance 解耦(默认 0.5)
 """
 import asyncio
 import logging
@@ -189,18 +195,45 @@ class MemoryCoordinator:
     async def _upsert_core_fact(self, oid: str, fact: dict) -> None:
         """高重要度事实升级到 core 层(常驻注入,2026-07-07 优化4)。
         按 content 归一化 + Jaccard 去重(避免核心记忆重复堆积)。
-        core 层在 retrieve 取全量 + render 常驻注入,不靠检索运气。"""
+        core 层在 retrieve 取全量 + render 常驻注入,不靠检索运气。
+        2026-11-08 P0-3(core 治理):
+          ①写入 source_mid(来源 long_term 的 mid)——遗忘/删除据此联动清理 core;
+          ②上限淘汰 settings.memory_max_core(默认 20):超出移除最旧的非 locked 条目,
+            修「core 只进不出单调膨胀+底层被遗忘 core 仍常驻(记忆鬼影)」。
+            被移除的 core 不动对应 long 条目(仍留在检索层,只是不再常驻注入)。"""
+        from core.config import settings
         core_list = await store.get_core(self.redis, oid)
         content = fact.get("content", "")
         for cf in core_list:
             if _normalize(cf.content) == _normalize(content) or _similar(cf.content, content):
                 return   # 已存在(去重)
+        # source_mid 反查:按归一化 content 匹配 long_term 取 mid(core 升级低频,一次全量可接受)
+        source_mid = ""
+        try:
+            for m in await store.get_all_long_term(self.redis, oid):
+                if _normalize(m.content) == _normalize(content):
+                    source_mid = m.id
+                    break
+        except Exception:
+            logger.warning("core source_mid 反查失败(空值继续)", exc_info=True)
         from memory.models import CoreFact
         core_list.append(CoreFact(
             key=f"{fact.get('category', 'fact')}:{_normalize(content)[:32]}",
             content=content,
+            source_mid=source_mid,
         ))
+        # 上限淘汰:超出 max_core 移除最旧的非 locked(列表 append 顺序=时间序)
+        max_core = max(1, int(getattr(settings, "memory_max_core", 20)))
+        removed = 0
+        while len(core_list) > max_core:
+            idx = next((i for i, c in enumerate(core_list) if not c.locked), None)
+            if idx is None:
+                break   # 全部 locked,不淘汰
+            core_list.pop(idx)
+            removed += 1
         await store.set_core(self.redis, oid, core_list)
+        if removed:
+            logger.info("core 上限淘汰 %d 条(max=%d,余 %d)", removed, max_core, len(core_list))
 
     async def _apply_score_to_recalled(self, oid: str, ctx, sign: int) -> None:
         """2026-08-13 useful_score RL credit assignment:本轮被召回的记忆(ctx.memory_meta.hit_mids)
@@ -251,6 +284,15 @@ class MemoryCoordinator:
                 return
             oid = ctx.object_id
             model = self._summary_model()
+            # 2026-11-08 P0-1(RL 回流解锁):评分回流移出「if facts + 每 6 轮节拍」双重门控——
+            # 原版只在抽出 facts 的那一轮回流,5/6 轮的评分信号丢失,用进废退闭环名存实亡。
+            # 每轮只要有评分就对召回记忆集体增减(锁与原用法一致)。
+            score_final = getattr(ctx, "last_score", -1.0)
+            if score_final >= 0:
+                sign = 1 if score_final >= 85 else (-1 if score_final < 60 else 0)
+                if sign:
+                    async with self._lock(oid):
+                        await self._apply_score_to_recalled(oid, ctx, sign)
             # 2026-07-07 拟人化:取角色对用户的称呼,传给 encoder 让记忆用具体称呼(如"主人喜欢动漫")
             _pc = getattr(ctx, "persona_card", None)
             user_alias = (_pc.user_alias if _pc else "") or ""
@@ -261,13 +303,18 @@ class MemoryCoordinator:
                 recent = await store.get_working_span(self.redis, oid, threshold)
                 summary = await encoder.summarize(recent, self.llm, model, user_alias=user_alias)
                 if summary:
-                    await store.append_episodic(self.redis, oid, EpisodicEntry(
+                    # 2026-11-08 P0-2 修正 B2:span ts 用窗口首尾消息的真实 ts(原版两端都填
+                    # created_ts,字段失真,时间检索/标注的零成本修正窗口)
+                    _first_ts = getattr(recent[0], "ts", 0) if recent else 0
+                    _last_ts = getattr(recent[-1], "ts", 0) if recent else 0
+                    _epi = EpisodicEntry(
                         id=f"epi_{turn_count}",
                         summary=summary,
-                        span_start_ts=ctx.created_ts or 0,
-                        span_end_ts=ctx.created_ts or 0,
+                        span_start_ts=_first_ts or (ctx.created_ts or 0),
+                        span_end_ts=_last_ts or (ctx.created_ts or 0),
                         turn_range=(max(0, turn_count - threshold), turn_count),
-                    ))
+                    )
+                    await store.append_episodic(self.redis, oid, _epi)
                 epi_count = await store.count_episodic(self.redis, oid)
                 if (epi_count > 0
                         and epi_count % settings.memory_episodic_reflect_interval == 0):
@@ -283,11 +330,10 @@ class MemoryCoordinator:
                 facts = await encoder.extract_facts_batch(recent, self.llm, model, user_alias=user_alias)
                 if facts:
                     # 2026-07-07 优化3:评分联动 importance(本轮高分 +0.1 强化/低分 -0.1 弱化新 facts)
+                    # 2026-11-08 P0-1:RL 回流已上移至 on_turn_complete 顶部(每轮必调,不再依赖本节拍)
                     score_final = getattr(ctx, "last_score", -1.0)
-                    sign = 0
                     if score_final >= 0:
                         delta = 0.1 if score_final >= 85 else (-0.1 if score_final < 60 else 0.0)
-                        sign = 1 if delta > 0 else (-1 if delta < 0 else 0)
                         if delta:
                             for f in facts:
                                 f["importance"] = max(0.0, min(1.0, float(f.get("importance", 0.5)) + delta))
@@ -300,10 +346,6 @@ class MemoryCoordinator:
                             if (float(f.get("importance", 0)) >= 0.8
                                     or f.get("category") == "relationship"):
                                 await self._upsert_core_fact(oid, f)
-                        # 2026-08-13 useful_score RL credit assignment:本轮召回的记忆随评分集体增减
-                        # (本轮>=85 强化 / <60 衰减;手动档 tier>=0 与 locked 不动,避免改用户显式设定)
-                        if sign:
-                            await self._apply_score_to_recalled(oid, ctx, sign)
             # 2026-07-07 拟人化:自动学用户称呼(每轮扫 working span,用户自报"叫我X"则更新 persona.user_alias)
             try:
                 await self._learn_user_alias(oid)

@@ -2,18 +2,26 @@
 应用日志配置单测(2026-08-04,logging 盲区修复)
 钉死 setup_logging 行为:根 handler 挂载 / 级别生效 / 非法值兜底 / env 覆盖 / 幂等不重复 /
 uvicorn 整合(propagate=False)/ 第三方噪音压制 / 业务 INFO 可达 root handler(盲区核心)。
+2026-11-10 增强落盘:滚动文件(server.log)+ ERROR 归档(error.log 只收 ERROR+)/ trace id 注入。
 
 注意:setup_logging 用 dictConfig 会重置 root handlers,会冲掉 pytest caplog 的捕获 handler,
 故可见性测试用自挂的 _CaptureHandler(在 setup_logging 之后加,不被 dictConfig 清),不用 caplog。
+文件类测试用 tmp_path 隔离,结束前显式 close RotatingFileHandler(Windows 句柄不释放会挡 tmp 清理)。
 
 日期: 2026-08-04
+
+2026-11-10
+变更说明：
+  1. 新增落盘/归档/trace id 测试 5 条(滚动 handler 挂载/ERROR 闸门行为/关闭落盘/trace 流转/配置项)
 """
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 import pytest
 
 from core.config import Settings
-from core.logging_config import setup_logging
+from core.logging_config import setup_logging, set_trace_id, get_trace_id
 
 
 class _CaptureHandler(logging.Handler):
@@ -116,3 +124,68 @@ def test_log_level_is_valid_level():
     s = Settings()
     assert s.log_level
     assert s.log_level.upper() in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+
+
+# —— 2026-11-10 增强落盘 + trace id ——
+def _close_file_handlers():
+    """收尾:close 并摘掉 dictConfig 建的文件句柄(Windows 下不关会挡 tmp_path 清理)"""
+    for h in list(logging.root.handlers):
+        if isinstance(h, RotatingFileHandler):
+            h.close()
+            logging.getLogger().removeHandler(h)
+
+
+def test_setup_logging_attaches_rotating_file_handlers(restore_root_logger, tmp_path):
+    """落盘:root 挂 RotatingFileHandler×2(server.log 全量 + error.log 只收 ERROR+)"""
+    setup_logging("INFO", log_dir=str(tmp_path))
+    files = [h for h in logging.root.handlers if isinstance(h, RotatingFileHandler)]
+    assert len(files) == 2
+    # server.log 不设 handler 级别 = NOTSET(0) 全收(闸门在 root);error.log 独立闸门 ERROR
+    assert sorted(h.level for h in files) == [0, logging.ERROR]
+    assert {Path(h.baseFilename).name for h in files} == {"server.log", "error.log"}
+    # uvicorn 三件套同步带上文件 handler(与业务日志同落盘)
+    assert any(isinstance(h, RotatingFileHandler) for h in logging.getLogger("uvicorn").handlers)
+    _close_file_handlers()
+
+
+def test_error_archive_only_receives_error(restore_root_logger, tmp_path):
+    """ERROR 归档行为:WARNING 不入 error.log;ERROR+ 两边都收(server.log 全量/error.log 归档)"""
+    setup_logging("INFO", log_dir=str(tmp_path))
+    lg = logging.getLogger("biz.test.archive")
+    lg.warning("这条警告不该进归档")
+    lg.error("这条错误该进归档")
+    _close_file_handlers()
+    err_text = (Path(tmp_path) / "error.log").read_text(encoding="utf-8")
+    full_text = (Path(tmp_path) / "server.log").read_text(encoding="utf-8")
+    assert "这条警告" not in err_text
+    assert "这条错误" in err_text
+    assert "这条警告" in full_text and "这条错误" in full_text
+
+
+def test_file_disabled_keeps_console_only(restore_root_logger):
+    """log_file_enable=False 仅 console(不落盘;测试等纯内存场景用)"""
+    setup_logging("INFO", log_file_enable=False)
+    assert not any(isinstance(h, RotatingFileHandler) for h in logging.root.handlers)
+    assert any(isinstance(h, logging.StreamHandler) for h in logging.root.handlers)
+
+
+def test_trace_id_flows_into_format(restore_root_logger, tmp_path):
+    """trace id:set_trace_id 注入格式 %(trace_id)s;复位回 '-'(每请求隔离)"""
+    setup_logging("INFO", log_dir=str(tmp_path))
+    assert get_trace_id() == "-"   # 默认占位
+    set_trace_id("deadbeef")
+    logging.getLogger("biz.test.trace").warning("带 trace 的日志")
+    set_trace_id("")   # 中间件 finally 复位
+    logging.getLogger("biz.test.trace").warning("复位后的日志")
+    _close_file_handlers()
+    text = (Path(tmp_path) / "server.log").read_text(encoding="utf-8")
+    assert "[deadbeef] biz.test.trace" in text   # 注入生效
+    assert "[-] biz.test.trace" in text          # 复位生效
+
+
+def test_log_settings_fields_exist():
+    """落盘配置项存在且默认合理(log_dir 空=栈根 logs/;10MB×5)"""
+    s = Settings()
+    assert s.log_dir == ""
+    assert s.log_file_max_bytes >= 1024
+    assert s.log_file_backups >= 0

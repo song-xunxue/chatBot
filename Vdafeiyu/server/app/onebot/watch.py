@@ -137,7 +137,7 @@ def json_str(v) -> str:
 
 def _interpret_login_status(data: dict) -> bool:
     """解读 CheckLoginStatus 的 data → 实际是否在线(纯函数便于单测)。
-    2026-11-01 清浔实证坑:QQNT 自动快速登录后 NapCat 状态机停在 offline(isLogin=False/
+    2026-11-01 6390 栈实证坑:QQNT 自动快速登录后 NapCat 状态机停在 offline(isLogin=False/
     coreReady=False),但 loginError 明说「已登录,无法重复登录」——实际在线,按误报修正;
     真离线(待扫码)时 loginError 为空,返回 False 不放水。"""
     if bool(data.get("isLogin")):

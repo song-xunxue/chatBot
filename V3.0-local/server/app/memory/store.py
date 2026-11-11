@@ -128,6 +128,14 @@ async def touch_long_term(redis: Redis, oid: str, mids: Iterable[str]) -> None:
             await upsert_long_term(redis, oid, m)
 
 
+async def _prune_core_by_mids(redis: Redis, oid: str, mids: set) -> None:
+    """移除 source_mid 命中 mids 的 core 条目(P0-3 联动清理,2026-11-08)"""
+    core = await get_core(redis, oid)
+    kept = [c for c in core if c.source_mid not in mids]
+    if len(kept) != len(core):
+        await set_core(redis, oid, kept)
+
+
 async def mark_forgotten(redis: Redis, oid: str, mids: Iterable[str],
                          forgotten: bool = True) -> None:
     mids = list(mids)   # 物化(下方世界书同步要二次使用,防生成器二遍为空)
@@ -142,6 +150,15 @@ async def mark_forgotten(redis: Redis, oid: str, mids: Iterable[str],
     from memory.worldbook_store import sync_forget
     await sync_forget(redis, oid, mids, forgotten)
 
+    # 2026-11-08 P0-3(core 治理):遗忘联动清理 core 层——底层 long 被遗忘后,
+    # 其 source_mid 指向的 core 条目同步移除(修"记忆鬼影":被遗忘的事实仍以核心记忆
+    # 身份常驻注入)。恢复(forgotten=False)不回填 core(重新升级走正常路径)。软失败。
+    if forgotten:
+        try:
+            await _prune_core_by_mids(redis, oid, set(mids))
+        except Exception:
+            pass
+
 
 async def restore_long_term(redis: Redis, oid: str, mids: Iterable[str]) -> None:
     await mark_forgotten(redis, oid, mids, forgotten=False)
@@ -154,6 +171,12 @@ async def delete_long_term(redis: Redis, oid: str, mids: Iterable[str]) -> None:
     for mid in list(mids):
         pipe.delete(_K_VEC.format(oid=oid, mid=mid))
     await pipe.execute()
+
+    # 2026-11-08 P0-3(core 治理):物理删除联动清理 core 层(source_mid 命中即移除,防记忆鬼影)
+    try:
+        await _prune_core_by_mids(redis, oid, set(mids))
+    except Exception:
+        pass
 
 
 async def set_locked(redis: Redis, oid: str, mid: str, locked: bool) -> bool:

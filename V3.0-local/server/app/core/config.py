@@ -131,7 +131,10 @@ class Settings(BaseSettings):
     memory_forget_halflife_hours: float = 72.0
     # 2026-08-13 useful_score 用进废退(三档衰减闭环)
     memory_useful_score_delta: float = 0.1        # 评分驱动增减步长(本轮>=85 +δ / <60 -δ)
-    memory_useful_score_init: str = "importance"  # 新记忆 useful_score 初始(importance|0.5)
+    # 2026-11-08 P0-4(A4 解耦):默认改 0.5——importance(写时显著度)与 useful_score(RL 实证效用)
+    #    是两种语义,旧默认让 importance>=0.8 的记忆出生即 T2 永不衰减(衰减体系被初始值主导)
+    memory_useful_score_init: str = "0.5"  # 新记忆 useful_score 初始(0.5|importance;推荐 0.5)
+    memory_max_core: int = 20              # core 层上限(P0-3:超出淘汰最旧非 locked,防记忆鬼影单调膨胀)
     memory_tier0_threshold: float = 0.3           # 自动档:useful_score<此→T0(自然衰减);T1 跌破此值也忘
     memory_tier1_threshold: float = 0.7           # 自动档:useful_score>=此→T2(永不衰减)
     memory_forget_loop_interval_hours: float = 6.0  # forget_tick 后台循环周期(小时)
@@ -204,8 +207,12 @@ class Settings(BaseSettings):
     glm_vision_model: str = "glm-4v-flash"   # GLM 视觉模型(free 轻量;可改 glm-4v / glm-4v-plus)
     multimodal_vision_prompt: str = "请用中文简洁描述这张图片的内容(用于对话上下文)。"  # 视觉解析提示词
 
-    # 16.日志(2026-08-04):应用 logging 级别,配合 core/logging_config.setup_logging 修盲区
+    # 16.日志(2026-08-04;2026-11-10 增强落盘):应用 logging 级别+滚动落盘+ERROR 归档,
+    #    配合 core/logging_config.setup_logging
     log_level: str = "INFO"  # 根 logger 级别(INFO/DEBUG/WARNING;.env LOG_LEVEL 覆盖;排障用 DEBUG)
+    log_dir: str = ""  # 日志目录(空=栈根 logs/;.env LOG_DIR 覆盖;server.log 与 error.log 都写这里)
+    log_file_max_bytes: int = 10 * 1024 * 1024  # server.log/error.log 单文件滚动阈值(默认 10MB)
+    log_file_backups: int = 5  # 滚动备份数(server.log.1~N / error.log.1~N,超出最旧删除)
 
     # 17.TTS 语音合成(M-tts):QQ 语音条。provider 可选 siliconflow(CosyVoice2,已弃用)/gptsovits(GAG/api_v2 主力)/stub
     #    用户面板开关/音色/语速/gain 在 plugins/tts_reply/plugin.yaml config_schema

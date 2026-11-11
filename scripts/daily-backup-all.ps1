@@ -1,5 +1,5 @@
 ﻿# 功能:双栈数据每日备份包装(计划任务 ChatBotDailyBackup 每天凌晨 02:17 调用)
-# 流程:清浔(6390+V3.0-local/server/data) → 大肥鱼(6380+Vdafeiyu/server/data),各自保留 14 份
+# 流程:6390 栈(6390+V3.0-local/server/data) → 大肥鱼(6380+Vdafeiyu/server/data),各自保留 14 份
 # 日志:backups\backup.log(backup.ps1 内部写);本包装只在两栈都失败时退出码 1
 # 日期:2026-11-03
 # 变更日志:

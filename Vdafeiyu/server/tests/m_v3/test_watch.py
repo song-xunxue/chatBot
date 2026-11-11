@@ -274,7 +274,7 @@ async def test_heal_reset_on_recover(fake_redis, monkeypatch):
     assert watch._heal["attempts"] == 0 and watch._heal["alerted"] is False
 
 
-# ================ 登录态探测解读(2026-11-01 清浔误报实证) ================
+# ================ 登录态探测解读(2026-11-01 6390 栈误报实证) ================
 
 def test_interpret_login_status():
     """CheckLoginStatus 解读:isLogin=True 在线;自动快速登录形态(状态机 offline 但

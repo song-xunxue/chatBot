@@ -133,8 +133,8 @@ Write-SvcLog $LogPath 'done' ("onebot_connected=true：{0}" -f $online)
 if (-not $online) {
     $qr = Join-Path $NapDir 'cache\qrcode.png'
     if (Test-Path $qr) {
-        Copy-Item $qr 'C:\Users\26904\.dsh\runtime\清浔_qr_latest.png' -Force
-        Write-SvcLog $LogPath 'napcat' '未连上，二维码已复制到 .dsh\runtime\清浔_qr_latest.png'
+        Copy-Item $qr 'C:\Users\26904\.dsh\runtime\qingxun_qr_latest.png' -Force
+        Write-SvcLog $LogPath 'napcat' '未连上，二维码已复制到 .dsh\runtime\qingxun_qr_latest.png'
     }
     exit 2
 }

@@ -8,7 +8,7 @@
 流程(每步落日志 logs/sticker-restore.log,失败即停):
   1. 快照:6390 sticker:lib + 全部 desc:{md5} 缓存 → backups/sticker_lib_snapshot_<ts>.json
      (56 条描述元数据是唯一副本,先快照再动手——review 强制修正①)
-  2. 拉图:scp -r 云端 ~/ChatBot-V3/server/data/stickers/. → 清浔 server/data/stickers/
+  2. 拉图:scp -r 云端 ~/ChatBot-V3/server/data/stickers/. → 6390 栈 server/data/stickers/
      (追加合并,不删本地现有文件);再本地复制一份给大肥鱼
   3. 同步:6390 lib 注册全量 HSET 到 6380(大肥鱼此前 0 注册,merge 无冲突)
   4. 验证:两栈各抽 3 条注册 → lib 描述 + 磁盘文件 exists + find_sticker 同款匹配逻辑,
@@ -74,7 +74,7 @@ async def main(apply: bool) -> None:
     # 0.现状统计
     lib = await redis.hgetall(K_LIB)
     local_files = {p.name for p in QING_DIR.glob("*")} if QING_DIR.is_dir() else set()
-    log.info(f"[0.现状] 6390 注册 {len(lib)} 条 | 清浔磁盘文件 {len(local_files)} 个 | "
+    log.info(f"[0.现状] 6390 注册 {len(lib)} 条 | 6390 栈磁盘文件 {len(local_files)} 个 | "
              f"死注册(注册无文件) {len([f for f in lib if f not in local_files])} 条")
 
     # 1.快照(dry-run 也做——快照本身只增不删,安全)
@@ -90,7 +90,7 @@ async def main(apply: bool) -> None:
         log.error(f"[2.拉图] scp 失败: {out[:300]}")
         return
     after_files = {p.name for p in QING_DIR.glob("*")}
-    log.info(f"[2.拉图] 清浔目录文件 {len(local_files)} → {len(after_files)} 个")
+    log.info(f"[2.拉图] 6390 栈目录文件 {len(local_files)} → {len(after_files)} 个")
 
     # 3.大肥鱼复制一份
     DAFEIYU_DIR.mkdir(parents=True, exist_ok=True)
@@ -126,11 +126,11 @@ async def main(apply: bool) -> None:
             log.info(f"[5.验证-{tag_}] {fname}: 文件存在={p.exists()} 描述={desc[:40]}")
         return ok
 
-    ok1 = verify(lib, QING_DIR, "清浔")
+    ok1 = verify(lib, QING_DIR, "6390")
     ok2 = verify(lib, DAFEIYU_DIR, "大肥鱼")
     disk_q = len({p.name for p in QING_DIR.glob('*')})
     disk_d = len({p.name for p in DAFEIYU_DIR.glob('*')})
-    log.info(f"[5.验证] 抽验命中 清浔={ok1}/3 大肥鱼={ok2}/3 | 磁盘文件 清浔={disk_q} 大肥鱼={disk_d} | 注册={len(lib)}")
+    log.info(f"[5.验证] 抽验命中 6390={ok1}/3 大肥鱼={ok2}/3 | 磁盘文件 6390={disk_q} 大肥鱼={disk_d} | 注册={len(lib)}")
     log.info("=== 恢复完成。配图链路(find_sticker)已可命中;下次带 [表情包: ...] 的回复即发真实图片 ===")
 
 

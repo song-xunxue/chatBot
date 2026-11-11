@@ -50,12 +50,13 @@ lifespan 启动:QQ httpx 客户端 + Redis 预热 + 人设/mood 种子 + 插件�
 """
 import asyncio
 import logging
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from core.config import settings
-from core.logging_config import setup_logging
+from core.logging_config import setup_logging, set_trace_id
 from api.rest_score import router as score_router
 from api.rest_memory import router as memory_router
 from api.rest_chat import router as chat_router
@@ -72,7 +73,10 @@ from api.rest_sticker import router as sticker_router
 
 # 配置应用 logging(修盲区:原未配置致业务 INFO 被默认 lastResort 丢弃,仅 WARNING+ 出)
 # 必须在 create_app 前调用;dictConfig 整合 uvicorn 走同一 handler/格式(详见 core/logging_config.py)
-setup_logging(settings.log_level)
+# 2026-11-10 落盘增强:server.log 滚动 + error.log ERROR 归档(目录/阈值 .env LOG_* 可覆盖)
+setup_logging(settings.log_level, log_dir=settings.log_dir,
+              file_max_bytes=settings.log_file_max_bytes,
+              file_backups=settings.log_file_backups)
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +242,20 @@ def create_app() -> FastAPI:
         "http://localhost:5173", "http://127.0.0.1:5173"]
     app.add_middleware(CORSMiddleware, allow_origins=_origins,
                        allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+    # trace id 中间件(2026-11-10):每请求生成 8 位 hex 注入日志上下文,响应头 X-Trace-Id 带回,
+    # 一次排障链路的日志行按 id 串联(格式见 core/logging_config %(trace_id)s)。
+    # 请求内 create_task 的后台任务继承创建时上下文,日志天然带同一 id。
+    @app.middleware("http")
+    async def _trace_id_middleware(request: Request, call_next):
+        tid = uuid.uuid4().hex[:8]
+        set_trace_id(tid)
+        try:
+            response = await call_next(request)
+            response.headers["X-Trace-Id"] = tid
+            return response
+        finally:
+            set_trace_id("")   # 请求收尾复位,防后续请求误沿用上一请求的 id
 
     @app.get("/health")
     async def health():

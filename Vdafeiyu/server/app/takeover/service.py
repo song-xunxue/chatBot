@@ -112,7 +112,7 @@ async def _deliver(redis, oid: str, content: str, *, msg_id: str, msg_seq: int, 
         vr = await send_voice_reply(oid, voice_parts, msg_id="", msg_seq=msg_seq,
                                     voice=voice, speed=speed, gain=gain,
                                     emotion_enable=emo,
-                                    send_text_also=False,
+                                    send_text_also=bool(tts_cfg.get("send_text_also")),  # 2026-11-10 修:a2dc0fe 重写时误写死 False,面板「语音同时发文本」开关失效
                                     human_authored=True)  # admin 代答文本不过守卫
         if vr and vr.get("delivered"):
             return {"delivered": True, "mode": vr["mode"]}

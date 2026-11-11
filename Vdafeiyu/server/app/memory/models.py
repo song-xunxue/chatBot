@@ -138,6 +138,9 @@ class CoreFact:
     key: str                             # 如 "user_name" / "persona_trait:温柔"
     content: str
     locked: bool = False                 # 锁定防遗忘
+    # 2026-11-08 P0-3(core 治理):来源 long_term 的 mid——mark_forgotten/delete 据此联动
+    # 清理 core(修"底层记忆被遗忘后 core 仍在常驻注入"的记忆鬼影);旧数据无此字段=default
+    source_mid: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -146,7 +149,8 @@ class CoreFact:
     def from_dict(cls, raw: dict) -> "CoreFact":
         raw = dict(raw or {})
         return cls(key=raw.get("key", ""), content=raw.get("content", ""),
-                   locked=bool(raw.get("locked", False)))
+                   locked=bool(raw.get("locked", False)),
+                   source_mid=str(raw.get("source_mid", "") or ""))
 
 
 @dataclass
