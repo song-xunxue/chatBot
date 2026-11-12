@@ -7,7 +7,7 @@ core 层激活单测(2026-07-07 记忆优化阶段3):
 日期: 2026-07-07
 """
 from memory.coordinator import MemoryCoordinator
-from memory.models import RecallResult, CoreFact, MemoryItem
+from memory.models import RecallResult, CoreFact, MemoryItem, EpisodicEntry
 
 
 def test_render_includes_core_section():
@@ -28,6 +28,30 @@ def test_render_core_before_long_term():
     )
     block = c.render(result)
     assert block.find("核心A") < block.find("长期B")
+
+
+def test_render_time_annotations_20261112():
+    """P0-5 时间感知(B1):long_term 按 created_ts、episodic 按 span 首尾标注;
+    created_ts=0 老数据与 core 不标注"""
+    import time as _time
+    now = int(_time.time() * 1000)
+    day = 86_400_000
+    result = RecallResult(
+        core=[CoreFact(key="k", content="核心C")],
+        long_term=[MemoryItem(id="m1", content="老事实", created_ts=now - 3 * day),
+                   MemoryItem(id="m2", content="无时间戳",
+                              created_ts=now + 3_600_000)],   # 未来 ts → delta<0 稳定不标注(0 会被 __post_init__ 盖成 now)
+        episodic=[EpisodicEntry(id="e1", summary="摘要A",
+                                span_start_ts=now - 2 * day,
+                                span_end_ts=now - day - 3_600_000)],
+    )
+    block = MemoryCoordinator(redis=None).render(result)
+    assert "- 老事实（3天前）" in block
+    assert "- 摘要A（2天前~1天前）" in block
+    m2_line = [l for l in block.splitlines() if "无时间戳" in l][0]
+    assert m2_line == "- 无时间戳"          # 老数据不标注
+    core_line = [l for l in block.splitlines() if "核心C" in l][0]
+    assert core_line == "- 核心C"            # core 常驻事实无时态
 
 
 async def test_upsert_core_fact_writes_and_dedup(fake_redis):

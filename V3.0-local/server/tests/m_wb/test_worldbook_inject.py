@@ -82,20 +82,25 @@ async def test_worldbook_mode_inject_anchors(monkeypatch, fake_redis):
     """worldbook 模式:命中条目按 position 锚点进 sections;memory_block 停用;
     build 按锚点序拼进 system prompt"""
     monkeypatch.setattr(settings, "memory_mode", "worldbook")
+    import time as _time
+    _ts3d = int(_time.time() * 1000) - 3 * 86_400_000   # 钉 3 天前:P0-5 标注跨机器稳定
     await worldbook_store.upsert_entry(
-        fake_redis, _e("wb_p", mode="always", content="她叫角色A", position="after_persona"))
+        fake_redis, _e("wb_p", mode="always", content="她叫角色A", position="after_persona",
+                       created_ts=_ts3d))
     await worldbook_store.upsert_entry(
         fake_redis, _e("wb_m", keys=["打雷"], content="打雷时她会缩起来",
-                       position="before_memories"))
+                       position="before_memories", created_ts=_ts3d))
     await worldbook_store.upsert_entry(
-        fake_redis, _e("wb_t", keys=["打雷"], content="夜间情绪偏脆弱", position="tail"))
+        fake_redis, _e("wb_t", keys=["打雷"], content="夜间情绪偏脆弱", position="tail",
+                       created_ts=_ts3d))
     ctx = _ctx()
     ctx.system_prompt = "【核心人设指令】\n她是角色A"
     await stage_memory_retrieve(ctx, fake_redis)
+    # P0-5 时间感知(2026-11-12):入库条目 created_ts=now → 行尾标注（刚刚）
     assert ctx.worldbook_sections == {
-        "after_persona": "- 她叫角色A",
-        "before_memories": "- 打雷时她会缩起来",
-        "tail": "- 夜间情绪偏脆弱",
+        "after_persona": "- 她叫角色A（3天前）",
+        "before_memories": "- 打雷时她会缩起来（3天前）",
+        "tail": "- 夜间情绪偏脆弱（3天前）",
     }
     assert ctx.memory_block == ""                   # legacy 全量注入停用
     msgs = await stage_build_messages(ctx)

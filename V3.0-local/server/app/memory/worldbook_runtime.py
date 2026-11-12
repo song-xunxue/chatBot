@@ -138,7 +138,7 @@ async def inject(ctx, redis) -> None:
                 await mem_store.touch_long_term(redis, ctx.object_id, touched_extra)
             except Exception as te:
                 logger.warning("worldbook touch 命中记忆失败(软失败): %s", te)
-        sections = worldbook.render_sections(kept)
+        sections = worldbook.render_sections(kept, now)   # P0-5:传 now 出时间标注(topup 分支与主 select 同 now)
         tokens = sum(e.token_estimate for e in kept)
         injected_ids = [e.id for e in kept if not e.id.startswith("topup_")]
         ctx.worldbook_sections = sections

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from modality.base import VisionProvider
 from modality.glm import GLMVisionProvider
+from modality.deepseek import DeepSeekVisionProvider
 from modality.stub import StubVisionProvider
 from core.config import settings
 
@@ -24,6 +25,7 @@ class VisionSpec:
 
 _VISION_PROVIDERS: list[VisionSpec] = [
     VisionSpec("glm", GLMVisionProvider, "glm_api_key", "GLM glm-4v"),
+    VisionSpec("deepseek", DeepSeekVisionProvider, "deepseek_api_key", "DeepSeek 多模态(deepseek-chat)"),
     VisionSpec("stub", StubVisionProvider, "", "占位(不调 API)"),
 ]
 _BY_NAME: dict[str, VisionSpec] = {p.name: p for p in _VISION_PROVIDERS}

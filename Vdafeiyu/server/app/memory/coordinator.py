@@ -258,17 +258,34 @@ class MemoryCoordinator:
 
     def render(self, result: RecallResult) -> str:
         """组装 memory_block:核心记忆(常驻) + 长期记忆(召回) + 情景摘要。
-        2026-07-07 优化4:激活 core 层渲染(原 retrieve 取了 core 但 render 不用,是死代码)。"""
+        2026-07-07 优化4:激活 core 层渲染(原 retrieve 取了 core 但 render 不用,是死代码)。
+        2026-11-12 P0-5 时间感知(B1):长期记忆按 created_ts、情景摘要按 span 首尾追加
+        相对时间标注（3天前）——模型可自然说"你上次说…那天";core 不标注(常驻事实无时态);
+        created_ts=0 的老数据不标注(免迁移)。"""
+        from memory.models import relative_time_label
         blocks = []
         if result.core:
             core_facts = "\n".join(f"- {f.content}" for f in result.core)
             blocks.append(f"【核心记忆】\n{core_facts}")
         if result.long_term:
-            facts = "\n".join(f"- {m.content}" for m in result.long_term)
-            blocks.append(f"【相关长期记忆】\n{facts}")
+            now_ms = int(time.time() * 1000)
+            lines = []
+            for m in result.long_term:
+                lab = relative_time_label(m.created_ts, now_ms)
+                lines.append(f"- {m.content}（{lab}）" if lab else f"- {m.content}")
+            blocks.append("【相关长期记忆】\n" + "\n".join(lines))
         if result.episodic:
-            sums = "\n".join(f"- {e.summary}" for e in result.episodic)
-            blocks.append(f"【近期对话摘要】\n{sums}")
+            now_ms = int(time.time() * 1000)
+            lines = []
+            for e in result.episodic:
+                l1 = relative_time_label(e.span_start_ts, now_ms)
+                l2 = relative_time_label(e.span_end_ts, now_ms)
+                if l1 and l2:
+                    tag = f"（{l1}）" if l1 == l2 else f"（{l1}~{l2}）"
+                else:
+                    tag = f"（{l1 or l2}）" if (l1 or l2) else ""
+                lines.append(f"- {e.summary}{tag}")
+            blocks.append("【近期对话摘要】\n" + "\n".join(lines))
         return "\n\n".join(blocks)
 
     def _summary_model(self) -> str:

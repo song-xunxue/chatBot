@@ -45,12 +45,25 @@ def normalize_for_match(s: str) -> str:
 
 _CJK_RUN = re.compile(r"[一-龥]+")            # 连续汉字段(切 2-gram 用)
 _WORD = re.compile(r"[a-zA-Z0-9]+")           # 英文/数字词
-# 中文虚词 2-gram 停用表(自动 keys 提取时过滤,避免"我们/一个"这类无区分度的 key)
+# 中文虚词+高频低区分词 2-gram 停用表(自动 keys 提取时过滤)。
+# 2026-11-12 P1-5(C2 治理):原 30 个纯虚词不够——"喜欢/今天/聊天"等内容高频词不在表内,
+# 一条"他喜欢动漫"会在用户每次说"喜欢"时必然命中注入,预算被高频词条目挤占。
+# 新增口径:时间词/寒暄语气词/万能名词与动词(事情/聊天)——这些词作 key 无召回价值,
+# 事实的区分度靠剩余实词(动漫/打雷/椰子鸡)。只停 2-gram,不动单字与英文词。
 _STOPGRAM = {
     "我们", "你们", "他们", "她们", "一个", "什么", "没有", "自己", "这个", "那个",
     "时候", "现在", "可以", "就是", "但是", "因为", "所以", "如果", "还是", "已经",
     "这样", "那样", "怎么", "觉得", "感觉", "知道", "可能", "应该", "不会", "一下",
     "很多", "有些", "然后", "其实", "真的", "关于", "对于", "以及", "或者", "而且",
+    # 2026-11-12 P1-5 扩表:时间词
+    "喜欢", "今天", "明天", "昨天", "今晚", "昨晚", "早上", "中午", "晚上", "下午",
+    "最近", "一直", "总是", "经常", "偶尔", "这次", "上次", "每次", "后来", "突然",
+    # 高频寒暄/语气
+    "哈哈", "嘿嘿", "呵呵", "谢谢", "再见", "晚安", "早安", "挺好", "还行", "不错",
+    # 万能名词/动词(作 key 无区分度)
+    "聊天", "聊到", "说到", "提到", "东西", "事情", "地方", "问题", "时间", "工作",
+    "一起", "一点", "有点", "好像", "大家", "别人", "人家", "多少", "不用", "不能",
+    "不要", "可是", "于是", "接着", "总之", "反正",
 }
 
 
@@ -303,12 +316,17 @@ def budget_trim(ordered: list[WbEntry], budget: int,
     return kept, dropped
 
 
-def render_sections(entries: list[WbEntry]) -> dict[str, str]:
+def render_sections(entries: list[WbEntry], now_ms: int | None = None) -> dict[str, str]:
     """渲染(docs/09 §2.5):每条一行 `- {content}`(不加标题防复读);按 position 分组,
-    组内换行连接。返回 {position: 多行文本}(空组不出键;整体插入锚点时组间自然空行)"""
+    组内换行连接。返回 {position: 多行文本}(空组不出键;整体插入锚点时组间自然空行)。
+    2026-11-12 P0-5 时间感知(B1):created_ts 非零追加相对时间标注（3天前）
+    ——与 coordinator.render 同款(记忆/条目原文不动,只加行尾标注)"""
+    from memory.models import relative_time_label
     sections: dict[str, list[str]] = {}
     for e in entries:
-        sections.setdefault(e.position, []).append(f"- {e.content}")
+        lab = relative_time_label(e.created_ts, now_ms)
+        sections.setdefault(e.position, []).append(
+            f"- {e.content}（{lab}）" if lab else f"- {e.content}")
     return {pos: "\n".join(lines) for pos, lines in sections.items()}
 
 
@@ -324,7 +342,7 @@ def select_for_injection(entries: list[WbEntry], texts: list[str], now_ms: int,
     ordered = sort_entries(survived)
     kept, dropped = budget_trim(ordered, budget, max_entries=max_entries)
     return {
-        "sections": render_sections(kept),
+        "sections": render_sections(kept, now_ms),   # P0-5:传入 now_ms 出时间标注
         "kept": kept,
         "dropped": dropped,
         "tokens": sum(e.token_estimate for e in kept),

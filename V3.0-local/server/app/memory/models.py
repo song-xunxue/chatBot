@@ -163,6 +163,29 @@ class RecallResult:
     hit_mids: list[str] = field(default_factory=list)  # 被召回的 long_term mid,供更新访问统计
 
 
+def relative_time_label(ts: int, now_ms: int | None = None) -> str:
+    """相对时间标注(P0-5 时间感知,2026-11-12):Unix 毫秒 →（3天前）样式中文标注。
+    ts=0/未来时间返 ""(不标注——老数据免迁移,脏数据兜底)。
+    放 models(双栈共用件):coordinator.render(legacy 注入)与 worldbook.render_sections
+    都要消费;coordinator 不得反向依赖 worldbook(大肥鱼零 worldbook 引用铁律)。"""
+    if not ts:
+        return ""
+    now = int(time.time() * 1000) if now_ms is None else now_ms
+    delta = now - ts
+    if delta <= 0:
+        return ""          # 未来时间(时钟偏差/脏数据)不标注
+    if delta < 3_600_000:
+        return "刚刚"
+    if delta < 86_400_000:
+        return "今天"
+    days = delta / 86_400_000
+    if days < 30:
+        return f"{int(days)}天前"
+    if days < 365:
+        return f"{max(1, int(days // 30))}个月前"
+    return "一年多前"
+
+
 @dataclass
 class ForgetConfig:
     """遗忘评分权重与阈值"""

@@ -12,6 +12,7 @@ config_schema:
   mood_weight_enable: { type: bool, default: true, description: "按当前心情档位过滤候选表情包(档位无命中时回退全库)" }
   mood_keywords: { type: string, default: "", description: "心情档位附加关键词,格式 档位:词,词;档位:词(如 开心:哈哈,雀跃;难过:呜呜;留空仅用档位名匹配)" }
   usage_window: { type: number, default: 10, min: 1, max: 50, step: 1, description: "最近使用降权窗口(条):窗口内刚用过的表情包打分降权,避免连续重发同一张" }
+  min_overlap: { type: number, default: 1, min: 0, max: 10, step: 1, description: "配图最低重叠度:回复与描述的词重叠数下限,0=关闭(零相关也配),1=至少沾边(默认),2+=更严格(会削弱最近使用翻盘机制)" }
   render_template: { type: string, default: "", description: "文字表情默认底图路径(留空=自动生成纯色底;REST /api/v1/sticker/render 与面板用)" }
   render_font: { type: string, default: "C:/Windows/Fonts/msyh.ttc", description: "文字表情字体路径(渲染用)" }
   render_font_size: { type: number, default: 48, min: 12, max: 200, step: 1, description: "文字表情字号(像素,渲染用)" }

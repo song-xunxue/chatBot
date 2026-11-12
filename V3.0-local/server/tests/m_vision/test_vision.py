@@ -2,9 +2,13 @@
 M-vision 图像理解模块单测(2026-07-01)
 覆盖:GLM vision provider(mock httpx)、stub、registry 降级、webhook 图片消息解析(含软失败)、
       parse_c2c_message attachments 解析、rest_multimodal 端点(鉴权+解析)。
-mock httpx,全程不真调 GLM API。
+mock httpx,全程不真调外部 API。2026-11-12 增 DeepSeek vision(deepseek-chat 实测支持图像输入)。
 
 日期: 2026-07-01
+
+2026-11-12
+变更说明：
+  1. 新增 DeepSeek vision provider 测试(GLM 账单到期后 vision 切 deepseek)
 """
 import base64
 import json
@@ -88,6 +92,51 @@ async def test_glm_vision_uses_settings_model_and_key(monkeypatch):
     await p.understand(b"x", "p")
     assert captured["json"]["model"] == "glm-4v-plus"
     assert captured["headers"]["Authorization"] == "Bearer set-key"
+
+
+# ================ DeepSeek Vision Provider(2026-11-12) ================
+
+@pytest.mark.asyncio
+async def test_deepseek_vision_understand_returns_description(monkeypatch):
+    """DeepSeek vision understand:mock 200 → 返回描述;请求打 deepseek 端点,图 base64 进 payload"""
+    from modality.deepseek import DeepSeekVisionProvider, _BASE as DS_BASE
+    resp = _FakeResp({"choices": [{"message": {"content": "一只橘猫趴在键盘上"}}]})
+    captured: dict = {}
+    monkeypatch.setattr("modality.deepseek.httpx.AsyncClient",
+                        lambda **kw: _FakeClient(resp, captured))
+    p = DeepSeekVisionProvider(api_key="k", model="deepseek-chat")
+    desc = await p.understand(b"\x89PNG fake", "描述图片", mime="image/png")
+    assert desc == "一只橘猫趴在键盘上"
+    assert captured["url"] == f"{DS_BASE}/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer k"
+    msg = captured["json"]["messages"][0]["content"]
+    assert any(c["type"] == "image_url" for c in msg)
+    img_url = [c for c in msg if c["type"] == "image_url"][0]["image_url"]["url"]
+    assert img_url.startswith("data:image/png;base64,")
+
+
+@pytest.mark.asyncio
+async def test_deepseek_vision_uses_settings_model_and_key(monkeypatch):
+    """无显式参数 → settings.deepseek_api_key + settings.deepseek_vision_model"""
+    from modality.deepseek import DeepSeekVisionProvider
+    monkeypatch.setattr(settings, "deepseek_api_key", "set-key")
+    monkeypatch.setattr(settings, "deepseek_vision_model", "deepseek-chat")
+    resp = _FakeResp({"choices": [{"message": {"content": "图"}}]})
+    captured: dict = {}
+    monkeypatch.setattr("modality.deepseek.httpx.AsyncClient",
+                        lambda **kw: _FakeClient(resp, captured))
+    p = DeepSeekVisionProvider()   # 不传参 → 走 settings
+    await p.understand(b"x", "p")
+    assert captured["json"]["model"] == "deepseek-chat"
+    assert captured["headers"]["Authorization"] == "Bearer set-key"
+
+
+def test_get_vision_deepseek_with_key(monkeypatch):
+    """registry:provider=deepseek 且 key 已配 → DeepSeekVisionProvider(不降级 stub)"""
+    from modality.deepseek import DeepSeekVisionProvider
+    monkeypatch.setattr(settings, "multimodal_vision_provider", "deepseek")
+    monkeypatch.setattr(settings, "deepseek_api_key", "k")
+    assert isinstance(get_vision(), DeepSeekVisionProvider)
 
 
 # ================ Stub ================

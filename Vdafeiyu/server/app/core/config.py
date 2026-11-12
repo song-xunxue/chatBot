@@ -205,6 +205,7 @@ class Settings(BaseSettings):
     multimodal_vision_enable: bool = True   # 图像理解总开关:收图消息时尝试解析;关则图片消息忽略/纯文本
     multimodal_vision_provider: str = "glm"  # 图像理解 provider(glm 用 glm-4v;stub 占位;无 key 自动降级 stub)
     glm_vision_model: str = "glm-4v-flash"   # GLM 视觉模型(free 轻量;可改 glm-4v / glm-4v-plus)
+    deepseek_vision_model: str = "deepseek-chat"  # DeepSeek 视觉模型(deepseek-chat 实测支持图像输入,2026-11-12)
     multimodal_vision_prompt: str = "请用中文简洁描述这张图片的内容(用于对话上下文)。"  # 视觉解析提示词
 
     # 16.日志(2026-08-04;2026-11-10 增强落盘):应用 logging 级别+滚动落盘+ERROR 归档,

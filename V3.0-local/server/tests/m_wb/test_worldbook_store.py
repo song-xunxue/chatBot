@@ -168,6 +168,69 @@ async def test_sync_from_memory_source_mapping(fake_redis):
         assert e.source == expect, f"{m.source}->{e.source} 应为 {expect}"
 
 
+async def test_sync_reflection_tail_entry_20261112(fake_redis):
+    """P0-7 反思接线:sync_reflection 建 source=summary/tail/0.5 条目,稳定 ref 只留最新"""
+    e1 = await worldbook_store.sync_reflection(fake_redis, "10001", "主人长期偏好夜间聊天,白天话少")
+    assert e1.source == "summary" and e1.source_ref == "reflect:10001"
+    assert e1.position == "tail" and e1.probability == 0.5
+    assert e1.enabled is True
+    # 新反思 → 同 ref 更新(不膨胀条目)
+    e2 = await worldbook_store.sync_reflection(fake_redis, "10001", "主人最近在赶论文,常熬夜")
+    assert e2.id == e1.id and "赶论文" in e2.content
+    assert len(await worldbook_store.list_entries(fake_redis)) == 1
+
+
+async def test_on_turn_complete_reflection_wired_20261112(fake_redis, monkeypatch):
+    """P0-7 全链:on_turn_complete 反思维度命中 → sync_reflection 进世界书"""
+    from memory.coordinator import MemoryCoordinator
+    from memory.models import EpisodicEntry
+    from memory import encoder as enc, store as mstore
+    from memory import worldbook_store
+
+    c = MemoryCoordinator(redis=fake_redis, llm_provider=None)
+    # 预置 4 条 episodic → summarize 节拍追加第 5 条 → 5 % reflect_interval(5)==0 触发反思
+    for i in range(4):
+        await mstore.append_episodic(fake_redis, "u1", EpisodicEntry(
+            id=f"epi_{i}", summary=f"摘要{i}", span_start_ts=1, span_end_ts=2))
+    async def _t12(redis, oid):
+        return 12
+    async def _span(redis, oid, t):
+        from types import SimpleNamespace
+        return [SimpleNamespace(role="user", content="今天聊了聊天", ts=1)]
+    async def _fake_reflect(sums, llm, model):
+        return "主人长期偏好夜间聊天,白天话少"
+    monkeypatch.setattr(mstore, "get_turn_count", _t12)
+    monkeypatch.setattr(mstore, "get_working_span", _span)
+    monkeypatch.setattr(enc, "reflect", _fake_reflect)
+
+    class FakeCtx:
+        object_id = "u1"
+        created_ts = 0
+        last_score = -1.0
+        persona_card = None
+        memory_meta = {"hit_mids": []}
+
+    await c.on_turn_complete(FakeCtx())
+    refl = [e for e in await worldbook_store.list_entries(fake_redis)
+            if e.source_ref == "reflect:u1"]
+    assert len(refl) == 1 and refl[0].position == "tail" and refl[0].probability == 0.5
+    assert "夜间聊天" in refl[0].content
+
+
+async def test_sync_from_memory_tags_first_20261112(fake_redis):
+    """P1-5:tags 优先占位(keys 队头),auto_keys 补位——原顺序 tags 排尾常被 [:8] 截掉"""
+    m = _mem(tags=["恋爱日常", "喜好", "2026-11-12"])
+    e = await worldbook_store.sync_from_memory(fake_redis, "10001", m)
+    assert e.keys[:3] == ["恋爱日常", "喜好", "2026-11-12"]   # tags 队头
+    assert len(e.keys) <= 8 and any("怕打" in k or "打雷" in k for k in e.keys[3:])   # auto_keys 补位
+
+
+async def test_sync_from_memory_probability_policy_20261112(fake_redis):
+    """P1-5(C2):memory 来源默认 probability 1.0→0.8(命中必进降为八成进,防单条目垄断预算)"""
+    e = await worldbook_store.sync_from_memory(fake_redis, "10001", _mem())
+    assert e.source == "memory" and e.probability == 0.8
+
+
 async def test_sync_from_memory_forgotten_disabled(fake_redis):
     """遗忘态记忆同步为 enabled=False"""
     e = await worldbook_store.sync_from_memory(fake_redis, "10001", _mem(forgotten=True))

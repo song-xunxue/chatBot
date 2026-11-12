@@ -39,7 +39,6 @@ _K_EPISODIC = "mychat:mem:{oid}:episodic"
 _K_REFLECT = "mychat:mem:{oid}:reflect"
 _K_LONG = "mychat:mem:{oid}:long"
 _K_VEC = "mychat:mem:{oid}:vec:{mid}"   # 记忆向量(独立存,不污染 long Hash;2026-07-07 向量检索)
-_K_STATE = "mychat:state:{oid}"
 
 
 # ===== Core 核心记忆(常驻,String JSON)=====
@@ -243,17 +242,6 @@ async def get_vecs_bulk(redis: Redis, oid: str, mids: list[str]) -> dict[str, li
         pipe.get(_K_VEC.format(oid=oid, mid=mid))
     raws = await pipe.execute()
     return {mid: json.loads(r) for mid, r in zip(mids, raws) if r}
-
-
-# ===== State 动态状态(Hash)=====
-async def get_state(redis: Redis, oid: str) -> dict:
-    return await redis.hgetall(_K_STATE.format(oid=oid))
-
-
-async def set_state(redis: Redis, oid: str, partial: dict) -> None:
-    if partial:
-        partial = {**partial, "updated_ts": int(time.time() * 1000)}
-        await redis.hset(_K_STATE.format(oid=oid), mapping=partial)
 
 
 # ===== Working(委托 V2.0 chat_store block 三层,避免键耦合)=====

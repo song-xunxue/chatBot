@@ -34,9 +34,11 @@ _K_BY_KEY = "mychat:wb:by_key:{key}"
 _K_BY_REF = "mychat:wb:by_ref:{source}:{ref}"
 _K_STATS = "mychat:wb:stats"
 
-# 自动条目来源的默认参数(docs/09 §3:日记/梦低 order 低概率;summary 中间;memory 常规)
+# 自动条目来源的默认参数(docs/09 §3:日记/梦低 order 低概率;summary 中间;memory 常规)。
+# 2026-11-12 P1-5(C2 治理):memory 1.0→0.8——概率 1.0 意味着 key 命中必注入,
+# 与 keys 治理配套把"必进"降为"八成进",高频命中仍有随机衰减,预算不易被单一条目垄断
 _AUTO_DEFAULTS = {
-    "memory":   {"order": 100, "probability": 1.0, "position": "before_memories"},
+    "memory":   {"order": 100, "probability": 0.8, "position": "before_memories"},
     "summary":  {"order": 150, "probability": 0.7, "position": "before_memories"},
     "diary":    {"order": 200, "probability": 0.5, "position": "after_memories"},
     "dream":    {"order": 200, "probability": 0.5, "position": "after_memories"},
@@ -286,20 +288,22 @@ async def sync_from_memory(redis: Redis, oid: str, item, *, force_new: bool = Fa
         exist = await find_by_ref(redis, wb_src, ref)
         if exist and not force_new:
             exist.content = normalize_viewpoint(item.content)
-            keys = worldbook.auto_keys(exist.content)
-            for t in getattr(item, "tags", []) or []:
-                if t and t not in keys:
-                    keys.append(str(t))
+            # 2026-11-12 P1-5:tags 优先占位(人工/抽取语义标签触发价值高于自动 2-gram),
+            # auto_keys 补位——原顺序 tags 排尾,keys[:8] 截断常把 tags 挤掉
+            keys = [str(t) for t in (getattr(item, "tags", []) or []) if t]
+            for k in worldbook.auto_keys(exist.content):
+                if k and k not in keys:
+                    keys.append(k)
             exist.keys = keys[:8]
             exist.weight = max(0.0, min(1.0, float(getattr(item, "useful_score", 0.5))))
             exist.token_estimate = worldbook.estimate_tokens(item.content)
             exist.enabled = not getattr(item, "forgotten", False)
             return await upsert_entry(redis, exist)
         content = normalize_viewpoint(item.content)
-        keys = worldbook.auto_keys(content)
-        for t in getattr(item, "tags", []) or []:
-            if t and t not in keys:
-                keys.append(str(t))
+        keys = [str(t) for t in (getattr(item, "tags", []) or []) if t]
+        for k in worldbook.auto_keys(content):
+            if k and k not in keys:
+                keys.append(k)
         return await upsert_entry(redis, WbEntry(
             id=worldbook.new_entry_id(),
             title=content[:16],
@@ -377,6 +381,42 @@ async def sync_episodic(redis: Redis, oid: str, entry) -> WbEntry | None:
         ))
     except Exception as e:
         logger.warning("worldbook sync_episodic 失败(不阻塞): %s", e)
+        return None
+
+
+async def sync_reflection(redis: Redis, oid: str, reflection: str) -> WbEntry | None:
+    """反思产出 → source=summary 条目(P0-7 反思接线,2026-11-12)。
+    reflect 原先只写 reflect List 零消费方(死层);现接进世界书注入:
+      position=tail(收尾位置) / probability=0.5 / 稳定 ref=f"reflect:{oid}" ——
+      每次新反思**更新同一条目**(只留最新高层规律,防条目膨胀),复用 sync 通道零新键。
+    keys 取反思自动关键词。软失败返 None(不阻塞记忆写入)"""
+    try:
+        ref = f"reflect:{oid}"
+        content = normalize_viewpoint(reflection or "")
+        if not content:
+            return None
+        exist = await find_by_ref(redis, "summary", ref)
+        if exist:
+            exist.content = content
+            exist.keys = worldbook.auto_keys(content)
+            exist.token_estimate = worldbook.estimate_tokens(content)
+            exist.enabled = True   # 新反思到来说明该层仍活跃
+            return await upsert_entry(redis, exist)
+        return await upsert_entry(redis, WbEntry(
+            id=worldbook.new_entry_id(),
+            title=content[:16],
+            content=content,
+            keys=worldbook.auto_keys(content),
+            mode="trigger",
+            order=_AUTO_DEFAULTS["summary"]["order"],
+            position="tail",
+            probability=0.5,
+            source="summary",
+            source_ref=ref,
+            weight=0.5,
+        ))
+    except Exception as e:
+        logger.warning("worldbook sync_reflection 失败(不阻塞): %s", e)
         return None
 
 

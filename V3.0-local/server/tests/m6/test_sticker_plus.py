@@ -32,7 +32,7 @@ _LIB3 = {"happy.png": "开心猫咪举爪", "sad.png": "难过落泪哭泣", "sm
 
 # on_message_out 测试基准参数(概率 1 保证确定性)
 _PARAMS = {"attach_prob": 1.0, "mood_weight_enable": True, "mood_keywords": "",
-           "usage_window": 10}
+           "usage_window": 10, "min_overlap": 0}   # 链路测试不考察重叠下限(picker 单测管)
 
 
 class _FakeManager:
@@ -104,14 +104,18 @@ async def test_pick_sticker_missing_file_and_blank_desc_skipped(fake_redis, tmp_
     await _seed_lib(fake_redis, tmp_path, monkeypatch,
                     {"gone.png": "开心开心开心", "here.png": "平静", "blank.png": ""},
                     skip_files=("gone.png",))
-    desc, fname, reason = await pick_sticker(fake_redis, "开心开心开心", rng=lambda: 0)
+    # min_overlap=0:考察点=死条目跳过(gone 重叠更高但文件缺失仍不选),阈值另测
+    desc, fname, reason = await pick_sticker(fake_redis, "开心开心开心", rng=lambda: 0,
+                                             min_overlap=0)
     assert fname == "here.png" and desc == "平静"
 
 
 async def test_pick_sticker_mood_narrows(fake_redis, tmp_path, monkeypatch):
     """心情过滤收窄:回复语义更贴'难过',但档位=开心 → 命中集只剩 happy,必选之"""
     await _seed_lib(fake_redis, tmp_path, monkeypatch, dict(_LIB3))
-    desc, fname, reason = await pick_sticker(fake_redis, "呜呜我好难过想哭", mood_label="开心")
+    # min_overlap=0:本测试考察心情窄化(语义贴难过但档位强制 happy,零重叠属预期),阈值另测
+    desc, fname, reason = await pick_sticker(fake_redis, "呜呜我好难过想哭", mood_label="开心",
+                                             min_overlap=0)
     assert fname == "happy.png" and desc == "开心猫咪举爪"
     assert "心情过滤[开心]候选1/3" in reason
 
@@ -343,6 +347,31 @@ def test_manifest_default_disabled_and_hooks():
 
 
 # ================ 审查加固回归(2026-10-25) ================
+
+async def test_pick_sticker_min_overlap_filters_unrelated(fake_redis, tmp_path, monkeypatch):
+    """2026-11-12 重叠下限(review 2.3-②):全库零相关(重叠0)→ 不配图(旧版零分照样返回 top)"""
+    await _seed_lib(fake_redis, tmp_path, monkeypatch,
+                    {"work.png": "加班改bug崩溃", "code.png": "程序员敲代码"})
+    desc, fname, reason = await pick_sticker(fake_redis, "今晚吃的椰子鸡真不错")
+    assert fname is None and desc is None
+    assert "无重叠≥1" in reason
+
+
+async def test_pick_sticker_min_overlap_keeps_penalty_flip(fake_redis, tmp_path, monkeypatch):
+    """下限=1 不误伤反重复设计:raw 2/1 双双达标,降权翻盘机制照常工作"""
+    await _seed_lib(fake_redis, tmp_path, monkeypatch,
+                    {"hi.png": "开心哈哈大笑", "lo.png": "开心微笑一下"})
+    await fake_redis.lpush(_K_RECENT_USAGE, "hi.png")
+    _, fname, reason = await pick_sticker(fake_redis, "今天真的好开心呀哈哈哈", usage_window=10)
+    assert fname == "lo.png"   # 重叠1 的候选翻盘(若下限误设 2 此候选会被剔除)
+
+
+async def test_pick_sticker_min_overlap_disabled(fake_redis, tmp_path, monkeypatch):
+    """min_overlap=0 关闭下限:零相关也配图(2026-11-12 前旧行为,面板可回退)"""
+    await _seed_lib(fake_redis, tmp_path, monkeypatch, {"work.png": "加班改bug崩溃"})
+    desc, fname, reason = await pick_sticker(fake_redis, "今晚吃的椰子鸡真不错", min_overlap=0)
+    assert fname == "work.png"
+
 
 def test_parse_mood_keywords_fullwidth_semicolon():
     """全角分号分段(中文输入法常见)与半角等效——审查低#1 回归"""

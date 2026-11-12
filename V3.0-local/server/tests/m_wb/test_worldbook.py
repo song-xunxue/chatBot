@@ -80,6 +80,17 @@ def test_auto_keys_stopgram_filtered():
     assert ks   # "们没/有说/说什"等邻居组合仍在
 
 
+def test_auto_keys_stopgram_expanded_20261112():
+    """P1-5(C2 治理):高频内容词入停用表——喜欢/时间词/寒暄/万能名词不再作 key,
+    事实区分度靠剩余实词(动漫/大笑);旧 30 词断言不受影响"""
+    ks = auto_keys("他喜欢动漫和聊天")
+    assert "喜欢" not in ks and "聊天" not in ks
+    assert "动漫" in ks
+    ks2 = auto_keys("今天哈哈大笑了一整天")
+    assert "今天" not in ks2 and "哈哈" not in ks2
+    assert "大笑" in ks2   # 滑窗邻居组合(天哈/哈大)仍在——与旧停用表测试同一口径
+
+
 def test_auto_keys_limit_and_dedup():
     """保序去重 + limit 截断"""
     ks = auto_keys("打雷打雷下雨", limit=2)
@@ -228,17 +239,32 @@ def test_render_sections_groups_and_lines():
     e1 = _e("e1", content="甲", position="after_persona")
     e2 = _e("e2", content="乙", position="after_persona")
     e3 = _e("e3", content="丙", position="tail")
-    sec = render_sections([e1, e2, e3])
+    # now_ms 钉死为条目 created_ts → delta=0 → 不标注(post_init 自盖 created_ts,不钉死则
+    # 标注有无取决于构造/渲染是否同毫秒,跨机器不稳定)
+    sec = render_sections([e1, e2, e3], now_ms=e1.created_ts)
     assert sec == {"after_persona": "- 甲\n- 乙", "tail": "- 丙"}
+
+
+def test_render_sections_time_annotation_20261112():
+    """P0-5 时间感知:created_ts 非零条目行尾加（N天前）;=0 不标注(旧精确相等语义保持)"""
+    import time as _time
+    now = int(_time.time() * 1000)
+    e1 = _e("e1", content="甲", position="after_persona", created_ts=now - 3 * 86_400_000)
+    e2 = _e("e2", content="乙", position="after_persona", created_ts=now + 86_400_000)   # 未来时间戳 → delta<0 稳定不标注(post_init 不覆盖非零值)
+    sec = render_sections([e1, e2])
+    lines = sec["after_persona"].splitlines()
+    assert lines[0] == "- 甲（3天前）"
+    assert lines[1] == "- 乙"
 
 
 def test_select_for_injection_end_to_end():
     """一站式:命中→过滤→排序→裁剪→渲染→统计。
     disabled 条目也会进候选(hit_ids 含它)但被 enabled 过滤(docs §2.2 过滤阶段)"""
-    a = _e("a", mode="always", content="常驻", position="after_persona")
-    hit = _e("hit", keys=["打雷"], content="打雷相关", position="before_memories")
-    miss = _e("miss", keys=["下雨"], content="下雨相关")
-    dis = _e("dis", keys=["打雷"], content="停用", enabled=False)
+    # created_ts=NOW:delta=0 无标注(P0-5 标注与本测试无关,钉死防毫秒抖动)
+    a = _e("a", mode="always", content="常驻", position="after_persona", created_ts=NOW)
+    hit = _e("hit", keys=["打雷"], content="打雷相关", position="before_memories", created_ts=NOW)
+    miss = _e("miss", keys=["下雨"], content="下雨相关", created_ts=NOW)
+    dis = _e("dis", keys=["打雷"], content="停用", enabled=False, created_ts=NOW)
     r = select_for_injection([a, hit, miss, dis], ["打雷了"], NOW,
                              budget=2000, max_entries=12, rng=random.Random(42))
     assert set(r["sections"]) == {"after_persona", "before_memories"}

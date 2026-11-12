@@ -78,12 +78,16 @@ class StickerPlusPlugin(Plugin):
         # 窗口同样判 None 再转型;0/负值=不记使用(picker 视为不降权,与这里不写队列保持一致)
         window_raw = params.get("usage_window")
         usage_window = int(window_raw) if window_raw is not None else 10
+        # 重叠下限判 None 再转型;0=关闭(零相关也配图,2026-11-12 前的旧行为)
+        minov_raw = params.get("min_overlap")
+        min_overlap = int(minov_raw) if minov_raw is not None else 1
         desc, fname, reason = await pick_sticker(
             redis, reply_text,
             mood_label=label,
             mood_keywords=str(params.get("mood_keywords", "") or ""),
             mood_weight_enable=bool(params.get("mood_weight_enable", True)),
             usage_window=usage_window,
+            min_overlap=min_overlap,
         )
         if desc is None:
             logger.debug("sticker_plus 未配图:%s oid=%s", reason, ctx.object_id)

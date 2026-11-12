@@ -57,7 +57,7 @@ def _bigrams(s: str) -> set[str]:
 
 async def pick_sticker(redis, reply_text: str, *, mood_label: str = "",
                        mood_keywords: str = "", mood_weight_enable: bool = True,
-                       usage_window: int = 10,
+                       usage_window: int = 10, min_overlap: int = 1,
                        rng=random.random) -> tuple[str | None, str | None, str]:
     """从表情包库挑一张最贴合回复的(可解释打分)。
 
@@ -65,8 +65,11 @@ async def pick_sticker(redis, reply_text: str, *, mood_label: str = "",
       redis: 库/最近使用队列数据源;reply_text: 待配图的回复文本
       mood_label: 当前心情档位名(空=不过滤);mood_keywords: "档位:词,词"附加关键词
       mood_weight_enable: 是否按心情过滤;usage_window: 最近使用降权窗口条数
+      min_overlap: 原始 bigram 重叠数下限(2026-11-12 防"完全无关也配图":
+        0=关闭;1=至少沾一个词;默认 1 而非 2——降权翻盘机制需要 raw≥1 候选留在榜内,
+        一刀切 2 会把"重叠 1 但刚没用过"的反重复设计杀死)
       rng: [0,1) 随机源(默认 random.random;测试注入 lambda:0 固定选并列第一个)
-    返回: (描述, 文件名, reason);库不可用时前两项为 None,reason 为中文原因。"""
+    返回: (描述, 文件名, reason);库不可用/无达标候选时前两项为 None,reason 为中文原因。"""
     # 1. 候选:描述非空且文件存在(文件被清理过的死条目跳过);按文件名排序保证确定性
     lib = await redis.hgetall(_K_LIB)
     if not lib:
@@ -104,8 +107,12 @@ async def pick_sticker(redis, reply_text: str, *, mood_label: str = "",
     scored: list[tuple[float, str, str, float]] = []   # (总分, 文件名, 描述, 降权)
     for fname, desc in cands:
         score = float(len(reply_bg & _bigrams(desc)))
+        if score < min_overlap:
+            continue   # 2026-11-12:低于重叠下限不入榜(原始重叠为准,降权只影响排序不剔除)
         penalty = (usage_window - recent_rank[fname]) * 0.5 if fname in recent_rank else 0.0
         scored.append((score - penalty, fname, desc, penalty))
+    if not scored:
+        return None, None, ";".join(parts + [f"无重叠≥{min_overlap:g}的候选(共{len(cands)}张)"])
     top = max(s[0] for s in scored)
     tied = sorted((s for s in scored if s[0] == top), key=lambda s: s[1])
     idx = min(int(rng() * len(tied)), len(tied) - 1)   # rng()=0 恒选并列第一个(测试口径)
